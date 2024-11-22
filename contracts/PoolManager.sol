@@ -13,9 +13,15 @@ import {QuoteParams} from "./structs/QuoteParams.sol";
 contract PoolManager is ERC6909Claims { 
     // using PoolIDHelper for *;
 
+    function brothers() public {
+        
+    }
+
     function swap() public returns (bool success) {
 
     }
+
+
 
     // batch swap is done via multiple calls of swap function 
     function quote(SwapParams calldata params) public returns (uint256) {
