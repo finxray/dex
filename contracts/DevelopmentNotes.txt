@@ -1,0 +1,6 @@
+
+GAS SAVING  
+    1. All data passed between external functions should be of bytes type, including non fixed arrays. 
+    2. Use assembly in places where gas consuming function are used especially in places where function are 
+        frequently called. 
+    3. PoolId = (bucketId + quoterAddress) 
