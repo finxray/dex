@@ -13,20 +13,23 @@ import {QuoteParams} from "./structs/QuoteParams.sol";
 contract PoolManager is ERC6909Claims { 
     // using PoolIDHelper for *;
 
-    function brothers() public {
-        
+    // Temproraly constructotr and immutable variable. Later will be replaced by a function with ownership access or can 
+    // be left as it but in that case MarketQuoter will be executed via a proxy contract
+    address immutable  public marketAddress;
+    constructor(address _marketAddress) {
+        marketAddress = _marketAddress;
     }
 
     function swap() public returns (bool success) {
-
+        
     }
-
 
 
     // batch swap is done via multiple calls of swap function 
     function quote(SwapParams calldata params) public returns (uint256) {
+        
         uint256 poolID = PoolIDHelper.poolID(params.quoter, params.bucketID, params.currencyID);
-        MarketData memory marketData = IMarketDataQuoter(params.quoter).quoteMarket(params.currencyID);
+        MarketData memory marketData = IMarketDataQuoter(marketAddress).quoteMarket(params.currencyID);
         (uint128 inventory0, uint128 inventory1) = inventory(poolID);
         QuoteParams memory quoterParams = QuoteParams(
             params.amount,
@@ -41,8 +44,10 @@ contract PoolManager is ERC6909Claims {
             quoterParams
         );
         return IStoixQuoter(params.quoter).quote(request);
+        // return request.bucketId;
     } 
     
+
     function inventory(uint256 poolID) public view returns (uint128 inventory0, uint128 inventory1) {
         // dummy function 
         inventory0 = 250; 

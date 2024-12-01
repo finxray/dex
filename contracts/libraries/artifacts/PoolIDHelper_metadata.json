@@ -1,0 +1,45 @@
+{
+	"compiler": {
+		"version": "0.8.27+commit.40a35a09"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/libraries/PoolIDHelper.sol": "PoolIDHelper"
+		},
+		"evmVersion": "cancun",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/libraries/PoolIDHelper.sol": {
+			"keccak256": "0x06cb5c00421fb6ed4d04824fd6944e1e02a3187cea75c7cc6e80aa86c41074ec",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://48351db9280ebd2db16a30205784c91bdd057f74570611a84ca828914214db67",
+				"dweb:/ipfs/Qmdp74KFYkKrhuztSjhPArcAUnc3drhT4G9ehxkW9voaDS"
+			]
+		}
+	},
+	"version": 1
+}

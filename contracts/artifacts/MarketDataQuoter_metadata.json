@@ -1,0 +1,85 @@
+{
+	"compiler": {
+		"version": "0.8.27+commit.40a35a09"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "id",
+						"type": "uint256"
+					}
+				],
+				"name": "quoteMarket",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "spot",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "twa",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct MarketData",
+						"name": "data",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/MarketDataQuoter.sol": "MarketDataQuoter"
+		},
+		"evmVersion": "cancun",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/MarketDataQuoter.sol": {
+			"keccak256": "0xcfd9f2b5bd607e24ed9186fe422f95d354915dab7371b4acf7559f3bfb64e63b",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://3246d4e2275362feb90cf6e71eb55724515b98d07731f0947221c6b206f4993a",
+				"dweb:/ipfs/QmVyUXsapzomx8QJWpmcBWFc347sjzp8JC6TGP97huELGD"
+			]
+		},
+		"contracts/structs/MarketData.sol": {
+			"keccak256": "0x71f96387ceba111d15aaaf1b66986195c9a6a9ce750368bf28276e1f40900400",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://d7b8ae1985cf0849448030d01b9221b4df27434cf049b625bde627fc767029c2",
+				"dweb:/ipfs/QmPTpLqBDsgeZ7fuC1db8u8bkUtvohaJ8YxinG9QnyXQdC"
+			]
+		}
+	},
+	"version": 1
+}

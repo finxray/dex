@@ -1,0 +1,218 @@
+{
+	"compiler": {
+		"version": "0.8.27+commit.40a35a09"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "bucketId",
+								"type": "uint256"
+							},
+							{
+								"components": [
+									{
+										"internalType": "uint256",
+										"name": "spot",
+										"type": "uint256"
+									},
+									{
+										"internalType": "uint256",
+										"name": "twa",
+										"type": "uint256"
+									}
+								],
+								"internalType": "struct MarketData",
+								"name": "marketData",
+								"type": "tuple"
+							},
+							{
+								"components": [
+									{
+										"internalType": "uint256",
+										"name": "amount",
+										"type": "uint256"
+									},
+									{
+										"internalType": "bool",
+										"name": "zeroForOne",
+										"type": "bool"
+									},
+									{
+										"internalType": "uint128",
+										"name": "inventory0",
+										"type": "uint128"
+									},
+									{
+										"internalType": "uint128",
+										"name": "inventory1",
+										"type": "uint128"
+									}
+								],
+								"internalType": "struct QuoteParams",
+								"name": "quoteParams",
+								"type": "tuple"
+							}
+						],
+						"internalType": "struct StoixQuoterRequest[]",
+						"name": "request",
+						"type": "tuple[]"
+					}
+				],
+				"name": "batchQuotes",
+				"outputs": [
+					{
+						"internalType": "uint256[]",
+						"name": "quotes",
+						"type": "uint256[]"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "bucketId",
+								"type": "uint256"
+							},
+							{
+								"components": [
+									{
+										"internalType": "uint256",
+										"name": "spot",
+										"type": "uint256"
+									},
+									{
+										"internalType": "uint256",
+										"name": "twa",
+										"type": "uint256"
+									}
+								],
+								"internalType": "struct MarketData",
+								"name": "marketData",
+								"type": "tuple"
+							},
+							{
+								"components": [
+									{
+										"internalType": "uint256",
+										"name": "amount",
+										"type": "uint256"
+									},
+									{
+										"internalType": "bool",
+										"name": "zeroForOne",
+										"type": "bool"
+									},
+									{
+										"internalType": "uint128",
+										"name": "inventory0",
+										"type": "uint128"
+									},
+									{
+										"internalType": "uint128",
+										"name": "inventory1",
+										"type": "uint128"
+									}
+								],
+								"internalType": "struct QuoteParams",
+								"name": "quoteParams",
+								"type": "tuple"
+							}
+						],
+						"internalType": "struct StoixQuoterRequest",
+						"name": "request",
+						"type": "tuple"
+					}
+				],
+				"name": "quote",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "quote",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/StoixQuoter.sol": "StoixQuoter"
+		},
+		"evmVersion": "cancun",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/StoixQuoter.sol": {
+			"keccak256": "0x5a63ba8d17c8bb1fa69986fc1ce2236b2760e6fa934dd903b7ce38b03ff6ad5e",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://cab7cc3846a7e24f2ca7210353bc30c8b221b4df33bdd972587229e310ea3596",
+				"dweb:/ipfs/QmeCaCKuae7tXrzwY493hefQs3SCk1ArXMus4sYvaUZvt8"
+			]
+		},
+		"contracts/libraries/StoixQuoterLib.sol": {
+			"keccak256": "0x826718966347b8983dd490cca2e51f1e6a6be79cb82b703f6ce9ae05856aa599",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://301ac3298f2f1dff74c9748d9b027e2b7936079b4ca6aa028be153bd1f9a20ea",
+				"dweb:/ipfs/QmUWiyFcSims2fcsreoV56mLUcj8ujZYEu5j5LQqXHxDd4"
+			]
+		},
+		"contracts/structs/MarketData.sol": {
+			"keccak256": "0x71f96387ceba111d15aaaf1b66986195c9a6a9ce750368bf28276e1f40900400",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://d7b8ae1985cf0849448030d01b9221b4df27434cf049b625bde627fc767029c2",
+				"dweb:/ipfs/QmPTpLqBDsgeZ7fuC1db8u8bkUtvohaJ8YxinG9QnyXQdC"
+			]
+		},
+		"contracts/structs/QuoteParams.sol": {
+			"keccak256": "0x1fae79f43a06a0e6031dee284a17f29575f151327d97f749b5fd8aceb8208fdd",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://03de9551ea56cd74cab8ded9f9f606ce9fb2a2d9d9598e4e2057a17b5a36bdd6",
+				"dweb:/ipfs/QmV2BqP2A8MzAWWc2zsJZaNxKE9ssBPpW82Tu6EMN29D9c"
+			]
+		},
+		"contracts/structs/StoixQuoterRequest.sol": {
+			"keccak256": "0x835417d0cb993cefede7978d53c0e82b62aa132b0fc1a927a23a74cfca30034a",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://89f5dc11a7ca1f65a8342c2aac448123bb07ad772f37a0c9aae1c1df373a8315",
+				"dweb:/ipfs/QmZrasqWK1fDxYWdkJqy9SjuSqHxwKav5QbFvTzvpScfyQ"
+			]
+		}
+	},
+	"version": 1
+}

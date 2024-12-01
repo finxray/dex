@@ -8,8 +8,8 @@ contract StoixQuoter {
     using StoixQuoterLib for StoixQuoterRequest;
 
     function quote(StoixQuoterRequest calldata request) public returns (uint256 quote) { 
-        request.calcQuote(); // equivalent to the below one 
-        // StoixQuoterLib.calcQuote(request);    
+        return request.calcQuote(); // equivalent to the below one 
+        // return StoixQuoterLib.calcQuote(request);    
     }
 
     function batchQuotes(StoixQuoterRequest[] calldata request) external returns (uint256[] memory quotes) {

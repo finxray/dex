@@ -1,0 +1,2799 @@
+{
+	"id": "7ff58ad1bc35b54e194db6c0d036084a",
+	"_format": "hh-sol-build-info-1",
+	"solcVersion": "0.8.27",
+	"solcLongVersion": "0.8.27+commit.40a35a09",
+	"input": {
+		"language": "Solidity",
+		"sources": {
+			"contracts/libraries/StoixQuoterLib.sol": {
+				"content": "// SPDX-License-Identifier: MIT \npragma solidity 0.8.27;\n\nimport {StoixQuoterRequest} from \"../structs/StoixQuoterRequest.sol\";\n\nlibrary StoixQuoterLib {\n    struct Variables {\n        uint256 alpha;\n        uint256 beta;\n        uint256 gamma;\n    }\n\n    function calcQuote(StoixQuoterRequest calldata r) internal pure returns (uint256 quote) {\n        Variables memory v;\n        if (r.bucketId == 0) {\n            // Dummy calculation for id 0\n            v.alpha = 0;\n            v.beta = 80;\n            v.gamma = 20;\n        } else if (r.bucketId == 1) {\n            // Dummy calculation for id 1\n            v.alpha = 10;\n            v.beta = 70;\n            v.gamma = 30;\n        } else if (r.bucketId == 2) {\n            // Dummy calculation for id 2\n            v.alpha = 12;\n            v.beta = 60;\n            v.gamma = 40;\n        } else if (r.bucketId == 3) {\n            // Dummy calculation for id 3\n            v.alpha = 15;\n            v.beta = 50;\n            v.gamma = 50;\n        } else if (r.bucketId == 4) {\n            // Dummy calculation for id 4\n            v.alpha = 20;\n            v.beta = 30;\n            v.gamma = 70;\n        }\n\n        // we are ignoring r.swapParams here for simplicity\n        quote = (v.alpha + v.beta * r.marketData.spot + v.gamma * r.marketData.twa) / 100; \n    } \n}"
+			},
+			"contracts/structs/StoixQuoterRequest.sol": {
+				"content": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.27;  \n\nimport {MarketData} from \"./MarketData.sol\";\nimport {QuoteParams} from \"./QuoteParams.sol\";\n\nstruct StoixQuoterRequest {\n    uint256 bucketId; \n    MarketData marketData;\n    QuoteParams quoteParams;\n} \n\n\n"
+			},
+			"contracts/structs/QuoteParams.sol": {
+				"content": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.27;  \n\nstruct QuoteParams {\n    uint256 amount; \n    bool zeroForOne; \n    uint128 inventory0; \n    uint128 inventory1;\n}"
+			},
+			"contracts/structs/MarketData.sol": {
+				"content": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.27;\n\nstruct MarketData {\n    uint256 spot;\n    uint256 twa;\n} "
+			}
+		},
+		"settings": {
+			"optimizer": {
+				"enabled": false,
+				"runs": 200
+			},
+			"outputSelection": {
+				"*": {
+					"": [
+						"ast"
+					],
+					"*": [
+						"abi",
+						"metadata",
+						"devdoc",
+						"userdoc",
+						"storageLayout",
+						"evm.legacyAssembly",
+						"evm.bytecode",
+						"evm.deployedBytecode",
+						"evm.methodIdentifiers",
+						"evm.gasEstimates",
+						"evm.assembly"
+					]
+				}
+			},
+			"remappings": []
+		}
+	},
+	"output": {
+		"contracts": {
+			"contracts/libraries/StoixQuoterLib.sol": {
+				"StoixQuoterLib": {
+					"abi": [],
+					"devdoc": {
+						"kind": "dev",
+						"methods": {},
+						"version": 1
+					},
+					"evm": {
+						"assembly": "    /* \"contracts/libraries/StoixQuoterLib.sol\":129:1322  library StoixQuoterLib {... */\n  dataSize(sub_0)\n  dataOffset(sub_0)\n  0x0b\n  dup3\n  dup3\n  dup3\n  codecopy\n  dup1\n  mload\n  0x00\n  byte\n  0x73\n  eq\n  tag_1\n  jumpi\n  mstore(0x00, 0x4e487b7100000000000000000000000000000000000000000000000000000000)\n  mstore(0x04, 0x00)\n  revert(0x00, 0x24)\ntag_1:\n  mstore(0x00, address)\n  0x73\n  dup2\n  mstore8\n  dup3\n  dup2\n  return\nstop\n\nsub_0: assembly {\n        /* \"contracts/libraries/StoixQuoterLib.sol\":129:1322  library StoixQuoterLib {... */\n      eq(address, deployTimeAddress())\n      mstore(0x40, 0x80)\n      revert(0x00, 0x00)\n\n    auxdata: 0xa26469706673582212203b0f179701d71410c24b7ad6a789f09379ab393607719c625697136255e7fbba64736f6c634300081b0033\n}\n",
+						"bytecode": {
+							"functionDebugData": {},
+							"generatedSources": [],
+							"linkReferences": {},
+							"object": "6055604b600b8282823980515f1a607314603f577f4e487b71000000000000000000000000000000000000000000000000000000005f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f5ffdfea26469706673582212203b0f179701d71410c24b7ad6a789f09379ab393607719c625697136255e7fbba64736f6c634300081b0033",
+							"opcodes": "PUSH1 0x55 PUSH1 0x4B PUSH1 0xB DUP3 DUP3 DUP3 CODECOPY DUP1 MLOAD PUSH0 BYTE PUSH1 0x73 EQ PUSH1 0x3F JUMPI PUSH32 0x4E487B7100000000000000000000000000000000000000000000000000000000 PUSH0 MSTORE PUSH0 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST ADDRESS PUSH0 MSTORE PUSH1 0x73 DUP2 MSTORE8 DUP3 DUP2 RETURN INVALID PUSH20 0x0 ADDRESS EQ PUSH1 0x80 PUSH1 0x40 MSTORE PUSH0 PUSH0 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 EXTCODESIZE 0xF OR SWAP8 ADD 0xD7 EQ LT 0xC2 0x4B PUSH27 0xD6A789F09379AB393607719C625697136255E7FBBA64736F6C6343 STOP ADDMOD SHL STOP CALLER ",
+							"sourceMap": "129:1193:0:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+						},
+						"deployedBytecode": {
+							"functionDebugData": {},
+							"generatedSources": [],
+							"immutableReferences": {},
+							"linkReferences": {},
+							"object": "730000000000000000000000000000000000000000301460806040525f5ffdfea26469706673582212203b0f179701d71410c24b7ad6a789f09379ab393607719c625697136255e7fbba64736f6c634300081b0033",
+							"opcodes": "PUSH20 0x0 ADDRESS EQ PUSH1 0x80 PUSH1 0x40 MSTORE PUSH0 PUSH0 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 EXTCODESIZE 0xF OR SWAP8 ADD 0xD7 EQ LT 0xC2 0x4B PUSH27 0xD6A789F09379AB393607719C625697136255E7FBBA64736F6C6343 STOP ADDMOD SHL STOP CALLER ",
+							"sourceMap": "129:1193:0:-:0;;;;;;;;"
+						},
+						"gasEstimates": {
+							"creation": {
+								"codeDepositCost": "17000",
+								"executionCost": "92",
+								"totalCost": "17092"
+							},
+							"internal": {
+								"calcQuote(struct StoixQuoterRequest calldata)": "infinite"
+							}
+						},
+						"legacyAssembly": {
+							".code": [
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH #[$]",
+									"source": 0,
+									"value": "0000000000000000000000000000000000000000000000000000000000000000"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH [$]",
+									"source": 0,
+									"value": "0000000000000000000000000000000000000000000000000000000000000000"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "B"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP3",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP3",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP3",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "CODECOPY",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP1",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "MLOAD",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "0"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "BYTE",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "73"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "EQ",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH [tag]",
+									"source": 0,
+									"value": "1"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "JUMPI",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "4E487B7100000000000000000000000000000000000000000000000000000000"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "0"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "MSTORE",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "0"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "4"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "MSTORE",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "24"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "0"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "REVERT",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "tag",
+									"source": 0,
+									"value": "1"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "JUMPDEST",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "ADDRESS",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "0"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "MSTORE",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "PUSH",
+									"source": 0,
+									"value": "73"
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP2",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "MSTORE8",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP3",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "DUP2",
+									"source": 0
+								},
+								{
+									"begin": 129,
+									"end": 1322,
+									"name": "RETURN",
+									"source": 0
+								}
+							],
+							".data": {
+								"0": {
+									".auxdata": "a26469706673582212203b0f179701d71410c24b7ad6a789f09379ab393607719c625697136255e7fbba64736f6c634300081b0033",
+									".code": [
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "PUSHDEPLOYADDRESS",
+											"source": 0
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "ADDRESS",
+											"source": 0
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "EQ",
+											"source": 0
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "PUSH",
+											"source": 0,
+											"value": "80"
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "PUSH",
+											"source": 0,
+											"value": "40"
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "MSTORE",
+											"source": 0
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "PUSH",
+											"source": 0,
+											"value": "0"
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "PUSH",
+											"source": 0,
+											"value": "0"
+										},
+										{
+											"begin": 129,
+											"end": 1322,
+											"name": "REVERT",
+											"source": 0
+										}
+									]
+								}
+							},
+							"sourceList": [
+								"contracts/libraries/StoixQuoterLib.sol",
+								"contracts/structs/MarketData.sol",
+								"contracts/structs/QuoteParams.sol",
+								"contracts/structs/StoixQuoterRequest.sol",
+								"#utility.yul"
+							]
+						},
+						"methodIdentifiers": {}
+					},
+					"metadata": "{\"compiler\":{\"version\":\"0.8.27+commit.40a35a09\"},\"language\":\"Solidity\",\"output\":{\"abi\":[],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/libraries/StoixQuoterLib.sol\":\"StoixQuoterLib\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/libraries/StoixQuoterLib.sol\":{\"keccak256\":\"0x826718966347b8983dd490cca2e51f1e6a6be79cb82b703f6ce9ae05856aa599\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://301ac3298f2f1dff74c9748d9b027e2b7936079b4ca6aa028be153bd1f9a20ea\",\"dweb:/ipfs/QmUWiyFcSims2fcsreoV56mLUcj8ujZYEu5j5LQqXHxDd4\"]},\"contracts/structs/MarketData.sol\":{\"keccak256\":\"0x71f96387ceba111d15aaaf1b66986195c9a6a9ce750368bf28276e1f40900400\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://d7b8ae1985cf0849448030d01b9221b4df27434cf049b625bde627fc767029c2\",\"dweb:/ipfs/QmPTpLqBDsgeZ7fuC1db8u8bkUtvohaJ8YxinG9QnyXQdC\"]},\"contracts/structs/QuoteParams.sol\":{\"keccak256\":\"0x1fae79f43a06a0e6031dee284a17f29575f151327d97f749b5fd8aceb8208fdd\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://03de9551ea56cd74cab8ded9f9f606ce9fb2a2d9d9598e4e2057a17b5a36bdd6\",\"dweb:/ipfs/QmV2BqP2A8MzAWWc2zsJZaNxKE9ssBPpW82Tu6EMN29D9c\"]},\"contracts/structs/StoixQuoterRequest.sol\":{\"keccak256\":\"0x835417d0cb993cefede7978d53c0e82b62aa132b0fc1a927a23a74cfca30034a\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://89f5dc11a7ca1f65a8342c2aac448123bb07ad772f37a0c9aae1c1df373a8315\",\"dweb:/ipfs/QmZrasqWK1fDxYWdkJqy9SjuSqHxwKav5QbFvTzvpScfyQ\"]}},\"version\":1}",
+					"storageLayout": {
+						"storage": [],
+						"types": null
+					},
+					"userdoc": {
+						"kind": "user",
+						"methods": {},
+						"version": 1
+					}
+				}
+			}
+		},
+		"sources": {
+			"contracts/libraries/StoixQuoterLib.sol": {
+				"ast": {
+					"absolutePath": "contracts/libraries/StoixQuoterLib.sol",
+					"exportedSymbols": {
+						"StoixQuoterLib": [
+							166
+						],
+						"StoixQuoterRequest": [
+							199
+						]
+					},
+					"id": 167,
+					"license": "MIT",
+					"nodeType": "SourceUnit",
+					"nodes": [
+						{
+							"id": 1,
+							"literals": [
+								"solidity",
+								"0.8",
+								".27"
+							],
+							"nodeType": "PragmaDirective",
+							"src": "33:23:0"
+						},
+						{
+							"absolutePath": "contracts/structs/StoixQuoterRequest.sol",
+							"file": "../structs/StoixQuoterRequest.sol",
+							"id": 3,
+							"nameLocation": "-1:-1:-1",
+							"nodeType": "ImportDirective",
+							"scope": 167,
+							"sourceUnit": 200,
+							"src": "58:69:0",
+							"symbolAliases": [
+								{
+									"foreign": {
+										"id": 2,
+										"name": "StoixQuoterRequest",
+										"nodeType": "Identifier",
+										"overloadedDeclarations": [],
+										"referencedDeclaration": 199,
+										"src": "66:18:0",
+										"typeDescriptions": {}
+									},
+									"nameLocation": "-1:-1:-1"
+								}
+							],
+							"unitAlias": ""
+						},
+						{
+							"abstract": false,
+							"baseContracts": [],
+							"canonicalName": "StoixQuoterLib",
+							"contractDependencies": [],
+							"contractKind": "library",
+							"fullyImplemented": true,
+							"id": 166,
+							"linearizedBaseContracts": [
+								166
+							],
+							"name": "StoixQuoterLib",
+							"nameLocation": "137:14:0",
+							"nodeType": "ContractDefinition",
+							"nodes": [
+								{
+									"canonicalName": "StoixQuoterLib.Variables",
+									"id": 10,
+									"members": [
+										{
+											"constant": false,
+											"id": 5,
+											"mutability": "mutable",
+											"name": "alpha",
+											"nameLocation": "193:5:0",
+											"nodeType": "VariableDeclaration",
+											"scope": 10,
+											"src": "185:13:0",
+											"stateVariable": false,
+											"storageLocation": "default",
+											"typeDescriptions": {
+												"typeIdentifier": "t_uint256",
+												"typeString": "uint256"
+											},
+											"typeName": {
+												"id": 4,
+												"name": "uint256",
+												"nodeType": "ElementaryTypeName",
+												"src": "185:7:0",
+												"typeDescriptions": {
+													"typeIdentifier": "t_uint256",
+													"typeString": "uint256"
+												}
+											},
+											"visibility": "internal"
+										},
+										{
+											"constant": false,
+											"id": 7,
+											"mutability": "mutable",
+											"name": "beta",
+											"nameLocation": "216:4:0",
+											"nodeType": "VariableDeclaration",
+											"scope": 10,
+											"src": "208:12:0",
+											"stateVariable": false,
+											"storageLocation": "default",
+											"typeDescriptions": {
+												"typeIdentifier": "t_uint256",
+												"typeString": "uint256"
+											},
+											"typeName": {
+												"id": 6,
+												"name": "uint256",
+												"nodeType": "ElementaryTypeName",
+												"src": "208:7:0",
+												"typeDescriptions": {
+													"typeIdentifier": "t_uint256",
+													"typeString": "uint256"
+												}
+											},
+											"visibility": "internal"
+										},
+										{
+											"constant": false,
+											"id": 9,
+											"mutability": "mutable",
+											"name": "gamma",
+											"nameLocation": "238:5:0",
+											"nodeType": "VariableDeclaration",
+											"scope": 10,
+											"src": "230:13:0",
+											"stateVariable": false,
+											"storageLocation": "default",
+											"typeDescriptions": {
+												"typeIdentifier": "t_uint256",
+												"typeString": "uint256"
+											},
+											"typeName": {
+												"id": 8,
+												"name": "uint256",
+												"nodeType": "ElementaryTypeName",
+												"src": "230:7:0",
+												"typeDescriptions": {
+													"typeIdentifier": "t_uint256",
+													"typeString": "uint256"
+												}
+											},
+											"visibility": "internal"
+										}
+									],
+									"name": "Variables",
+									"nameLocation": "165:9:0",
+									"nodeType": "StructDefinition",
+									"scope": 166,
+									"src": "158:92:0",
+									"visibility": "public"
+								},
+								{
+									"body": {
+										"id": 164,
+										"nodeType": "Block",
+										"src": "344:975:0",
+										"statements": [
+											{
+												"assignments": [
+													20
+												],
+												"declarations": [
+													{
+														"constant": false,
+														"id": 20,
+														"mutability": "mutable",
+														"name": "v",
+														"nameLocation": "371:1:0",
+														"nodeType": "VariableDeclaration",
+														"scope": 164,
+														"src": "354:18:0",
+														"stateVariable": false,
+														"storageLocation": "memory",
+														"typeDescriptions": {
+															"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+															"typeString": "struct StoixQuoterLib.Variables"
+														},
+														"typeName": {
+															"id": 19,
+															"nodeType": "UserDefinedTypeName",
+															"pathNode": {
+																"id": 18,
+																"name": "Variables",
+																"nameLocations": [
+																	"354:9:0"
+																],
+																"nodeType": "IdentifierPath",
+																"referencedDeclaration": 10,
+																"src": "354:9:0"
+															},
+															"referencedDeclaration": 10,
+															"src": "354:9:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_struct$_Variables_$10_storage_ptr",
+																"typeString": "struct StoixQuoterLib.Variables"
+															}
+														},
+														"visibility": "internal"
+													}
+												],
+												"id": 21,
+												"nodeType": "VariableDeclarationStatement",
+												"src": "354:18:0"
+											},
+											{
+												"condition": {
+													"commonType": {
+														"typeIdentifier": "t_uint256",
+														"typeString": "uint256"
+													},
+													"id": 25,
+													"isConstant": false,
+													"isLValue": false,
+													"isPure": false,
+													"lValueRequested": false,
+													"leftExpression": {
+														"expression": {
+															"id": 22,
+															"name": "r",
+															"nodeType": "Identifier",
+															"overloadedDeclarations": [],
+															"referencedDeclaration": 13,
+															"src": "386:1:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																"typeString": "struct StoixQuoterRequest calldata"
+															}
+														},
+														"id": 23,
+														"isConstant": false,
+														"isLValue": false,
+														"isPure": false,
+														"lValueRequested": false,
+														"memberLocation": "388:8:0",
+														"memberName": "bucketId",
+														"nodeType": "MemberAccess",
+														"referencedDeclaration": 192,
+														"src": "386:10:0",
+														"typeDescriptions": {
+															"typeIdentifier": "t_uint256",
+															"typeString": "uint256"
+														}
+													},
+													"nodeType": "BinaryOperation",
+													"operator": "==",
+													"rightExpression": {
+														"hexValue": "30",
+														"id": 24,
+														"isConstant": false,
+														"isLValue": false,
+														"isPure": true,
+														"kind": "number",
+														"lValueRequested": false,
+														"nodeType": "Literal",
+														"src": "400:1:0",
+														"typeDescriptions": {
+															"typeIdentifier": "t_rational_0_by_1",
+															"typeString": "int_const 0"
+														},
+														"value": "0"
+													},
+													"src": "386:15:0",
+													"typeDescriptions": {
+														"typeIdentifier": "t_bool",
+														"typeString": "bool"
+													}
+												},
+												"falseBody": {
+													"condition": {
+														"commonType": {
+															"typeIdentifier": "t_uint256",
+															"typeString": "uint256"
+														},
+														"id": 48,
+														"isConstant": false,
+														"isLValue": false,
+														"isPure": false,
+														"lValueRequested": false,
+														"leftExpression": {
+															"expression": {
+																"id": 45,
+																"name": "r",
+																"nodeType": "Identifier",
+																"overloadedDeclarations": [],
+																"referencedDeclaration": 13,
+																"src": "542:1:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																	"typeString": "struct StoixQuoterRequest calldata"
+																}
+															},
+															"id": 46,
+															"isConstant": false,
+															"isLValue": false,
+															"isPure": false,
+															"lValueRequested": false,
+															"memberLocation": "544:8:0",
+															"memberName": "bucketId",
+															"nodeType": "MemberAccess",
+															"referencedDeclaration": 192,
+															"src": "542:10:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_uint256",
+																"typeString": "uint256"
+															}
+														},
+														"nodeType": "BinaryOperation",
+														"operator": "==",
+														"rightExpression": {
+															"hexValue": "31",
+															"id": 47,
+															"isConstant": false,
+															"isLValue": false,
+															"isPure": true,
+															"kind": "number",
+															"lValueRequested": false,
+															"nodeType": "Literal",
+															"src": "556:1:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_rational_1_by_1",
+																"typeString": "int_const 1"
+															},
+															"value": "1"
+														},
+														"src": "542:15:0",
+														"typeDescriptions": {
+															"typeIdentifier": "t_bool",
+															"typeString": "bool"
+														}
+													},
+													"falseBody": {
+														"condition": {
+															"commonType": {
+																"typeIdentifier": "t_uint256",
+																"typeString": "uint256"
+															},
+															"id": 71,
+															"isConstant": false,
+															"isLValue": false,
+															"isPure": false,
+															"lValueRequested": false,
+															"leftExpression": {
+																"expression": {
+																	"id": 68,
+																	"name": "r",
+																	"nodeType": "Identifier",
+																	"overloadedDeclarations": [],
+																	"referencedDeclaration": 13,
+																	"src": "699:1:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																		"typeString": "struct StoixQuoterRequest calldata"
+																	}
+																},
+																"id": 69,
+																"isConstant": false,
+																"isLValue": false,
+																"isPure": false,
+																"lValueRequested": false,
+																"memberLocation": "701:8:0",
+																"memberName": "bucketId",
+																"nodeType": "MemberAccess",
+																"referencedDeclaration": 192,
+																"src": "699:10:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_uint256",
+																	"typeString": "uint256"
+																}
+															},
+															"nodeType": "BinaryOperation",
+															"operator": "==",
+															"rightExpression": {
+																"hexValue": "32",
+																"id": 70,
+																"isConstant": false,
+																"isLValue": false,
+																"isPure": true,
+																"kind": "number",
+																"lValueRequested": false,
+																"nodeType": "Literal",
+																"src": "713:1:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_rational_2_by_1",
+																	"typeString": "int_const 2"
+																},
+																"value": "2"
+															},
+															"src": "699:15:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_bool",
+																"typeString": "bool"
+															}
+														},
+														"falseBody": {
+															"condition": {
+																"commonType": {
+																	"typeIdentifier": "t_uint256",
+																	"typeString": "uint256"
+																},
+																"id": 94,
+																"isConstant": false,
+																"isLValue": false,
+																"isPure": false,
+																"lValueRequested": false,
+																"leftExpression": {
+																	"expression": {
+																		"id": 91,
+																		"name": "r",
+																		"nodeType": "Identifier",
+																		"overloadedDeclarations": [],
+																		"referencedDeclaration": 13,
+																		"src": "856:1:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																			"typeString": "struct StoixQuoterRequest calldata"
+																		}
+																	},
+																	"id": 92,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": false,
+																	"lValueRequested": false,
+																	"memberLocation": "858:8:0",
+																	"memberName": "bucketId",
+																	"nodeType": "MemberAccess",
+																	"referencedDeclaration": 192,
+																	"src": "856:10:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"nodeType": "BinaryOperation",
+																"operator": "==",
+																"rightExpression": {
+																	"hexValue": "33",
+																	"id": 93,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": true,
+																	"kind": "number",
+																	"lValueRequested": false,
+																	"nodeType": "Literal",
+																	"src": "870:1:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_rational_3_by_1",
+																		"typeString": "int_const 3"
+																	},
+																	"value": "3"
+																},
+																"src": "856:15:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_bool",
+																	"typeString": "bool"
+																}
+															},
+															"falseBody": {
+																"condition": {
+																	"commonType": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	},
+																	"id": 117,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": false,
+																	"lValueRequested": false,
+																	"leftExpression": {
+																		"expression": {
+																			"id": 114,
+																			"name": "r",
+																			"nodeType": "Identifier",
+																			"overloadedDeclarations": [],
+																			"referencedDeclaration": 13,
+																			"src": "1013:1:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																				"typeString": "struct StoixQuoterRequest calldata"
+																			}
+																		},
+																		"id": 115,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": false,
+																		"lValueRequested": false,
+																		"memberLocation": "1015:8:0",
+																		"memberName": "bucketId",
+																		"nodeType": "MemberAccess",
+																		"referencedDeclaration": 192,
+																		"src": "1013:10:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"nodeType": "BinaryOperation",
+																	"operator": "==",
+																	"rightExpression": {
+																		"hexValue": "34",
+																		"id": 116,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": true,
+																		"kind": "number",
+																		"lValueRequested": false,
+																		"nodeType": "Literal",
+																		"src": "1027:1:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_rational_4_by_1",
+																			"typeString": "int_const 4"
+																		},
+																		"value": "4"
+																	},
+																	"src": "1013:15:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_bool",
+																		"typeString": "bool"
+																	}
+																},
+																"id": 137,
+																"nodeType": "IfStatement",
+																"src": "1009:151:0",
+																"trueBody": {
+																	"id": 136,
+																	"nodeType": "Block",
+																	"src": "1030:130:0",
+																	"statements": [
+																		{
+																			"expression": {
+																				"id": 122,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": false,
+																				"lValueRequested": false,
+																				"leftHandSide": {
+																					"expression": {
+																						"id": 118,
+																						"name": "v",
+																						"nodeType": "Identifier",
+																						"overloadedDeclarations": [],
+																						"referencedDeclaration": 20,
+																						"src": "1086:1:0",
+																						"typeDescriptions": {
+																							"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																							"typeString": "struct StoixQuoterLib.Variables memory"
+																						}
+																					},
+																					"id": 120,
+																					"isConstant": false,
+																					"isLValue": true,
+																					"isPure": false,
+																					"lValueRequested": true,
+																					"memberLocation": "1088:5:0",
+																					"memberName": "alpha",
+																					"nodeType": "MemberAccess",
+																					"referencedDeclaration": 5,
+																					"src": "1086:7:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_uint256",
+																						"typeString": "uint256"
+																					}
+																				},
+																				"nodeType": "Assignment",
+																				"operator": "=",
+																				"rightHandSide": {
+																					"hexValue": "3230",
+																					"id": 121,
+																					"isConstant": false,
+																					"isLValue": false,
+																					"isPure": true,
+																					"kind": "number",
+																					"lValueRequested": false,
+																					"nodeType": "Literal",
+																					"src": "1096:2:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_rational_20_by_1",
+																						"typeString": "int_const 20"
+																					},
+																					"value": "20"
+																				},
+																				"src": "1086:12:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"id": 123,
+																			"nodeType": "ExpressionStatement",
+																			"src": "1086:12:0"
+																		},
+																		{
+																			"expression": {
+																				"id": 128,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": false,
+																				"lValueRequested": false,
+																				"leftHandSide": {
+																					"expression": {
+																						"id": 124,
+																						"name": "v",
+																						"nodeType": "Identifier",
+																						"overloadedDeclarations": [],
+																						"referencedDeclaration": 20,
+																						"src": "1112:1:0",
+																						"typeDescriptions": {
+																							"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																							"typeString": "struct StoixQuoterLib.Variables memory"
+																						}
+																					},
+																					"id": 126,
+																					"isConstant": false,
+																					"isLValue": true,
+																					"isPure": false,
+																					"lValueRequested": true,
+																					"memberLocation": "1114:4:0",
+																					"memberName": "beta",
+																					"nodeType": "MemberAccess",
+																					"referencedDeclaration": 7,
+																					"src": "1112:6:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_uint256",
+																						"typeString": "uint256"
+																					}
+																				},
+																				"nodeType": "Assignment",
+																				"operator": "=",
+																				"rightHandSide": {
+																					"hexValue": "3330",
+																					"id": 127,
+																					"isConstant": false,
+																					"isLValue": false,
+																					"isPure": true,
+																					"kind": "number",
+																					"lValueRequested": false,
+																					"nodeType": "Literal",
+																					"src": "1121:2:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_rational_30_by_1",
+																						"typeString": "int_const 30"
+																					},
+																					"value": "30"
+																				},
+																				"src": "1112:11:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"id": 129,
+																			"nodeType": "ExpressionStatement",
+																			"src": "1112:11:0"
+																		},
+																		{
+																			"expression": {
+																				"id": 134,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": false,
+																				"lValueRequested": false,
+																				"leftHandSide": {
+																					"expression": {
+																						"id": 130,
+																						"name": "v",
+																						"nodeType": "Identifier",
+																						"overloadedDeclarations": [],
+																						"referencedDeclaration": 20,
+																						"src": "1137:1:0",
+																						"typeDescriptions": {
+																							"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																							"typeString": "struct StoixQuoterLib.Variables memory"
+																						}
+																					},
+																					"id": 132,
+																					"isConstant": false,
+																					"isLValue": true,
+																					"isPure": false,
+																					"lValueRequested": true,
+																					"memberLocation": "1139:5:0",
+																					"memberName": "gamma",
+																					"nodeType": "MemberAccess",
+																					"referencedDeclaration": 9,
+																					"src": "1137:7:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_uint256",
+																						"typeString": "uint256"
+																					}
+																				},
+																				"nodeType": "Assignment",
+																				"operator": "=",
+																				"rightHandSide": {
+																					"hexValue": "3730",
+																					"id": 133,
+																					"isConstant": false,
+																					"isLValue": false,
+																					"isPure": true,
+																					"kind": "number",
+																					"lValueRequested": false,
+																					"nodeType": "Literal",
+																					"src": "1147:2:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_rational_70_by_1",
+																						"typeString": "int_const 70"
+																					},
+																					"value": "70"
+																				},
+																				"src": "1137:12:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"id": 135,
+																			"nodeType": "ExpressionStatement",
+																			"src": "1137:12:0"
+																		}
+																	]
+																}
+															},
+															"id": 138,
+															"nodeType": "IfStatement",
+															"src": "852:308:0",
+															"trueBody": {
+																"id": 113,
+																"nodeType": "Block",
+																"src": "873:130:0",
+																"statements": [
+																	{
+																		"expression": {
+																			"id": 99,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"leftHandSide": {
+																				"expression": {
+																					"id": 95,
+																					"name": "v",
+																					"nodeType": "Identifier",
+																					"overloadedDeclarations": [],
+																					"referencedDeclaration": 20,
+																					"src": "929:1:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																						"typeString": "struct StoixQuoterLib.Variables memory"
+																					}
+																				},
+																				"id": 97,
+																				"isConstant": false,
+																				"isLValue": true,
+																				"isPure": false,
+																				"lValueRequested": true,
+																				"memberLocation": "931:5:0",
+																				"memberName": "alpha",
+																				"nodeType": "MemberAccess",
+																				"referencedDeclaration": 5,
+																				"src": "929:7:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"nodeType": "Assignment",
+																			"operator": "=",
+																			"rightHandSide": {
+																				"hexValue": "3135",
+																				"id": 98,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": true,
+																				"kind": "number",
+																				"lValueRequested": false,
+																				"nodeType": "Literal",
+																				"src": "939:2:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_rational_15_by_1",
+																					"typeString": "int_const 15"
+																				},
+																				"value": "15"
+																			},
+																			"src": "929:12:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"id": 100,
+																		"nodeType": "ExpressionStatement",
+																		"src": "929:12:0"
+																	},
+																	{
+																		"expression": {
+																			"id": 105,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"leftHandSide": {
+																				"expression": {
+																					"id": 101,
+																					"name": "v",
+																					"nodeType": "Identifier",
+																					"overloadedDeclarations": [],
+																					"referencedDeclaration": 20,
+																					"src": "955:1:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																						"typeString": "struct StoixQuoterLib.Variables memory"
+																					}
+																				},
+																				"id": 103,
+																				"isConstant": false,
+																				"isLValue": true,
+																				"isPure": false,
+																				"lValueRequested": true,
+																				"memberLocation": "957:4:0",
+																				"memberName": "beta",
+																				"nodeType": "MemberAccess",
+																				"referencedDeclaration": 7,
+																				"src": "955:6:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"nodeType": "Assignment",
+																			"operator": "=",
+																			"rightHandSide": {
+																				"hexValue": "3530",
+																				"id": 104,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": true,
+																				"kind": "number",
+																				"lValueRequested": false,
+																				"nodeType": "Literal",
+																				"src": "964:2:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_rational_50_by_1",
+																					"typeString": "int_const 50"
+																				},
+																				"value": "50"
+																			},
+																			"src": "955:11:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"id": 106,
+																		"nodeType": "ExpressionStatement",
+																		"src": "955:11:0"
+																	},
+																	{
+																		"expression": {
+																			"id": 111,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"leftHandSide": {
+																				"expression": {
+																					"id": 107,
+																					"name": "v",
+																					"nodeType": "Identifier",
+																					"overloadedDeclarations": [],
+																					"referencedDeclaration": 20,
+																					"src": "980:1:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																						"typeString": "struct StoixQuoterLib.Variables memory"
+																					}
+																				},
+																				"id": 109,
+																				"isConstant": false,
+																				"isLValue": true,
+																				"isPure": false,
+																				"lValueRequested": true,
+																				"memberLocation": "982:5:0",
+																				"memberName": "gamma",
+																				"nodeType": "MemberAccess",
+																				"referencedDeclaration": 9,
+																				"src": "980:7:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"nodeType": "Assignment",
+																			"operator": "=",
+																			"rightHandSide": {
+																				"hexValue": "3530",
+																				"id": 110,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": true,
+																				"kind": "number",
+																				"lValueRequested": false,
+																				"nodeType": "Literal",
+																				"src": "990:2:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_rational_50_by_1",
+																					"typeString": "int_const 50"
+																				},
+																				"value": "50"
+																			},
+																			"src": "980:12:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"id": 112,
+																		"nodeType": "ExpressionStatement",
+																		"src": "980:12:0"
+																	}
+																]
+															}
+														},
+														"id": 139,
+														"nodeType": "IfStatement",
+														"src": "695:465:0",
+														"trueBody": {
+															"id": 90,
+															"nodeType": "Block",
+															"src": "716:130:0",
+															"statements": [
+																{
+																	"expression": {
+																		"id": 76,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": false,
+																		"lValueRequested": false,
+																		"leftHandSide": {
+																			"expression": {
+																				"id": 72,
+																				"name": "v",
+																				"nodeType": "Identifier",
+																				"overloadedDeclarations": [],
+																				"referencedDeclaration": 20,
+																				"src": "772:1:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																					"typeString": "struct StoixQuoterLib.Variables memory"
+																				}
+																			},
+																			"id": 74,
+																			"isConstant": false,
+																			"isLValue": true,
+																			"isPure": false,
+																			"lValueRequested": true,
+																			"memberLocation": "774:5:0",
+																			"memberName": "alpha",
+																			"nodeType": "MemberAccess",
+																			"referencedDeclaration": 5,
+																			"src": "772:7:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"nodeType": "Assignment",
+																		"operator": "=",
+																		"rightHandSide": {
+																			"hexValue": "3132",
+																			"id": 75,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": true,
+																			"kind": "number",
+																			"lValueRequested": false,
+																			"nodeType": "Literal",
+																			"src": "782:2:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_rational_12_by_1",
+																				"typeString": "int_const 12"
+																			},
+																			"value": "12"
+																		},
+																		"src": "772:12:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"id": 77,
+																	"nodeType": "ExpressionStatement",
+																	"src": "772:12:0"
+																},
+																{
+																	"expression": {
+																		"id": 82,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": false,
+																		"lValueRequested": false,
+																		"leftHandSide": {
+																			"expression": {
+																				"id": 78,
+																				"name": "v",
+																				"nodeType": "Identifier",
+																				"overloadedDeclarations": [],
+																				"referencedDeclaration": 20,
+																				"src": "798:1:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																					"typeString": "struct StoixQuoterLib.Variables memory"
+																				}
+																			},
+																			"id": 80,
+																			"isConstant": false,
+																			"isLValue": true,
+																			"isPure": false,
+																			"lValueRequested": true,
+																			"memberLocation": "800:4:0",
+																			"memberName": "beta",
+																			"nodeType": "MemberAccess",
+																			"referencedDeclaration": 7,
+																			"src": "798:6:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"nodeType": "Assignment",
+																		"operator": "=",
+																		"rightHandSide": {
+																			"hexValue": "3630",
+																			"id": 81,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": true,
+																			"kind": "number",
+																			"lValueRequested": false,
+																			"nodeType": "Literal",
+																			"src": "807:2:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_rational_60_by_1",
+																				"typeString": "int_const 60"
+																			},
+																			"value": "60"
+																		},
+																		"src": "798:11:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"id": 83,
+																	"nodeType": "ExpressionStatement",
+																	"src": "798:11:0"
+																},
+																{
+																	"expression": {
+																		"id": 88,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": false,
+																		"lValueRequested": false,
+																		"leftHandSide": {
+																			"expression": {
+																				"id": 84,
+																				"name": "v",
+																				"nodeType": "Identifier",
+																				"overloadedDeclarations": [],
+																				"referencedDeclaration": 20,
+																				"src": "823:1:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																					"typeString": "struct StoixQuoterLib.Variables memory"
+																				}
+																			},
+																			"id": 86,
+																			"isConstant": false,
+																			"isLValue": true,
+																			"isPure": false,
+																			"lValueRequested": true,
+																			"memberLocation": "825:5:0",
+																			"memberName": "gamma",
+																			"nodeType": "MemberAccess",
+																			"referencedDeclaration": 9,
+																			"src": "823:7:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"nodeType": "Assignment",
+																		"operator": "=",
+																		"rightHandSide": {
+																			"hexValue": "3430",
+																			"id": 87,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": true,
+																			"kind": "number",
+																			"lValueRequested": false,
+																			"nodeType": "Literal",
+																			"src": "833:2:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_rational_40_by_1",
+																				"typeString": "int_const 40"
+																			},
+																			"value": "40"
+																		},
+																		"src": "823:12:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"id": 89,
+																	"nodeType": "ExpressionStatement",
+																	"src": "823:12:0"
+																}
+															]
+														}
+													},
+													"id": 140,
+													"nodeType": "IfStatement",
+													"src": "538:622:0",
+													"trueBody": {
+														"id": 67,
+														"nodeType": "Block",
+														"src": "559:130:0",
+														"statements": [
+															{
+																"expression": {
+																	"id": 53,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": false,
+																	"lValueRequested": false,
+																	"leftHandSide": {
+																		"expression": {
+																			"id": 49,
+																			"name": "v",
+																			"nodeType": "Identifier",
+																			"overloadedDeclarations": [],
+																			"referencedDeclaration": 20,
+																			"src": "615:1:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																				"typeString": "struct StoixQuoterLib.Variables memory"
+																			}
+																		},
+																		"id": 51,
+																		"isConstant": false,
+																		"isLValue": true,
+																		"isPure": false,
+																		"lValueRequested": true,
+																		"memberLocation": "617:5:0",
+																		"memberName": "alpha",
+																		"nodeType": "MemberAccess",
+																		"referencedDeclaration": 5,
+																		"src": "615:7:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"nodeType": "Assignment",
+																	"operator": "=",
+																	"rightHandSide": {
+																		"hexValue": "3130",
+																		"id": 52,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": true,
+																		"kind": "number",
+																		"lValueRequested": false,
+																		"nodeType": "Literal",
+																		"src": "625:2:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_rational_10_by_1",
+																			"typeString": "int_const 10"
+																		},
+																		"value": "10"
+																	},
+																	"src": "615:12:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"id": 54,
+																"nodeType": "ExpressionStatement",
+																"src": "615:12:0"
+															},
+															{
+																"expression": {
+																	"id": 59,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": false,
+																	"lValueRequested": false,
+																	"leftHandSide": {
+																		"expression": {
+																			"id": 55,
+																			"name": "v",
+																			"nodeType": "Identifier",
+																			"overloadedDeclarations": [],
+																			"referencedDeclaration": 20,
+																			"src": "641:1:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																				"typeString": "struct StoixQuoterLib.Variables memory"
+																			}
+																		},
+																		"id": 57,
+																		"isConstant": false,
+																		"isLValue": true,
+																		"isPure": false,
+																		"lValueRequested": true,
+																		"memberLocation": "643:4:0",
+																		"memberName": "beta",
+																		"nodeType": "MemberAccess",
+																		"referencedDeclaration": 7,
+																		"src": "641:6:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"nodeType": "Assignment",
+																	"operator": "=",
+																	"rightHandSide": {
+																		"hexValue": "3730",
+																		"id": 58,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": true,
+																		"kind": "number",
+																		"lValueRequested": false,
+																		"nodeType": "Literal",
+																		"src": "650:2:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_rational_70_by_1",
+																			"typeString": "int_const 70"
+																		},
+																		"value": "70"
+																	},
+																	"src": "641:11:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"id": 60,
+																"nodeType": "ExpressionStatement",
+																"src": "641:11:0"
+															},
+															{
+																"expression": {
+																	"id": 65,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": false,
+																	"lValueRequested": false,
+																	"leftHandSide": {
+																		"expression": {
+																			"id": 61,
+																			"name": "v",
+																			"nodeType": "Identifier",
+																			"overloadedDeclarations": [],
+																			"referencedDeclaration": 20,
+																			"src": "666:1:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																				"typeString": "struct StoixQuoterLib.Variables memory"
+																			}
+																		},
+																		"id": 63,
+																		"isConstant": false,
+																		"isLValue": true,
+																		"isPure": false,
+																		"lValueRequested": true,
+																		"memberLocation": "668:5:0",
+																		"memberName": "gamma",
+																		"nodeType": "MemberAccess",
+																		"referencedDeclaration": 9,
+																		"src": "666:7:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"nodeType": "Assignment",
+																	"operator": "=",
+																	"rightHandSide": {
+																		"hexValue": "3330",
+																		"id": 64,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": true,
+																		"kind": "number",
+																		"lValueRequested": false,
+																		"nodeType": "Literal",
+																		"src": "676:2:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_rational_30_by_1",
+																			"typeString": "int_const 30"
+																		},
+																		"value": "30"
+																	},
+																	"src": "666:12:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"id": 66,
+																"nodeType": "ExpressionStatement",
+																"src": "666:12:0"
+															}
+														]
+													}
+												},
+												"id": 141,
+												"nodeType": "IfStatement",
+												"src": "382:778:0",
+												"trueBody": {
+													"id": 44,
+													"nodeType": "Block",
+													"src": "403:129:0",
+													"statements": [
+														{
+															"expression": {
+																"id": 30,
+																"isConstant": false,
+																"isLValue": false,
+																"isPure": false,
+																"lValueRequested": false,
+																"leftHandSide": {
+																	"expression": {
+																		"id": 26,
+																		"name": "v",
+																		"nodeType": "Identifier",
+																		"overloadedDeclarations": [],
+																		"referencedDeclaration": 20,
+																		"src": "459:1:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																			"typeString": "struct StoixQuoterLib.Variables memory"
+																		}
+																	},
+																	"id": 28,
+																	"isConstant": false,
+																	"isLValue": true,
+																	"isPure": false,
+																	"lValueRequested": true,
+																	"memberLocation": "461:5:0",
+																	"memberName": "alpha",
+																	"nodeType": "MemberAccess",
+																	"referencedDeclaration": 5,
+																	"src": "459:7:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"nodeType": "Assignment",
+																"operator": "=",
+																"rightHandSide": {
+																	"hexValue": "30",
+																	"id": 29,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": true,
+																	"kind": "number",
+																	"lValueRequested": false,
+																	"nodeType": "Literal",
+																	"src": "469:1:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_rational_0_by_1",
+																		"typeString": "int_const 0"
+																	},
+																	"value": "0"
+																},
+																"src": "459:11:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_uint256",
+																	"typeString": "uint256"
+																}
+															},
+															"id": 31,
+															"nodeType": "ExpressionStatement",
+															"src": "459:11:0"
+														},
+														{
+															"expression": {
+																"id": 36,
+																"isConstant": false,
+																"isLValue": false,
+																"isPure": false,
+																"lValueRequested": false,
+																"leftHandSide": {
+																	"expression": {
+																		"id": 32,
+																		"name": "v",
+																		"nodeType": "Identifier",
+																		"overloadedDeclarations": [],
+																		"referencedDeclaration": 20,
+																		"src": "484:1:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																			"typeString": "struct StoixQuoterLib.Variables memory"
+																		}
+																	},
+																	"id": 34,
+																	"isConstant": false,
+																	"isLValue": true,
+																	"isPure": false,
+																	"lValueRequested": true,
+																	"memberLocation": "486:4:0",
+																	"memberName": "beta",
+																	"nodeType": "MemberAccess",
+																	"referencedDeclaration": 7,
+																	"src": "484:6:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"nodeType": "Assignment",
+																"operator": "=",
+																"rightHandSide": {
+																	"hexValue": "3830",
+																	"id": 35,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": true,
+																	"kind": "number",
+																	"lValueRequested": false,
+																	"nodeType": "Literal",
+																	"src": "493:2:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_rational_80_by_1",
+																		"typeString": "int_const 80"
+																	},
+																	"value": "80"
+																},
+																"src": "484:11:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_uint256",
+																	"typeString": "uint256"
+																}
+															},
+															"id": 37,
+															"nodeType": "ExpressionStatement",
+															"src": "484:11:0"
+														},
+														{
+															"expression": {
+																"id": 42,
+																"isConstant": false,
+																"isLValue": false,
+																"isPure": false,
+																"lValueRequested": false,
+																"leftHandSide": {
+																	"expression": {
+																		"id": 38,
+																		"name": "v",
+																		"nodeType": "Identifier",
+																		"overloadedDeclarations": [],
+																		"referencedDeclaration": 20,
+																		"src": "509:1:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																			"typeString": "struct StoixQuoterLib.Variables memory"
+																		}
+																	},
+																	"id": 40,
+																	"isConstant": false,
+																	"isLValue": true,
+																	"isPure": false,
+																	"lValueRequested": true,
+																	"memberLocation": "511:5:0",
+																	"memberName": "gamma",
+																	"nodeType": "MemberAccess",
+																	"referencedDeclaration": 9,
+																	"src": "509:7:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																},
+																"nodeType": "Assignment",
+																"operator": "=",
+																"rightHandSide": {
+																	"hexValue": "3230",
+																	"id": 41,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": true,
+																	"kind": "number",
+																	"lValueRequested": false,
+																	"nodeType": "Literal",
+																	"src": "519:2:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_rational_20_by_1",
+																		"typeString": "int_const 20"
+																	},
+																	"value": "20"
+																},
+																"src": "509:12:0",
+																"typeDescriptions": {
+																	"typeIdentifier": "t_uint256",
+																	"typeString": "uint256"
+																}
+															},
+															"id": 43,
+															"nodeType": "ExpressionStatement",
+															"src": "509:12:0"
+														}
+													]
+												}
+											},
+											{
+												"expression": {
+													"id": 162,
+													"isConstant": false,
+													"isLValue": false,
+													"isPure": false,
+													"lValueRequested": false,
+													"leftHandSide": {
+														"id": 142,
+														"name": "quote",
+														"nodeType": "Identifier",
+														"overloadedDeclarations": [],
+														"referencedDeclaration": 16,
+														"src": "1230:5:0",
+														"typeDescriptions": {
+															"typeIdentifier": "t_uint256",
+															"typeString": "uint256"
+														}
+													},
+													"nodeType": "Assignment",
+													"operator": "=",
+													"rightHandSide": {
+														"commonType": {
+															"typeIdentifier": "t_uint256",
+															"typeString": "uint256"
+														},
+														"id": 161,
+														"isConstant": false,
+														"isLValue": false,
+														"isPure": false,
+														"lValueRequested": false,
+														"leftExpression": {
+															"components": [
+																{
+																	"commonType": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	},
+																	"id": 158,
+																	"isConstant": false,
+																	"isLValue": false,
+																	"isPure": false,
+																	"lValueRequested": false,
+																	"leftExpression": {
+																		"commonType": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		},
+																		"id": 151,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": false,
+																		"lValueRequested": false,
+																		"leftExpression": {
+																			"expression": {
+																				"id": 143,
+																				"name": "v",
+																				"nodeType": "Identifier",
+																				"overloadedDeclarations": [],
+																				"referencedDeclaration": 20,
+																				"src": "1239:1:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																					"typeString": "struct StoixQuoterLib.Variables memory"
+																				}
+																			},
+																			"id": 144,
+																			"isConstant": false,
+																			"isLValue": true,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"memberLocation": "1241:5:0",
+																			"memberName": "alpha",
+																			"nodeType": "MemberAccess",
+																			"referencedDeclaration": 5,
+																			"src": "1239:7:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"nodeType": "BinaryOperation",
+																		"operator": "+",
+																		"rightExpression": {
+																			"commonType": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			},
+																			"id": 150,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"leftExpression": {
+																				"expression": {
+																					"id": 145,
+																					"name": "v",
+																					"nodeType": "Identifier",
+																					"overloadedDeclarations": [],
+																					"referencedDeclaration": 20,
+																					"src": "1249:1:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																						"typeString": "struct StoixQuoterLib.Variables memory"
+																					}
+																				},
+																				"id": 146,
+																				"isConstant": false,
+																				"isLValue": true,
+																				"isPure": false,
+																				"lValueRequested": false,
+																				"memberLocation": "1251:4:0",
+																				"memberName": "beta",
+																				"nodeType": "MemberAccess",
+																				"referencedDeclaration": 7,
+																				"src": "1249:6:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"nodeType": "BinaryOperation",
+																			"operator": "*",
+																			"rightExpression": {
+																				"expression": {
+																					"expression": {
+																						"id": 147,
+																						"name": "r",
+																						"nodeType": "Identifier",
+																						"overloadedDeclarations": [],
+																						"referencedDeclaration": 13,
+																						"src": "1258:1:0",
+																						"typeDescriptions": {
+																							"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																							"typeString": "struct StoixQuoterRequest calldata"
+																						}
+																					},
+																					"id": 148,
+																					"isConstant": false,
+																					"isLValue": false,
+																					"isPure": false,
+																					"lValueRequested": false,
+																					"memberLocation": "1260:10:0",
+																					"memberName": "marketData",
+																					"nodeType": "MemberAccess",
+																					"referencedDeclaration": 195,
+																					"src": "1258:12:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_struct$_MarketData_$173_calldata_ptr",
+																						"typeString": "struct MarketData calldata"
+																					}
+																				},
+																				"id": 149,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": false,
+																				"lValueRequested": false,
+																				"memberLocation": "1271:4:0",
+																				"memberName": "spot",
+																				"nodeType": "MemberAccess",
+																				"referencedDeclaration": 170,
+																				"src": "1258:17:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_uint256",
+																					"typeString": "uint256"
+																				}
+																			},
+																			"src": "1249:26:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"src": "1239:36:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"nodeType": "BinaryOperation",
+																	"operator": "+",
+																	"rightExpression": {
+																		"commonType": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		},
+																		"id": 157,
+																		"isConstant": false,
+																		"isLValue": false,
+																		"isPure": false,
+																		"lValueRequested": false,
+																		"leftExpression": {
+																			"expression": {
+																				"id": 152,
+																				"name": "v",
+																				"nodeType": "Identifier",
+																				"overloadedDeclarations": [],
+																				"referencedDeclaration": 20,
+																				"src": "1278:1:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_struct$_Variables_$10_memory_ptr",
+																					"typeString": "struct StoixQuoterLib.Variables memory"
+																				}
+																			},
+																			"id": 153,
+																			"isConstant": false,
+																			"isLValue": true,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"memberLocation": "1280:5:0",
+																			"memberName": "gamma",
+																			"nodeType": "MemberAccess",
+																			"referencedDeclaration": 9,
+																			"src": "1278:7:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"nodeType": "BinaryOperation",
+																		"operator": "*",
+																		"rightExpression": {
+																			"expression": {
+																				"expression": {
+																					"id": 154,
+																					"name": "r",
+																					"nodeType": "Identifier",
+																					"overloadedDeclarations": [],
+																					"referencedDeclaration": 13,
+																					"src": "1288:1:0",
+																					"typeDescriptions": {
+																						"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+																						"typeString": "struct StoixQuoterRequest calldata"
+																					}
+																				},
+																				"id": 155,
+																				"isConstant": false,
+																				"isLValue": false,
+																				"isPure": false,
+																				"lValueRequested": false,
+																				"memberLocation": "1290:10:0",
+																				"memberName": "marketData",
+																				"nodeType": "MemberAccess",
+																				"referencedDeclaration": 195,
+																				"src": "1288:12:0",
+																				"typeDescriptions": {
+																					"typeIdentifier": "t_struct$_MarketData_$173_calldata_ptr",
+																					"typeString": "struct MarketData calldata"
+																				}
+																			},
+																			"id": 156,
+																			"isConstant": false,
+																			"isLValue": false,
+																			"isPure": false,
+																			"lValueRequested": false,
+																			"memberLocation": "1301:3:0",
+																			"memberName": "twa",
+																			"nodeType": "MemberAccess",
+																			"referencedDeclaration": 172,
+																			"src": "1288:16:0",
+																			"typeDescriptions": {
+																				"typeIdentifier": "t_uint256",
+																				"typeString": "uint256"
+																			}
+																		},
+																		"src": "1278:26:0",
+																		"typeDescriptions": {
+																			"typeIdentifier": "t_uint256",
+																			"typeString": "uint256"
+																		}
+																	},
+																	"src": "1239:65:0",
+																	"typeDescriptions": {
+																		"typeIdentifier": "t_uint256",
+																		"typeString": "uint256"
+																	}
+																}
+															],
+															"id": 159,
+															"isConstant": false,
+															"isInlineArray": false,
+															"isLValue": false,
+															"isPure": false,
+															"lValueRequested": false,
+															"nodeType": "TupleExpression",
+															"src": "1238:67:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_uint256",
+																"typeString": "uint256"
+															}
+														},
+														"nodeType": "BinaryOperation",
+														"operator": "/",
+														"rightExpression": {
+															"hexValue": "313030",
+															"id": 160,
+															"isConstant": false,
+															"isLValue": false,
+															"isPure": true,
+															"kind": "number",
+															"lValueRequested": false,
+															"nodeType": "Literal",
+															"src": "1308:3:0",
+															"typeDescriptions": {
+																"typeIdentifier": "t_rational_100_by_1",
+																"typeString": "int_const 100"
+															},
+															"value": "100"
+														},
+														"src": "1238:73:0",
+														"typeDescriptions": {
+															"typeIdentifier": "t_uint256",
+															"typeString": "uint256"
+														}
+													},
+													"src": "1230:81:0",
+													"typeDescriptions": {
+														"typeIdentifier": "t_uint256",
+														"typeString": "uint256"
+													}
+												},
+												"id": 163,
+												"nodeType": "ExpressionStatement",
+												"src": "1230:81:0"
+											}
+										]
+									},
+									"id": 165,
+									"implemented": true,
+									"kind": "function",
+									"modifiers": [],
+									"name": "calcQuote",
+									"nameLocation": "265:9:0",
+									"nodeType": "FunctionDefinition",
+									"parameters": {
+										"id": 14,
+										"nodeType": "ParameterList",
+										"parameters": [
+											{
+												"constant": false,
+												"id": 13,
+												"mutability": "mutable",
+												"name": "r",
+												"nameLocation": "303:1:0",
+												"nodeType": "VariableDeclaration",
+												"scope": 165,
+												"src": "275:29:0",
+												"stateVariable": false,
+												"storageLocation": "calldata",
+												"typeDescriptions": {
+													"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_calldata_ptr",
+													"typeString": "struct StoixQuoterRequest"
+												},
+												"typeName": {
+													"id": 12,
+													"nodeType": "UserDefinedTypeName",
+													"pathNode": {
+														"id": 11,
+														"name": "StoixQuoterRequest",
+														"nameLocations": [
+															"275:18:0"
+														],
+														"nodeType": "IdentifierPath",
+														"referencedDeclaration": 199,
+														"src": "275:18:0"
+													},
+													"referencedDeclaration": 199,
+													"src": "275:18:0",
+													"typeDescriptions": {
+														"typeIdentifier": "t_struct$_StoixQuoterRequest_$199_storage_ptr",
+														"typeString": "struct StoixQuoterRequest"
+													}
+												},
+												"visibility": "internal"
+											}
+										],
+										"src": "274:31:0"
+									},
+									"returnParameters": {
+										"id": 17,
+										"nodeType": "ParameterList",
+										"parameters": [
+											{
+												"constant": false,
+												"id": 16,
+												"mutability": "mutable",
+												"name": "quote",
+												"nameLocation": "337:5:0",
+												"nodeType": "VariableDeclaration",
+												"scope": 165,
+												"src": "329:13:0",
+												"stateVariable": false,
+												"storageLocation": "default",
+												"typeDescriptions": {
+													"typeIdentifier": "t_uint256",
+													"typeString": "uint256"
+												},
+												"typeName": {
+													"id": 15,
+													"name": "uint256",
+													"nodeType": "ElementaryTypeName",
+													"src": "329:7:0",
+													"typeDescriptions": {
+														"typeIdentifier": "t_uint256",
+														"typeString": "uint256"
+													}
+												},
+												"visibility": "internal"
+											}
+										],
+										"src": "328:15:0"
+									},
+									"scope": 166,
+									"src": "256:1063:0",
+									"stateMutability": "pure",
+									"virtual": false,
+									"visibility": "internal"
+								}
+							],
+							"scope": 167,
+							"src": "129:1193:0",
+							"usedErrors": [],
+							"usedEvents": []
+						}
+					],
+					"src": "33:1289:0"
+				},
+				"id": 0
+			},
+			"contracts/structs/MarketData.sol": {
+				"ast": {
+					"absolutePath": "contracts/structs/MarketData.sol",
+					"exportedSymbols": {
+						"MarketData": [
+							173
+						]
+					},
+					"id": 174,
+					"license": "MIT",
+					"nodeType": "SourceUnit",
+					"nodes": [
+						{
+							"id": 168,
+							"literals": [
+								"solidity",
+								"0.8",
+								".27"
+							],
+							"nodeType": "PragmaDirective",
+							"src": "32:23:1"
+						},
+						{
+							"canonicalName": "MarketData",
+							"id": 173,
+							"members": [
+								{
+									"constant": false,
+									"id": 170,
+									"mutability": "mutable",
+									"name": "spot",
+									"nameLocation": "89:4:1",
+									"nodeType": "VariableDeclaration",
+									"scope": 173,
+									"src": "81:12:1",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_uint256",
+										"typeString": "uint256"
+									},
+									"typeName": {
+										"id": 169,
+										"name": "uint256",
+										"nodeType": "ElementaryTypeName",
+										"src": "81:7:1",
+										"typeDescriptions": {
+											"typeIdentifier": "t_uint256",
+											"typeString": "uint256"
+										}
+									},
+									"visibility": "internal"
+								},
+								{
+									"constant": false,
+									"id": 172,
+									"mutability": "mutable",
+									"name": "twa",
+									"nameLocation": "107:3:1",
+									"nodeType": "VariableDeclaration",
+									"scope": 173,
+									"src": "99:11:1",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_uint256",
+										"typeString": "uint256"
+									},
+									"typeName": {
+										"id": 171,
+										"name": "uint256",
+										"nodeType": "ElementaryTypeName",
+										"src": "99:7:1",
+										"typeDescriptions": {
+											"typeIdentifier": "t_uint256",
+											"typeString": "uint256"
+										}
+									},
+									"visibility": "internal"
+								}
+							],
+							"name": "MarketData",
+							"nameLocation": "64:10:1",
+							"nodeType": "StructDefinition",
+							"scope": 174,
+							"src": "57:56:1",
+							"visibility": "public"
+						}
+					],
+					"src": "32:82:1"
+				},
+				"id": 1
+			},
+			"contracts/structs/QuoteParams.sol": {
+				"ast": {
+					"absolutePath": "contracts/structs/QuoteParams.sol",
+					"exportedSymbols": {
+						"QuoteParams": [
+							184
+						]
+					},
+					"id": 185,
+					"license": "MIT",
+					"nodeType": "SourceUnit",
+					"nodes": [
+						{
+							"id": 175,
+							"literals": [
+								"solidity",
+								"0.8",
+								".27"
+							],
+							"nodeType": "PragmaDirective",
+							"src": "32:23:2"
+						},
+						{
+							"canonicalName": "QuoteParams",
+							"id": 184,
+							"members": [
+								{
+									"constant": false,
+									"id": 177,
+									"mutability": "mutable",
+									"name": "amount",
+									"nameLocation": "92:6:2",
+									"nodeType": "VariableDeclaration",
+									"scope": 184,
+									"src": "84:14:2",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_uint256",
+										"typeString": "uint256"
+									},
+									"typeName": {
+										"id": 176,
+										"name": "uint256",
+										"nodeType": "ElementaryTypeName",
+										"src": "84:7:2",
+										"typeDescriptions": {
+											"typeIdentifier": "t_uint256",
+											"typeString": "uint256"
+										}
+									},
+									"visibility": "internal"
+								},
+								{
+									"constant": false,
+									"id": 179,
+									"mutability": "mutable",
+									"name": "zeroForOne",
+									"nameLocation": "110:10:2",
+									"nodeType": "VariableDeclaration",
+									"scope": 184,
+									"src": "105:15:2",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_bool",
+										"typeString": "bool"
+									},
+									"typeName": {
+										"id": 178,
+										"name": "bool",
+										"nodeType": "ElementaryTypeName",
+										"src": "105:4:2",
+										"typeDescriptions": {
+											"typeIdentifier": "t_bool",
+											"typeString": "bool"
+										}
+									},
+									"visibility": "internal"
+								},
+								{
+									"constant": false,
+									"id": 181,
+									"mutability": "mutable",
+									"name": "inventory0",
+									"nameLocation": "135:10:2",
+									"nodeType": "VariableDeclaration",
+									"scope": 184,
+									"src": "127:18:2",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_uint128",
+										"typeString": "uint128"
+									},
+									"typeName": {
+										"id": 180,
+										"name": "uint128",
+										"nodeType": "ElementaryTypeName",
+										"src": "127:7:2",
+										"typeDescriptions": {
+											"typeIdentifier": "t_uint128",
+											"typeString": "uint128"
+										}
+									},
+									"visibility": "internal"
+								},
+								{
+									"constant": false,
+									"id": 183,
+									"mutability": "mutable",
+									"name": "inventory1",
+									"nameLocation": "160:10:2",
+									"nodeType": "VariableDeclaration",
+									"scope": 184,
+									"src": "152:18:2",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_uint128",
+										"typeString": "uint128"
+									},
+									"typeName": {
+										"id": 182,
+										"name": "uint128",
+										"nodeType": "ElementaryTypeName",
+										"src": "152:7:2",
+										"typeDescriptions": {
+											"typeIdentifier": "t_uint128",
+											"typeString": "uint128"
+										}
+									},
+									"visibility": "internal"
+								}
+							],
+							"name": "QuoteParams",
+							"nameLocation": "66:11:2",
+							"nodeType": "StructDefinition",
+							"scope": 185,
+							"src": "59:114:2",
+							"visibility": "public"
+						}
+					],
+					"src": "32:141:2"
+				},
+				"id": 2
+			},
+			"contracts/structs/StoixQuoterRequest.sol": {
+				"ast": {
+					"absolutePath": "contracts/structs/StoixQuoterRequest.sol",
+					"exportedSymbols": {
+						"MarketData": [
+							173
+						],
+						"QuoteParams": [
+							184
+						],
+						"StoixQuoterRequest": [
+							199
+						]
+					},
+					"id": 200,
+					"license": "MIT",
+					"nodeType": "SourceUnit",
+					"nodes": [
+						{
+							"id": 186,
+							"literals": [
+								"solidity",
+								"0.8",
+								".27"
+							],
+							"nodeType": "PragmaDirective",
+							"src": "32:23:3"
+						},
+						{
+							"absolutePath": "contracts/structs/MarketData.sol",
+							"file": "./MarketData.sol",
+							"id": 188,
+							"nameLocation": "-1:-1:-1",
+							"nodeType": "ImportDirective",
+							"scope": 200,
+							"sourceUnit": 174,
+							"src": "59:44:3",
+							"symbolAliases": [
+								{
+									"foreign": {
+										"id": 187,
+										"name": "MarketData",
+										"nodeType": "Identifier",
+										"overloadedDeclarations": [],
+										"referencedDeclaration": 173,
+										"src": "67:10:3",
+										"typeDescriptions": {}
+									},
+									"nameLocation": "-1:-1:-1"
+								}
+							],
+							"unitAlias": ""
+						},
+						{
+							"absolutePath": "contracts/structs/QuoteParams.sol",
+							"file": "./QuoteParams.sol",
+							"id": 190,
+							"nameLocation": "-1:-1:-1",
+							"nodeType": "ImportDirective",
+							"scope": 200,
+							"sourceUnit": 185,
+							"src": "104:46:3",
+							"symbolAliases": [
+								{
+									"foreign": {
+										"id": 189,
+										"name": "QuoteParams",
+										"nodeType": "Identifier",
+										"overloadedDeclarations": [],
+										"referencedDeclaration": 184,
+										"src": "112:11:3",
+										"typeDescriptions": {}
+									},
+									"nameLocation": "-1:-1:-1"
+								}
+							],
+							"unitAlias": ""
+						},
+						{
+							"canonicalName": "StoixQuoterRequest",
+							"id": 199,
+							"members": [
+								{
+									"constant": false,
+									"id": 192,
+									"mutability": "mutable",
+									"name": "bucketId",
+									"nameLocation": "192:8:3",
+									"nodeType": "VariableDeclaration",
+									"scope": 199,
+									"src": "184:16:3",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_uint256",
+										"typeString": "uint256"
+									},
+									"typeName": {
+										"id": 191,
+										"name": "uint256",
+										"nodeType": "ElementaryTypeName",
+										"src": "184:7:3",
+										"typeDescriptions": {
+											"typeIdentifier": "t_uint256",
+											"typeString": "uint256"
+										}
+									},
+									"visibility": "internal"
+								},
+								{
+									"constant": false,
+									"id": 195,
+									"mutability": "mutable",
+									"name": "marketData",
+									"nameLocation": "218:10:3",
+									"nodeType": "VariableDeclaration",
+									"scope": 199,
+									"src": "207:21:3",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_struct$_MarketData_$173_storage_ptr",
+										"typeString": "struct MarketData"
+									},
+									"typeName": {
+										"id": 194,
+										"nodeType": "UserDefinedTypeName",
+										"pathNode": {
+											"id": 193,
+											"name": "MarketData",
+											"nameLocations": [
+												"207:10:3"
+											],
+											"nodeType": "IdentifierPath",
+											"referencedDeclaration": 173,
+											"src": "207:10:3"
+										},
+										"referencedDeclaration": 173,
+										"src": "207:10:3",
+										"typeDescriptions": {
+											"typeIdentifier": "t_struct$_MarketData_$173_storage_ptr",
+											"typeString": "struct MarketData"
+										}
+									},
+									"visibility": "internal"
+								},
+								{
+									"constant": false,
+									"id": 198,
+									"mutability": "mutable",
+									"name": "quoteParams",
+									"nameLocation": "246:11:3",
+									"nodeType": "VariableDeclaration",
+									"scope": 199,
+									"src": "234:23:3",
+									"stateVariable": false,
+									"storageLocation": "default",
+									"typeDescriptions": {
+										"typeIdentifier": "t_struct$_QuoteParams_$184_storage_ptr",
+										"typeString": "struct QuoteParams"
+									},
+									"typeName": {
+										"id": 197,
+										"nodeType": "UserDefinedTypeName",
+										"pathNode": {
+											"id": 196,
+											"name": "QuoteParams",
+											"nameLocations": [
+												"234:11:3"
+											],
+											"nodeType": "IdentifierPath",
+											"referencedDeclaration": 184,
+											"src": "234:11:3"
+										},
+										"referencedDeclaration": 184,
+										"src": "234:11:3",
+										"typeDescriptions": {
+											"typeIdentifier": "t_struct$_QuoteParams_$184_storage_ptr",
+											"typeString": "struct QuoteParams"
+										}
+									},
+									"visibility": "internal"
+								}
+							],
+							"name": "StoixQuoterRequest",
+							"nameLocation": "159:18:3",
+							"nodeType": "StructDefinition",
+							"scope": 200,
+							"src": "152:108:3",
+							"visibility": "public"
+						}
+					],
+					"src": "32:232:3"
+				},
+				"id": 3
+			}
+		}
+	}
+}

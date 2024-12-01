@@ -6,6 +6,17 @@
 	"output": {
 		"abi": [
 			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_marketAddress",
+						"type": "address"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "constructor"
+			},
+			{
 				"anonymous": false,
 				"inputs": [
 					{
@@ -181,13 +192,6 @@
 				"type": "function"
 			},
 			{
-				"inputs": [],
-				"name": "brothers",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
 				"inputs": [
 					{
 						"internalType": "uint256",
@@ -230,6 +234,19 @@
 						"internalType": "bool",
 						"name": "isOperator",
 						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "marketAddress",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
 					}
 				],
 				"stateMutability": "view",
@@ -508,11 +525,11 @@
 			]
 		},
 		"contracts/PoolManager.sol": {
-			"keccak256": "0x3c67f26e045d6bd4534f0acfb3161b3204c45e0c5f93186de8a02530eb64b52f",
+			"keccak256": "0x48b1dea845fc7e5ffc0936332175e43af6080d2f853d58497b6dd3ed6e0209be",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://0ba6c4510f622313496794d8b8ac3c6bb2e63c2d355b7c03fbae8a93b8a77873",
-				"dweb:/ipfs/QmRnbGoCBTRM3xfNaVQspFf4WbBU7P6xgGAvGpfRwt5vtV"
+				"bzz-raw://b472d35303f59599b7f289b66f32dfcf2ce900a85fca62f8b489410d2e76ef0f",
+				"dweb:/ipfs/QmTJd9CDkAbren56XTjA9MGSg1Qcv894wDJV5N56adSkU8"
 			]
 		},
 		"contracts/interfaces/external/IERC6909Claims.sol": {
@@ -540,11 +557,11 @@
 			]
 		},
 		"contracts/libraries/PoolIDHelper.sol": {
-			"keccak256": "0x97c7d67e406b25a727163a465badc6612a60a7e3fc4c581153d51d55f62972e7",
+			"keccak256": "0x06cb5c00421fb6ed4d04824fd6944e1e02a3187cea75c7cc6e80aa86c41074ec",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://67264f60f5d28eefb4d775fdf8e4deea73ad4bc095c92868c5f1081496b066fb",
-				"dweb:/ipfs/QmU18Gv3nSRJWMLYMchtHVNAsxTd6cxsAqG8enKXjWsd63"
+				"bzz-raw://48351db9280ebd2db16a30205784c91bdd057f74570611a84ca828914214db67",
+				"dweb:/ipfs/Qmdp74KFYkKrhuztSjhPArcAUnc3drhT4G9ehxkW9voaDS"
 			]
 		},
 		"contracts/structs/MarketData.sol": {
