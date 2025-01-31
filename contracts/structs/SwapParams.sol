@@ -2,10 +2,14 @@
 pragma solidity 0.8.27;
 
 struct SwapParams {
-    uint80 currencyID;
+    address asset0; 
+    address asset1; 
     address quoter;
-    uint16 bucketID;
     uint256 amount; 
     bool zeroForOne;
-}
+    bytes3 markings;
+} 
+
+
+
 
