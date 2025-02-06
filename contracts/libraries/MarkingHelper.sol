@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 import {Marking} from "../structs/Marking.sol";
 
-library MarkingsHelper {
+library MarkingHelper {
    
 
     function decodeMarkings(bytes3 markings) external pure returns (Marking memory result) {

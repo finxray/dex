@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-contract PoolIDCreator {
+library PoolIDCreator {
     function createPoolID(
         address asset0,
         address asset1,
         address quoter,
         bytes3 markings
-    ) external pure returns (bytes32 poolID) {
+    ) internal pure returns (bytes32 poolID) {
         assembly {
             // Allocate memory for the hash input (asset0, asset1, quoter)
             let memPointer := mload(0x40)

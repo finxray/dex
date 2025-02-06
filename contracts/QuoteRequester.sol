@@ -3,14 +3,14 @@ pragma solidity 0.8.27;
 
 import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol";
-import {MarkingsHelper} from "./libraries/MarkingsHelper.sol";
+import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {IQuoter} from "./interfaces/internal/quoters/IQuoter.sol";
 import {IQuoterOracle} from "./interfaces/internal/quoters/IQuoterOracle.sol";
 import {IQuoterDexOracle} from "./interfaces/internal/quoters/IQuoterDexOracle.sol";
 import {DexMarketData} from "./structs/DexMarketData.sol";
 import {OracleMarketData} from "./structs/OracleMarketData.sol"; 
 import {MarketDataLib} from "./libraries/MarketDataLib.sol";
-import {QuoteBase, Inventory, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
+import {Inventory, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 import {DexMarketData} from "./structs/DexMarketData.sol";
 import {OracleMarketData} from "./structs/OracleMarketData.sol";
 import {IQuoterDex} from "./interfaces/internal/quoters/IQuoterDex.sol";
@@ -40,16 +40,16 @@ abstract contract QuoteRequester {
         if (m.isDexMarket && m.isOracleMarket) {
 
             // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterDexOracle(params.base.quoter).quote(params, getStoredDexData(dexAddress), getStoredOracleData(oracleAddress));
+            result = IQuoterDexOracle(params.quoter).quote(params, getStoredDexData(dexAddress), getStoredOracleData(oracleAddress));
         } else if (!m.isDexMarket && !m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
-            result = IQuoter(params.base.quoter).quote(params);
+            result = IQuoter(params.quoter).quote(params);
         } else if (m.isDexMarket && !m.isOracleMarket) {
             // `m.isDexMarket` is true, `m.isOracleMarket` is false: Call IQuoterDex
-            result = IQuoterDex(params.base.quoter).quote(params, getStoredDexData(dexAddress));
+            result = IQuoterDex(params.quoter).quote(params, getStoredDexData(dexAddress));
         } else if (!m.isDexMarket && m.isOracleMarket) {
             // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
-            result = IQuoterOracle(params.base.quoter).quote(params, getStoredOracleData(oracleAddress));
+            result = IQuoterOracle(params.quoter).quote(params, getStoredOracleData(oracleAddress));
         } 
     }
 
@@ -59,16 +59,16 @@ abstract contract QuoteRequester {
         // Routing logic based on markings
         if (m.isDexMarket && m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterDexOracle(params.base.quoter).quoteBatch(params, getStoredDexData(dexAddress), getStoredOracleData(oracleAddress));
+            result = IQuoterDexOracle(params.quoter).quoteBatch(params, getStoredDexData(dexAddress), getStoredOracleData(oracleAddress));
         } else if (!m.isDexMarket && !m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
-            result = IQuoter(params.base.quoter).quoteBatch(params);
+            result = IQuoter(params.quoter).quoteBatch(params);
         } else if (m.isDexMarket && !m.isOracleMarket) {
             // `m.isDexMarket` is true, `m.isOracleMarket` is false: Call IQuoterDex
-            result = IQuoterDex(params.base.quoter).quoteBatch(params, getStoredDexData(dexAddress));
+            result = IQuoterDex(params.quoter).quoteBatch(params, getStoredDexData(dexAddress));
         } else if (!m.isDexMarket && m.isOracleMarket) {
             // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
-            result = IQuoterOracle(params.base.quoter).quoteBatch(params, getStoredOracleData(oracleAddress));
+            result = IQuoterOracle(params.quoter).quoteBatch(params, getStoredOracleData(oracleAddress));
         } 
     }
 } 
