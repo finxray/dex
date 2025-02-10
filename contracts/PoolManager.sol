@@ -28,12 +28,7 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester {
         }
     }
 
-    
-    
-
-    function dexData() public view returns (DexMarketData memory) {
-
-    }
+ function dexData() public view returns (DexMarketData memory) { }
 
     function oracleData() public view returns (OracleMarketData memory) {
 
