@@ -5,18 +5,22 @@ import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol";
 import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {PoolIDCreator} from "./libraries/PoolIDCreator.sol";
+import {MarketDataLib} from "./libraries/MarketDataLib.sol";
+import {TransientStorage} from "./libraries/TransientStorage.sol";
 import {IQuoter} from "./interfaces/internal/quoters/IQuoter.sol";
 import {IQuoterOracle} from "./interfaces/internal/quoters/IQuoterOracle.sol";
 import {IQuoterDexOracle} from "./interfaces/internal/quoters/IQuoterDexOracle.sol";
+import {IDexMarket} from "./interfaces/internal/market/IDexMarket.sol";
+import {IOracleMarket} from "./interfaces/internal/market/IOracleMarket.sol";
 import {DexMarketData} from "./structs/DexMarketData.sol";
 import {OracleMarketData} from "./structs/OracleMarketData.sol"; 
-import {MarketDataLib} from "./libraries/MarketDataLib.sol";
-import {Inventory, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
+import {Inventory, QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 import {DexMarketData} from "./structs/DexMarketData.sol";
 import {OracleMarketData} from "./structs/OracleMarketData.sol";
 import {IQuoterDex} from "./interfaces/internal/quoters/IQuoterDex.sol";
 
 abstract contract QuoteRequester {
+    using TransientStorage for address;
     // Temproraly constructotr and immutable variable. Later will be replaced by a function with ownership access or can 
     // be left as it but in that case MarketQuoter will be executed via a proxy contract
     address immutable public defaultDexMarketAddress;
@@ -31,18 +35,33 @@ abstract contract QuoteRequester {
     }
 
     // function inventories(bytes32 poolID) public virtual view returns (Inventory memory);
-    function getStoredDexData(address dexAddress) public virtual view returns (DexMarketData memory); 
+    function getStoredDexData(address dexAddress, QuoteParamsBase memory base, uint256 amount) public view returns (bytes memory data) {
+        data = dexAddress.loadTransient();
+        if (data.length == 0) {
+            data = IDexMarket(dexAddress).getData(base, amount);
+            dexAddress.storeTransient(data);
+        } 
+
+        return data;
+    }
+
     function getStoredOracleData(address oracleAddress) public virtual view returns (OracleMarketData memory);
     function inventory(bytes32 poolID) public virtual view returns (Inventory memory);
 
     function quote(SwapParams calldata p) internal returns (uint256 result) {
          bytes32 poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[0]);
         Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
-        QuoteParams memory params = QuoteParams({
+        QuoteParamsBase memory baseParams = QuoteParamsBase({
             asset0: p.asset0,
             asset1: p.asset1, 
+            zeroForOne: p.zeroForOne
+        }); 
+
+        uint256 totalAmount = p.amount[0];
+
+        QuoteParams memory params = QuoteParams({
+            base: baseParams,
             quoter: p.quoter,
-            zeroForOne: p.zeroForOne,
             amount: p.amount[0],
             inventory: inventory(poolID), 
             bucketID: m.bucketID

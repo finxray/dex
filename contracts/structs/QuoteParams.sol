@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;  
 
-import {Inventory} from "./Inventory.sol";
+import {Inventory} from "./Inventory.sol"; 
 
-struct QuoteParams {
+struct QuoteParamsBase {
     address asset0; 
     address asset1; 
-    address quoter;
     bool zeroForOne;
+}
+
+
+struct QuoteParams {
+    QuoteParamsBase base;
+    address quoter;
     uint256 amount; 
     Inventory inventory; 
     uint16 bucketID;
 } 
 
 struct QuoteParamsBatch {
-    address asset0; 
-    address asset1; 
+    QuoteParamsBase base;
     address quoter;
-    bool zeroForOne; 
     uint256[] amount; 
     Inventory[] inventory; 
     uint16[] bucketID;
