@@ -4,6 +4,7 @@ pragma solidity 0.8.27;
 import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol";
 import {MarkingHelper} from "./libraries/MarkingHelper.sol";
+import {PoolIDCreator} from "./libraries/PoolIDCreator.sol";
 import {IQuoter} from "./interfaces/internal/quoters/IQuoter.sol";
 import {IQuoterOracle} from "./interfaces/internal/quoters/IQuoterOracle.sol";
 import {IQuoterDexOracle} from "./interfaces/internal/quoters/IQuoterDexOracle.sol";
@@ -32,9 +33,21 @@ abstract contract QuoteRequester {
     // function inventories(bytes32 poolID) public virtual view returns (Inventory memory);
     function getStoredDexData(address dexAddress) public virtual view returns (DexMarketData memory); 
     function getStoredOracleData(address oracleAddress) public virtual view returns (OracleMarketData memory);
+    function inventory(bytes32 poolID) public virtual view returns (Inventory memory);
 
-    function quote(QuoteParams calldata params, Marking calldata m) external returns (uint256 result) {
-        // Routing logic based on markings
+    function quote(SwapParams calldata p) internal returns (uint256 result) {
+         bytes32 poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[0]);
+        Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
+        QuoteParams memory params = QuoteParams({
+            asset0: p.asset0,
+            asset1: p.asset1, 
+            quoter: p.quoter,
+            zeroForOne: p.zeroForOne,
+            amount: p.amount[0],
+            inventory: inventory(poolID), 
+            bucketID: m.bucketID
+        });
+
         address dexAddress = (m.isDexDefault) ? defaultDexMarketAddress : dexMarketAddress[m.dexStorageAddress];
         address oracleAddress = (m.isOracleDefault) ? defaultOracleMarketAddress : oracleMarketAddress[m.oracleStorageAddress];
         if (m.isDexMarket && m.isOracleMarket) {
@@ -51,9 +64,30 @@ abstract contract QuoteRequester {
             // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
             result = IQuoterOracle(params.quoter).quote(params, getStoredOracleData(oracleAddress));
         } 
-    }
+    } 
+ 
 
-    function quoteBatch(QuoteParamsBatch calldata params, Marking calldata m) external returns (uint256[] memory result) {
+    function quoteBatch(SwapParams calldata p) internal returns (uint256[] memory result) {
+            bytes32[] memory poolIDs = new bytes32[](p.markings.length);
+            Inventory[] memory inventories = new Inventory[](poolIDs.length);
+            uint16[] memory bucketIDs;
+            Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
+             for (uint i = 0; i < p.markings.length ;i++) {
+                poolIDs[i] = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[i]);
+                inventories[i]= inventory(poolIDs[i]);
+                bucketIDs[i]= MarkingHelper.decodeMarkings(p.markings[i]).bucketID;
+            }
+
+            QuoteParamsBatch memory params = QuoteParamsBatch({        
+                asset0: p.asset0,
+                asset1: p.asset1,
+                quoter: p.quoter,
+                zeroForOne: p.zeroForOne,  
+                amount: p.amount,
+                inventory: inventories,
+                bucketID: bucketIDs
+            });  
+
         address dexAddress = (m.isDexDefault) ? defaultDexMarketAddress : dexMarketAddress[m.dexStorageAddress];
         address oracleAddress = (m.isOracleDefault) ? defaultOracleMarketAddress : oracleMarketAddress[m.oracleStorageAddress];
         // Routing logic based on markings
@@ -70,7 +104,7 @@ abstract contract QuoteRequester {
             // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
             result = IQuoterOracle(params.quoter).quoteBatch(params, getStoredOracleData(oracleAddress));
         } 
-    }
+    } 
 } 
 
 
