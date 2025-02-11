@@ -5,16 +5,16 @@ import {DexMarketData} from "../../../structs/DexMarketData.sol";
 import {OracleMarketData} from "../../../structs/OracleMarketData.sol";
 
 
-interface IQuoterDexOracle {
+interface IQuoterBothData {
     function quote(
-        QuoteParams calldata params, 
-        DexMarketData calldata dex, 
-        OracleMarketData calldata oracle
+        QuoteParams memory params, 
+        bytes memory dexMarketData, 
+        bytes memory oracleMarketData
     ) external returns (uint256 quote); 
 
     function quoteBatch(
-        QuoteParamsBatch calldata params, 
-        DexMarketData calldata dex, 
-        OracleMarketData calldata oracle
+        QuoteParams memory params, 
+        bytes memory dexMarketData, 
+        bytes memory oracleMarketData
     ) external returns (uint256[] memory quotes); 
 } 

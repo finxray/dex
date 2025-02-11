@@ -1,23 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
-import {SwapParams} from "./structs/SwapParams.sol";
-import {Marking} from "./structs/Marking.sol";
+
 import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {PoolIDCreator} from "./libraries/PoolIDCreator.sol";
 import {MarketDataLib} from "./libraries/MarketDataLib.sol";
 import {TransientStorage} from "./libraries/TransientStorage.sol";
-import {IQuoter} from "./interfaces/internal/quoters/IQuoter.sol";
-import {IQuoterOracle} from "./interfaces/internal/quoters/IQuoterOracle.sol";
-import {IQuoterDexOracle} from "./interfaces/internal/quoters/IQuoterDexOracle.sol";
-import {IDexMarket} from "./interfaces/internal/market/IDexMarket.sol";
-import {IOracleMarket} from "./interfaces/internal/market/IOracleMarket.sol";
-import {DexMarketData} from "./structs/DexMarketData.sol";
-import {OracleMarketData} from "./structs/OracleMarketData.sol"; 
+
+import {IQuoterNoData} from "./interfaces/internal/quoters/IQuoterNoData.sol";
+import {IQuoterSingleData} from "./interfaces/internal/quoters/IQuoterSingleData.sol";
+import {IQuoterBothData} from "./interfaces/internal/quoters/IQuoterBothData.sol";
+import {IMarketQuoter} from "./interfaces/internal/IMarketQuoter.sol";
+
+import {SwapParams} from "./structs/SwapParams.sol";
+import {Marking} from "./structs/Marking.sol"; 
 import {Inventory, QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
-import {DexMarketData} from "./structs/DexMarketData.sol";
-import {OracleMarketData} from "./structs/OracleMarketData.sol";
-import {IQuoterDex} from "./interfaces/internal/quoters/IQuoterDex.sol";
+
+
 
 abstract contract QuoteRequester {
     using TransientStorage for address;
@@ -35,17 +34,16 @@ abstract contract QuoteRequester {
     }
 
     // function inventories(bytes32 poolID) public virtual view returns (Inventory memory);
-    function getStoredDexData(address dexAddress, QuoteParamsBase memory base, uint256 amount) public view returns (bytes memory data) {
-        data = dexAddress.loadTransient();
+    function getMarketData(address addr, QuoteParamsBase memory base) public view returns (bytes memory data) {
+        data = addr.loadTransient();
         if (data.length == 0) {
-            data = IDexMarket(dexAddress).getData(base, amount);
-            dexAddress.storeTransient(data);
+            data = IMarketQuoter(addr).getData(base);
+            addr.storeTransient(data);
         } 
-
         return data;
     }
 
-    function getStoredOracleData(address oracleAddress) public virtual view returns (OracleMarketData memory);
+    
     function inventory(bytes32 poolID) public virtual view returns (Inventory memory);
 
     function quote(SwapParams calldata p) internal returns (uint256 result) {
@@ -56,8 +54,6 @@ abstract contract QuoteRequester {
             asset1: p.asset1, 
             zeroForOne: p.zeroForOne
         }); 
-
-        uint256 totalAmount = p.amount[0];
 
         QuoteParams memory params = QuoteParams({
             base: baseParams,
@@ -72,16 +68,16 @@ abstract contract QuoteRequester {
         if (m.isDexMarket && m.isOracleMarket) {
 
             // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterDexOracle(params.quoter).quote(params, getStoredDexData(dexAddress), getStoredOracleData(oracleAddress));
+            result = IQuoterDexOracle(params.quoter).quote(params, getMarketData(dexAddress), getMarketData(oracleAddress));
         } else if (!m.isDexMarket && !m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
             result = IQuoter(params.quoter).quote(params);
         } else if (m.isDexMarket && !m.isOracleMarket) {
             // `m.isDexMarket` is true, `m.isOracleMarket` is false: Call IQuoterDex
-            result = IQuoterDex(params.quoter).quote(params, getStoredDexData(dexAddress));
+            result = IQuoterDex(params.quoter).quote(params, getMarketData(dexAddress));
         } else if (!m.isDexMarket && m.isOracleMarket) {
             // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
-            result = IQuoterOracle(params.quoter).quote(params, getStoredOracleData(oracleAddress));
+            result = IQuoterOracle(params.quoter).quote(params, getMarketData(oracleAddress));
         } 
     } 
  
@@ -97,11 +93,15 @@ abstract contract QuoteRequester {
                 bucketIDs[i]= MarkingHelper.decodeMarkings(p.markings[i]).bucketID;
             }
 
-            QuoteParamsBatch memory params = QuoteParamsBatch({        
+             QuoteParamsBase memory baseParams = QuoteParamsBase({
                 asset0: p.asset0,
-                asset1: p.asset1,
+                asset1: p.asset1, 
+                zeroForOne: p.zeroForOne
+             }); 
+
+            QuoteParamsBatch memory params = QuoteParamsBatch({        
+                base: baseParams,
                 quoter: p.quoter,
-                zeroForOne: p.zeroForOne,  
                 amount: p.amount,
                 inventory: inventories,
                 bucketID: bucketIDs
