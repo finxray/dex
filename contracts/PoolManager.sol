@@ -20,10 +20,12 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester {
 
 
     function swap(SwapParams calldata p) public returns (bool success) {
-        if (p.markings.length > 1) {
+        if (p.markings.length == 1) {
             uint256 quote = quote(p);
-        } else {
+        } else if (p.markings.length > 1) {
             uint256[] memory batchQuote = quoteBatch(p);
+        } else {
+            // Error goes heare
         }
     }
 

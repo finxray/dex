@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;  
 import {QuoteParams, QuoteParamsBatch} from "../../../structs/QuoteParams.sol";
-import {DexMarketData} from "../../../structs/DexMarketData.sol";
 
 
 interface IQuoterSingleData {
