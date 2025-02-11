@@ -8,7 +8,7 @@ import {TransientStorage} from "./libraries/TransientStorage.sol";
 
 import {IQuoterNoData} from "./interfaces/internal/quoters/IQuoterNoData.sol";
 import {IQuoterSingleData} from "./interfaces/internal/quoters/IQuoterSingleData.sol";
-import {IQuoterBothData} from "./interfaces/internal/quoters/IQuoterBothData.sol";
+import {IQuoterDualData} from "./interfaces/internal/quoters/IQuoterDualData.sol";
 import {IMarketQuoter} from "./interfaces/internal/IMarketQuoter.sol";
 
 import {SwapParams} from "./structs/SwapParams.sol";
@@ -68,7 +68,7 @@ abstract contract QuoteRequester {
         address oracleAddress = (m.isOracleDefault) ? defaultOracleMarketAddress : oracleMarketAddress[m.oracleStorageAddress];
         if (m.isDexMarket && m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterBothData(params.quoter).quote(params, getMarketData(dexAddress, baseParams), getMarketData(oracleAddress, baseParams));
+            result = IQuoterDualData(params.quoter).quote(params, getMarketData(dexAddress, baseParams), getMarketData(oracleAddress, baseParams));
         } else if (!m.isDexMarket && !m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
             result = IQuoterNoData(params.quoter).quote(params);
@@ -83,36 +83,36 @@ abstract contract QuoteRequester {
  
 
     function quoteBatch(SwapParams calldata p) internal returns (uint256[] memory result) {
-            bytes32[] memory poolIDs = new bytes32[](p.markings.length);
-            Inventory[] memory inventories = new Inventory[](poolIDs.length);
-            uint16[] memory bucketIDs;
-            Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
-             for (uint i = 0; i < p.markings.length ;i++) {
-                poolIDs[i] = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[i]);
-                inventories[i]= inventory(poolIDs[i]);
-                bucketIDs[i]= MarkingHelper.decodeMarkings(p.markings[i]).bucketID;
-            }
+        bytes32[] memory poolIDs = new bytes32[](p.markings.length);
+        Inventory[] memory inventories = new Inventory[](poolIDs.length);
+        uint16[] memory bucketIDs;
+        Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
+            for (uint i = 0; i < p.markings.length ;i++) {
+            poolIDs[i] = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[i]);
+            inventories[i]= inventory(poolIDs[i]);
+            bucketIDs[i]= MarkingHelper.decodeMarkings(p.markings[i]).bucketID;
+        }
 
-             QuoteParamsBase memory baseParams = QuoteParamsBase({
-                asset0: p.asset0,
-                asset1: p.asset1, 
-                zeroForOne: p.zeroForOne
-             }); 
+        QuoteParamsBase memory baseParams = QuoteParamsBase({
+            asset0: p.asset0,
+            asset1: p.asset1, 
+            zeroForOne: p.zeroForOne
+        }); 
 
-            QuoteParamsBatch memory params = QuoteParamsBatch({        
-                base: baseParams,
-                quoter: p.quoter,
-                amount: p.amount,
-                inventory: inventories,
-                bucketID: bucketIDs
-            });  
+        QuoteParamsBatch memory params = QuoteParamsBatch({        
+            base: baseParams,
+            quoter: p.quoter,
+            amount: p.amount,
+            inventory: inventories,
+            bucketID: bucketIDs
+        });  
 
         address dexAddress = (m.isDexDefault) ? defaultDexMarketAddress : dexMarketAddress[m.dexStorageAddress];
         address oracleAddress = (m.isOracleDefault) ? defaultOracleMarketAddress : oracleMarketAddress[m.oracleStorageAddress];
         // Routing logic based on markings
         if (m.isDexMarket && m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterBothData(params.quoter).quoteBatch(params, getMarketData(dexAddress, baseParams), getMarketData(oracleAddress, baseParams));
+            result = IQuoterDualData(params.quoter).quoteBatch(params, getMarketData(dexAddress, baseParams), getMarketData(oracleAddress, baseParams));
         } else if (!m.isDexMarket && !m.isOracleMarket) {
             // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
             result = IQuoterNoData(params.quoter).quoteBatch(params);

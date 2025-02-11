@@ -3,7 +3,7 @@ pragma solidity 0.8.27;
 import {QuoteParams, QuoteParamsBatch} from "../../../structs/QuoteParams.sol";
 
 
-interface IQuoterBothData {
+interface IQuoterDualData {
     function quote(
         QuoteParams memory params, 
         bytes memory dexMarketData, 

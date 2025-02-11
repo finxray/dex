@@ -18,8 +18,11 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester {
 
    constructor(address _defaultDexMarketAddress, address _defaultOracleMarketAddress) QuoteRequester(_defaultDexMarketAddress, _defaultOracleMarketAddress) {}
 
+    function swap(SwapParams[] calldata p) public returns (bool success) {
+        
+    }
 
-    function swap(SwapParams calldata p) public returns (bool success) {
+    function _swap(SwapParams calldata p) private returns (bool success) {
         if (p.markings.length == 1) {
             uint256 quote = quote(p);
         } else if (p.markings.length > 1) {
