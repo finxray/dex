@@ -3,13 +3,12 @@ pragma solidity 0.8.27;
 
 import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {PoolIDCreator} from "./libraries/PoolIDCreator.sol";
-import {MarketDataLib} from "./libraries/MarketDataLib.sol";
 import {TransientStorage} from "./libraries/TransientStorage.sol";
 
 import {IQuoterNoData} from "./interfaces/internal/quoters/IQuoterNoData.sol";
 import {IQuoterSingleData} from "./interfaces/internal/quoters/IQuoterSingleData.sol";
 import {IQuoterDualData} from "./interfaces/internal/quoters/IQuoterDualData.sol";
-import {IMarketQuoter} from "./interfaces/internal/IMarketQuoter.sol";
+import {IDataBridge} from "./interfaces/internal/IDataBridge.sol";
 
 import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol"; 
@@ -21,15 +20,15 @@ abstract contract QuoteRequester {
     using TransientStorage for address;
     // Temproraly constructotr and immutable variable. Later will be replaced by a function with ownership access or can 
     // be left as it but in that case MarketQuoter will be executed via a proxy contract
-    address immutable public defaultDexMarketAddress;
-    address immutable public defaultOracleMarketAddress;
+    address immutable public defaultAlpha;
+    address immutable public defaultBeta;
     // store up to 16 market addresses as alternative to default market data
-    mapping (uint8 => address) dexMarketAddress;
-    mapping (uint8 => address) oracleMarketAddress;
+    mapping (uint8 => address) alphaAddressStorage;
+    mapping (uint8 => address) betaAddressStorage;
 
-    constructor(address _defaultDexMarketAddress, address _defaultOracleMarketAddress) {
-        defaultDexMarketAddress = _defaultDexMarketAddress;
-        defaultOracleMarketAddress = _defaultOracleMarketAddress;
+    constructor(address _defaultAlpha, address _defaultBeta) {
+        defaultAlpha = _defaultAlpha;
+        defaultBeta = _defaultBeta;
     }
 
     function inventory(bytes32 poolID) public virtual view returns (Inventory memory);
@@ -38,7 +37,7 @@ abstract contract QuoteRequester {
     function getMarketData(address addr, QuoteParamsBase memory base) internal  returns (bytes memory data) {
         data = addr.loadTransient();
         if (data.length == 0) {
-            data = IMarketQuoter(addr).quote(base);
+            data = IDataBridge(addr).getData(base);
             addr.storeTransient(data);
         } 
         return data;
@@ -64,20 +63,20 @@ abstract contract QuoteRequester {
             bucketID: m.bucketID
         });
 
-        address dexAddress = (m.isDexDefault) ? defaultDexMarketAddress : dexMarketAddress[m.dexStorageAddress];
-        address oracleAddress = (m.isOracleDefault) ? defaultOracleMarketAddress : oracleMarketAddress[m.oracleStorageAddress];
-        if (m.isDexMarket && m.isOracleMarket) {
-            // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterDualData(params.quoter).quote(params, getMarketData(dexAddress, baseParams), getMarketData(oracleAddress, baseParams));
-        } else if (!m.isDexMarket && !m.isOracleMarket) {
-            // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
+        address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
+        address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
+        if (m.isAlpha && m.isBeta) {
+            // Both `m.isAlpha` and `m.isBeta` are true: Placeholder for combined logic
+            result = IQuoterDualData(params.quoter).quote(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
+        } else if (!m.isAlpha && !m.isBeta) {
+            // Both `m.isAlpha` and `m.isBeta` are false: Call IQuoter
             result = IQuoterNoData(params.quoter).quote(params);
-        } else if (m.isDexMarket && !m.isOracleMarket) {
-            // `m.isDexMarket` is true, `m.isOracleMarket` is false: Call IQuoterDex
-            result = IQuoterSingleData(params.quoter).quote(params, getMarketData(dexAddress, baseParams));
-        } else if (!m.isDexMarket && m.isOracleMarket) {
-            // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
-            result = IQuoterSingleData(params.quoter).quote(params, getMarketData(oracleAddress, baseParams));
+        } else if (m.isAlpha && !m.isBeta) {
+            // `m.isAlpha` is true, `m.isBeta` is false: Call IQuoterDex
+            result = IQuoterSingleData(params.quoter).quote(params, getMarketData(alpha, baseParams));
+        } else if (!m.isAlpha && m.isBeta) {
+            // `m.isAlpha` is false, `m.isBeta` is true: Call IQuoterOracle
+            result = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, baseParams));
         } 
     } 
  
@@ -107,21 +106,21 @@ abstract contract QuoteRequester {
             bucketID: bucketIDs
         });  
 
-        address dexAddress = (m.isDexDefault) ? defaultDexMarketAddress : dexMarketAddress[m.dexStorageAddress];
-        address oracleAddress = (m.isOracleDefault) ? defaultOracleMarketAddress : oracleMarketAddress[m.oracleStorageAddress];
+        address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
+        address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
         // Routing logic based on markings
-        if (m.isDexMarket && m.isOracleMarket) {
-            // Both `m.isDexMarket` and `m.isOracleMarket` are true: Placeholder for combined logic
-            result = IQuoterDualData(params.quoter).quoteBatch(params, getMarketData(dexAddress, baseParams), getMarketData(oracleAddress, baseParams));
-        } else if (!m.isDexMarket && !m.isOracleMarket) {
-            // Both `m.isDexMarket` and `m.isOracleMarket` are false: Call IQuoter
+        if (m.isAlpha && m.isBeta) {
+            // Both `m.isAlpha` and `m.isBeta` are true: Placeholder for combined logic
+            result = IQuoterDualData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
+        } else if (!m.isAlpha && !m.isBeta) {
+            // Both `m.isAlpha` and `m.isBeta` are false: Call IQuoter
             result = IQuoterNoData(params.quoter).quoteBatch(params);
-        } else if (m.isDexMarket && !m.isOracleMarket) {
-            // `m.isDexMarket` is true, `m.isOracleMarket` is false: Call IQuoterDex
-            result = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(dexAddress, baseParams));
-        } else if (!m.isDexMarket && m.isOracleMarket) {
-            // `m.isDexMarket` is false, `m.isOracleMarket` is true: Call IQuoterOracle
-            result = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(oracleAddress, baseParams));
+        } else if (m.isAlpha && !m.isBeta) {
+            // `m.isAlpha` is true, `m.isBeta` is false: Call IQuoterDex
+            result = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams));
+        } else if (!m.isAlpha && m.isBeta) {
+            // `m.isAlpha` is false, `m.isBeta` is true: Call IQuoterOracle
+            result = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(beta, baseParams));
         } 
     } 
 } 

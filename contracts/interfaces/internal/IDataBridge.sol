@@ -2,8 +2,8 @@
 pragma solidity 0.8.27;  
 import {QuoteParamsBase} from "../../structs/QuoteParams.sol";
 
-interface IMarketQuoter {
+interface IDataBridge {
   
-    function quote(QuoteParamsBase memory) external returns (bytes memory);
+    function getData(QuoteParamsBase memory) external returns (bytes memory);
 
 }
