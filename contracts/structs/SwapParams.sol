@@ -7,7 +7,8 @@ struct SwapParams {
     address quoter;
     uint256[] amount; 
     bool zeroForOne;
-    bytes3[] markings;
+    bytes3[] markings;  
+    // requestedAmount; // to check for slippage. this can be implemented later
 }   
 
 

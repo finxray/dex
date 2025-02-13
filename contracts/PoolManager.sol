@@ -10,25 +10,28 @@ import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {SwapParams} from "./structs/SwapParams.sol";
 import {QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 import {Inventory} from "./structs/Inventory.sol";
+import {Pool} from "./structs/Pool.sol";
 
 import {Marking} from "./structs/Marking.sol";
 
 
-abstract contract PoolManager is ERC6909Claims, QuoteRequester { 
+contract PoolManager is ERC6909Claims, QuoteRequester { 
+    mapping(bytes32 => Pool) public pools;
+    
+    constructor(address _defaultDexMarketAddress, address _defaultOracleMarketAddress) QuoteRequester(_defaultDexMarketAddress, _defaultOracleMarketAddress) {}
 
-   constructor(address _defaultDexMarketAddress, address _defaultOracleMarketAddress) QuoteRequester(_defaultDexMarketAddress, _defaultOracleMarketAddress) {}
-
-    function swap(SwapParams[] calldata p) public returns (bool success) {
+    function completeSwapParams(SwapParams[] calldata p) public returns (bool success) {
         
     }
+    // QuoteBatch are used to save gas on obtaining quotes. After quotes are received normal swap for each pool is done. 
 
-    function _swap(SwapParams calldata p) private returns (bool success) {
+    function _completeSwapParams(SwapParams calldata p) private returns (bool success) {
         if (p.markings.length == 1) {
             uint256 quote = quote(p);
         } else if (p.markings.length > 1) {
             uint256[] memory batchQuote = quoteBatch(p);
         } else {
-            // Error goes hear
+            // Error goes heare
         }
     }
 
