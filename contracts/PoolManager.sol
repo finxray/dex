@@ -28,7 +28,7 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester {
         } else if (p.markings.length > 1) {
             uint256[] memory batchQuote = quoteBatch(p);
         } else {
-            // Error goes heare
+            // Error goes hear
         }
     }
 
