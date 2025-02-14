@@ -3,12 +3,14 @@
 pragma solidity ^0.8.27;
 
 library PoolIDCreator {
+    /// @notice Creates a pool ID as a uint256 for use with ERC6909.
+    /// @dev Uses assembly for gas efficiency.
     function createPoolID(
         address asset0,
         address asset1,
         address quoter,
         bytes3 markings
-    ) internal pure returns (bytes32 poolID) {
+    ) internal pure returns (uint256 poolID) {
         assembly {
             // Allocate memory for the hash input (asset0, asset1, quoter)
             let memPointer := mload(0x40)

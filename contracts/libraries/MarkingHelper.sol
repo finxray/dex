@@ -12,15 +12,15 @@ library MarkingHelper {
             let data := and(mload(add(markings, 0x20)), 0xFFFFFF)
 
             // Decode boolean values (1 bit each)
-            mstore(result, and(data, 0x1))                          // isDexMarket
-            mstore(add(result, 0x20), and(shr(1, data), 0x1))       // isOracleMarket
-            mstore(add(result, 0x40), and(shr(2, data), 0x1))       // isDexDefault
-            mstore(add(result, 0x60), and(shr(3, data), 0x1))       // isOracleDefault
+            mstore(result, and(data, 0x1))                          // isAlpha
+            mstore(add(result, 0x20), and(shr(1, data), 0x1))       // isBeta
+            mstore(add(result, 0x40), and(shr(2, data), 0x1))       // isAlphaDefault
+            mstore(add(result, 0x60), and(shr(3, data), 0x1))       // isBetaDefault
 
-            // Decode 4-bit dexStorageAddress
+            // Decode 4-bit alphaAddressPointer
             mstore(add(result, 0x80), and(shr(4, data), 0xF))
 
-            // Decode 4-bit oracleStorageAddress
+            // Decode 4-bit betaAddressPointer
             mstore(add(result, 0xA0), and(shr(8, data), 0xF))
 
             // Decode 12-bit bucketID

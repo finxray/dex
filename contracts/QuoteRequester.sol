@@ -31,9 +31,9 @@ abstract contract QuoteRequester {
         defaultBeta = _defaultBeta;
     }
 
-    function inventory(bytes32 poolID) public virtual view returns (Inventory memory);
+    function inventory(uint256 poolID) public virtual view returns (Inventory memory);
 
-    // function inventories(bytes32 poolID) public virtual view returns (Inventory memory);
+    // function inventories(uint256 poolID) public virtual view returns (Inventory memory);
     function getMarketData(address addr, QuoteParamsBase memory base) internal  returns (bytes memory data) {
         data = addr.loadTransient();
         if (data.length == 0) {
@@ -47,7 +47,7 @@ abstract contract QuoteRequester {
     
 
     function quote(SwapParams calldata p) internal returns (uint256 result) {
-         bytes32 poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[0]);
+        uint256 poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[0]);
         Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
         QuoteParamsBase memory baseParams = QuoteParamsBase({
             asset0: p.asset0,
@@ -82,7 +82,7 @@ abstract contract QuoteRequester {
  
 
     function quoteBatch(SwapParams calldata p) internal returns (uint256[] memory result) {
-        bytes32[] memory poolIDs = new bytes32[](p.markings.length);
+        uint256[] memory poolIDs = new uint256[](p.markings.length);
         Inventory[] memory inventories = new Inventory[](poolIDs.length);
         uint16[] memory bucketIDs;
         Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);

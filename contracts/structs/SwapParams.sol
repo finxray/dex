@@ -5,7 +5,7 @@ struct SwapParams {
     address asset0; 
     address asset1; 
     address quoter;
-    uint256[] amount; 
+    uint256[] amount; // amountIn
     bool zeroForOne;
     bytes3[] markings;  
     // requestedAmount; // to check for slippage. this can be implemented later
@@ -13,10 +13,11 @@ struct SwapParams {
 
 
    
-
-
-
-
+struct SwapParamsInternal {
+    uint256 poolID;
+    int256 delta0;
+    int256 delta1;
+}
 
 
 
