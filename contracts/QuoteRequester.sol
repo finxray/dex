@@ -43,12 +43,9 @@ abstract contract QuoteRequester {
         return data;
     }
 
-
-    
-
-    function quote(SwapParams calldata p) internal returns (uint256 result) {
-        uint256 poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[0]);
-        Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
+    function qetQuote(SwapParams calldata p) internal returns (uint256 quote, uint256 poolID) {
+        poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.marking[0]);
+        Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
         QuoteParamsBase memory baseParams = QuoteParamsBase({
             asset0: p.asset0,
             asset1: p.asset1, 
@@ -67,29 +64,28 @@ abstract contract QuoteRequester {
         address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
         if (m.isAlpha && m.isBeta) {
             // Both `m.isAlpha` and `m.isBeta` are true: Placeholder for combined logic
-            result = IQuoterDualData(params.quoter).quote(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
+            quote = IQuoterDualData(params.quoter).quote(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
         } else if (!m.isAlpha && !m.isBeta) {
             // Both `m.isAlpha` and `m.isBeta` are false: Call IQuoter
-            result = IQuoterNoData(params.quoter).quote(params);
+            quote = IQuoterNoData(params.quoter).quote(params);
         } else if (m.isAlpha && !m.isBeta) {
             // `m.isAlpha` is true, `m.isBeta` is false: Call IQuoterDex
-            result = IQuoterSingleData(params.quoter).quote(params, getMarketData(alpha, baseParams));
+            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(alpha, baseParams));
         } else if (!m.isAlpha && m.isBeta) {
             // `m.isAlpha` is false, `m.isBeta` is true: Call IQuoterOracle
-            result = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, baseParams));
+            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, baseParams));
         } 
     } 
  
 
-    function quoteBatch(SwapParams calldata p) internal returns (uint256[] memory result) {
-        uint256[] memory poolIDs = new uint256[](p.markings.length);
-        Inventory[] memory inventories = new Inventory[](poolIDs.length);
-        uint16[] memory bucketIDs;
-        Marking memory m = MarkingHelper.decodeMarkings(p.markings[0]);
-            for (uint i = 0; i < p.markings.length ;i++) {
-            poolIDs[i] = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.markings[i]);
-            inventories[i]= inventory(poolIDs[i]);
-            bucketIDs[i]= MarkingHelper.decodeMarkings(p.markings[i]).bucketID;
+    function getQuoteBatch(SwapParams calldata p) internal returns (uint256[] memory quote, uint256[] memory poolID) {
+        Inventory[] memory inventories = new Inventory[](poolID.length);
+        uint16[] memory bucketIDs = new uint16[](poolID.length);
+        Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
+            for (uint i = 0; i < p.marking.length ;i++) {
+            poolID[i] = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.marking[i]);
+            inventories[i]= inventory(poolID[i]);
+            bucketIDs[i]= MarkingHelper.decodeMarkings(p.marking[i]).bucketID;
         }
 
         QuoteParamsBase memory baseParams = QuoteParamsBase({
@@ -108,19 +104,19 @@ abstract contract QuoteRequester {
 
         address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
         address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
-        // Routing logic based on markings
+        // Routing logic based on marking
         if (m.isAlpha && m.isBeta) {
             // Both `m.isAlpha` and `m.isBeta` are true: Placeholder for combined logic
-            result = IQuoterDualData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
+            quote = IQuoterDualData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
         } else if (!m.isAlpha && !m.isBeta) {
             // Both `m.isAlpha` and `m.isBeta` are false: Call IQuoter
-            result = IQuoterNoData(params.quoter).quoteBatch(params);
+            quote = IQuoterNoData(params.quoter).quoteBatch(params);
         } else if (m.isAlpha && !m.isBeta) {
             // `m.isAlpha` is true, `m.isBeta` is false: Call IQuoterDex
-            result = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams));
+            quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams));
         } else if (!m.isAlpha && m.isBeta) {
             // `m.isAlpha` is false, `m.isBeta` is true: Call IQuoterOracle
-            result = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(beta, baseParams));
+            quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(beta, baseParams));
         } 
     } 
 } 
