@@ -9,20 +9,20 @@ import {ExecutionParams} from "./structs/ExecutionParams.sol";
 import {Pool} from "./structs/Pool.sol";
 import {Inventory} from "./structs/Inventory.sol";
 
-abstract contract SwapExecuter is ERC6909Claims, QuoteRequester {
+abstract contract Swapper is ERC6909Claims, QuoteRequester {
     constructor(address defaultAlpha, address defaultBeta) QuoteRequester(defaultAlpha, defaultBeta) {}
     
-    mapping(uint256 => Pool) internal pools; 
+    function updateInventory(uint256 poolID, Delta memory delta) internal virtual;
 
-    function inventory(uint256 poolID) public view override returns (Inventory memory) {
-        return pools[poolID].inventory;
-    }
+    // function inventory(uint256 poolID) public view override returns (Inventory memory) {
+    //     return pools[poolID].inventory;
+    // }
 
     function swap(SwapParams[] calldata p) public  {
         ExecutionParams[] memory exeParams = new ExecutionParams[](p.length);
         exeParams = executionParams(p);
         for (uint256 i; i < p.length; i++) {
-            executeSwap(exeParams[i]);
+            // executeSwap(exeParams[i]);
         }
     }
 
@@ -89,15 +89,15 @@ abstract contract SwapExecuter is ERC6909Claims, QuoteRequester {
 
 
 
-    function executeSwap(ExecutionParams memory params) internal {
-        Pool storage pool = pools[params.poolID];
+    // function executeSwap(ExecutionParams memory params) internal {
+    //     // Pool storage pool = pools[params.poolID];
 
-        _validateSwap(pool, params.delta);
+    //     _validateSwap(pool, params.delta);
 
-        _executeTransfers(params.delta, params.poolID);
+    //     _executeTransfers(params.delta, params.poolID);
 
-        _updateInventory(pool, params.delta);
-    }
+    //     updateInventory(params.poolID, params.delta);
+    // }
 
     function _validateSwap(Pool storage pool, Delta memory delta) private view {
         // Ensure the pool has sufficient liquidity for the swap
@@ -127,17 +127,5 @@ abstract contract SwapExecuter is ERC6909Claims, QuoteRequester {
         }
     }
 
-    function _updateInventory(Pool storage pool, Delta memory delta) private {
-        if (delta.asset0 > 0) {
-            pool.inventory.asset0 += uint128(uint256(delta.asset0));
-        } else if (delta.asset0 < 0) {
-            pool.inventory.asset0 -= uint128(uint256(-delta.asset0));
-        }
-
-        if (delta.asset1 > 0) {
-            pool.inventory.asset1 += uint128(uint256(delta.asset1));
-        } else if (delta.asset1 < 0) {
-            pool.inventory.asset1 -= uint128(uint256(-delta.asset1));
-        }
-    }
+   
 }
