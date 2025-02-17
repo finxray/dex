@@ -4,8 +4,11 @@ pragma solidity ^0.8.27;
 
 import {Delta} from "../structs/Delta.sol";
 import {Inventory} from "../structs/Inventory.sol";
+import {ExecutionParams} from "../structs/ExecutionParams.sol";
+import {SwapParams} from "../structs/SwapParams.sol";
 
 library PoolManagerLib {
+
     function updatedInventory(Inventory storage self, Delta memory delta) internal pure returns (Inventory memory) {
         // Load the entire Inventory struct into memory
         Inventory memory inventory = self;
@@ -32,4 +35,25 @@ library PoolManagerLib {
         }
         return asset; // No change if delta is 0
     }
+
+    
+
+    function calculateDelta(
+        uint256 amount,
+        bool zeroForOne,
+        uint256 quote
+    ) internal pure returns (Delta memory delta) {
+        // Calculate asset0 and.asset1 based on the swap direction
+        if (zeroForOne) {
+            // Swap asset0 for asset1: asset0 = +amountIn,.asset1 = -amountOut
+            delta.asset0 = int256(amount);
+            delta.asset1 = -int256(amount * quote);
+        } else {
+            // Swap asset1 for asset0:.asset1 = +amountIn, asset0 = -amountOut
+            delta.asset1 = int256(amount);
+            delta.asset0 = -int256(amount * quote);
+        }
+    }
+
+
 }
