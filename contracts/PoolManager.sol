@@ -12,7 +12,6 @@ import {PoolManagerLib} from "./libraries/PoolManagerLib.sol";
 
 // ----------------- KISS -------------------- Keep it simple, stupit!----------------- KISS -------------------- Keep it simple, stupit
 
-
 abstract contract PoolManager is ERC6909Claims, QuoteRequester{ 
     mapping(uint256 => Pool) internal pools; 
 
@@ -53,7 +52,7 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester{
     function executionParamsFromSingle(SwapParams calldata p) private returns (ExecutionParams[] memory exeParams) {
         exeParams = new ExecutionParams[](p.marking.length);
         if (p.marking.length == 1) {
-            (uint256 quote, uint256 poolID) = qetQuote(p);
+            (uint256 quote, uint256 poolID) = getQuote(p);
             exeParams[0] = ExecutionParams({
                 asset0: p.asset0,
                 asset1: p.asset1,

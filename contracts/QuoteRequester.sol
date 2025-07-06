@@ -43,7 +43,7 @@ abstract contract QuoteRequester {
         return data;
     }
 
-    function qetQuote(SwapParams calldata p) internal returns (uint256 quote, uint256 poolID) {
+    function getQuote(SwapParams calldata p) internal returns (uint256 quote, uint256 poolID) {
         poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.marking[0]);
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
         QuoteParamsBase memory baseParams = QuoteParamsBase({
