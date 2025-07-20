@@ -10,7 +10,7 @@ import {Pool} from "./structs/Pool.sol";
 import {Inventory} from "./structs/Inventory.sol";
 import {PoolManagerLib} from "./libraries/PoolManagerLib.sol";
 
-// ----------------- KISS developed using cursor-------------- Keep it simple, stupit!----------------- KISS -------------------- Keep it simple, stupit
+// ----------------- KISS developed using cursor with help of Remixxx---------- Keep it simple, stupit!----------------- KISS -------------------- Keep it simple, stupit
 
 abstract contract PoolManager is ERC6909Claims, QuoteRequester{ 
     mapping(uint256 => Pool) internal pools; 
