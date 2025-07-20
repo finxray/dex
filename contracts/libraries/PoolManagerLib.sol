@@ -36,8 +36,6 @@ library PoolManagerLib {
         return asset; // No change if delta is 0
     }
 
-    
-
     function calculateDelta(
         uint256 amount,
         bool zeroForOne,
@@ -54,6 +52,4 @@ library PoolManagerLib {
             delta.asset0 = -int256(amount * quote);
         }
     }
-
-
 }

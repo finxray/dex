@@ -10,13 +10,12 @@ import {Pool} from "./structs/Pool.sol";
 import {Inventory} from "./structs/Inventory.sol";
 import {PoolManagerLib} from "./libraries/PoolManagerLib.sol";
 
-// ----------------- KISS -------------------- Keep it simple, stupit!----------------- KISS -------------------- Keep it simple, stupit
+// ----------------- KISS developed using cursor-------------- Keep it simple, stupit!----------------- KISS -------------------- Keep it simple, stupit
 
 abstract contract PoolManager is ERC6909Claims, QuoteRequester{ 
     mapping(uint256 => Pool) internal pools; 
 
     constructor(address defaultAlpha, address defaultBeta) QuoteRequester(defaultAlpha, defaultBeta) {}
-    
 
     function swap(SwapParams[] calldata p) public  {
         ExecutionParams[] memory exeParams = new ExecutionParams[](p.length);
@@ -24,11 +23,9 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester{
         for (uint256 i; i < p.length; i++) {
             // executeSwap(exeParams[i]);
 
-
             // swap logic goes here
         }
     }
-
 
     function executionParams(SwapParams[] calldata p) public returns (ExecutionParams[] memory exeParams) {
         uint256 totalLength = 0; 
@@ -47,7 +44,6 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester{
         }
     }
     // QuoteBatch are used to save gas on obtaining quotes. After quotes are received normal swap for each pool is done. 
-    
 
     function executionParamsFromSingle(SwapParams calldata p) private returns (ExecutionParams[] memory exeParams) {
         exeParams = new ExecutionParams[](p.marking.length);
@@ -83,6 +79,3 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester{
     function removeLiquidity() internal returns (uint256 amount0, uint256 amount1) {}
 
 }
-
-
-

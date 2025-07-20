@@ -9,9 +9,4 @@ struct SwapParams {
     bool zeroForOne;
     bytes3[] marking;  
     // requestedAmount; // to check for slippage. this can be implemented later
-}   
-
-
-   
-
-
+}

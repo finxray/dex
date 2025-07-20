@@ -14,8 +14,6 @@ import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol"; 
 import {Inventory, QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 
-
-
 abstract contract QuoteRequester {
     using TransientStorage for address;
     // Temproraly constructotr and immutable variable. Later will be replaced by a function with ownership access or can 
@@ -76,7 +74,6 @@ abstract contract QuoteRequester {
             quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, baseParams));
         } 
     } 
- 
 
     function getQuoteBatch(SwapParams calldata p) internal returns (uint256[] memory quote, uint256[] memory poolID) {
         Inventory[] memory inventories = new Inventory[](poolID.length);
@@ -119,7 +116,4 @@ abstract contract QuoteRequester {
             quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(beta, baseParams));
         } 
     } 
-} 
-
-
-
+}
