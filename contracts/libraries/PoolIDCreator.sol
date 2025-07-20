@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.30;
 
 library PoolIDCreator {
     /// @notice Creates a pool ID as a uint256 for use with ERC6909.
