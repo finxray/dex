@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.27;
+pragma solidity ^0.8.30;
 
 import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {PoolIDCreator} from "./libraries/PoolIDCreator.sol";

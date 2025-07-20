@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.27;  
+pragma solidity ^0.8.30;  
 
 import {QuoteRequester} from "./QuoteRequester.sol";
 import {ERC6909Claims} from "./ERC6909Claims.sol";
