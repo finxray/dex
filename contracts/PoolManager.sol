@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 // ssssssss
 // Custom errors for gas-efficient reverts
 error PoolManager__InsufficientWithdrawal(uint256 amount0, uint256 amount1);
-error PoolManager__ItnsufficientOutput(uint256 minOut, uint256 actual);
+error PoolManager__InsufficientOutput(uint256 minOut, uint256 actual);
 
 import {ERC6909Claims} from "./ERC6909Claims.sol";
 import {QuoteRequester} from "./QuoteRequester.sol";
