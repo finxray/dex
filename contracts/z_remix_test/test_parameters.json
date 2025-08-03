@@ -151,10 +151,10 @@
     },
     "TestInventories_getInventory_MainTest": {
       "function": "getInventory",
-      "poolId": "72353868998521619888681860453528528367784827584629633463205622674719133138944",
+      "poolId": "42955307580170980946467815337668002166680498660974576864971747189779899351040",
       "expected_return": ["1000000000000000000000", "2000000000000000000000"],
       "expected_gas": "~2800",
-      "description": "Test exact same poolID as PoolManager comment - NO struct overhead!"
+      "description": "Test exact same poolID as PoolManager comment - NO virtual function overhead!"
     },
     "TestInventories_getInventory_Simple": {
       "function": "getInventory",

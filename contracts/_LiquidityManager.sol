@@ -8,7 +8,7 @@ import {Delta} from "./structs/Delta.sol";
 import {ExecutionParams} from "./structs/ExecutionParams.sol";
 import {Pool} from "./structs/Pool.sol";
 import {Inventory} from "./structs/Inventory.sol";
-import {PoolManagerLib} from "./libraries/PoolManagerLib.sol";
+import {_PoolManagerLib} from "./libraries/_PoolManagerLib.sol";
 
 // ----------------- KISS developed using cursor with help of Remixxx Second---------- Keep it simple, stupit!----------------- KISS -------------------- Keep it simple, stupit
 
@@ -53,7 +53,7 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester{
                 asset0: p.asset0,
                 asset1: p.asset1,
                 poolID: poolID,
-                delta: PoolManagerLib.calculateDelta(p.amount[0], p.zeroForOne, quote),
+                delta: _PoolManagerLib.calculateDelta(p.amount[0], p.zeroForOne, quote),
                 quote: quote
             });
         } else if (p.marking.length > 1) {
@@ -63,7 +63,7 @@ abstract contract PoolManager is ERC6909Claims, QuoteRequester{
                     asset0: p.asset0,
                     asset1: p.asset1,
                     poolID: poolID[i],
-                    delta: PoolManagerLib.calculateDelta(p.amount[i], p.zeroForOne, quote[i]),
+                    delta: _PoolManagerLib.calculateDelta(p.amount[i], p.zeroForOne, quote[i]),
                     quote: quote[i]
                 });
                 exeParams[i] = exeParamsSingle;

@@ -14,7 +14,7 @@ import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol"; 
 import {QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 
-abstract contract QuoteRequester {
+contract QuoteRequester {
     using TransientStorage for address;
     // Temproraly constructotr and immutable variable. Later will be replaced by a function with ownership access or can 
     // be left as it but in that case MarketQuoter will be executed via a proxy contract
@@ -29,10 +29,16 @@ abstract contract QuoteRequester {
         defaultBeta = _defaultBeta;
     }
 
-    function inventory(uint256 poolID) public virtual view returns (uint128 asset0, uint128 asset1);
+
 
     // Dummy quoter returns a fixed exchange rate (asset0/asset1 = 1.3)
-    function dummyQuoter(address asset0, address asset1) public pure returns (uint256 rate) {
+    function dummyQuoter(
+        address, 
+        address,
+        uint128,
+        uint128
+    ) public pure returns (uint256 rate) {
+        // For now, just receives inventories but doesn't use them
         // Return 1.3 * 1e18 for fixed-point math
         rate = 1300000000000000000; // 1.3 * 1e18
     }
@@ -56,13 +62,12 @@ abstract contract QuoteRequester {
             zeroForOne: p.zeroForOne
         }); 
 
-        (uint128 asset0Balance, uint128 asset1Balance) = inventory(poolID);
         QuoteParams memory params = QuoteParams({
             base: baseParams,
             quoter: p.quoter,
             amount: p.amount[0],
-            asset0Balance: asset0Balance,
-            asset1Balance: asset1Balance,
+            asset0Balance: 0, // Will be set by caller
+            asset1Balance: 0, // Will be set by caller  
             bucketID: m.bucketID
         });
 
@@ -92,7 +97,8 @@ abstract contract QuoteRequester {
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
             for (uint i = 0; i < p.marking.length ;i++) {
             poolID[i] = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[i]);
-            (asset0Balances[i], asset1Balances[i]) = inventory(poolID[i]);
+            asset0Balances[i] = 0; // Will be set by caller
+            asset1Balances[i] = 0; // Will be set by caller
             bucketIDs[i]= MarkingHelper.decodeMarkings(p.marking[i]).bucketID;
         }
 

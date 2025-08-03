@@ -1,37 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-contract TestInventories {
-    /*//////////////////////////////////////////////////////////////
-                            STORAGE - EXACT REPLICA
-    //////////////////////////////////////////////////////////////*/
-    
-    // Pool asset balances (poolID -> packed uint256) - BOTH ASSETS IN SINGLE SLOT!
-    // Lower 128 bits = asset0, Upper 128 bits = asset1
-    mapping(uint256 poolId => uint256 packedInventory) public poolInventories;
+import {ERC6909Extended} from "../ERC6909Extended.sol";
+
+contract TestInventories is ERC6909Extended {
 
     constructor() {
         // Initialize test data - same as PoolManager poolID from comment
-        // poolID 72353868998521619888681860453528528367784827584629633463205622674719133138944
-        uint256 testPoolID = 72353868998521619888681860453528528367784827584629633463205622674719133138944;
+        // Updated poolID from PoolManager comment
+        uint256 testPoolID = 42955307580170980946467815337668002166680498660974576864971747189779899351040;
         poolInventories[testPoolID] = _packInventory(1000000000000000000000, 2000000000000000000000);
         
         // Add more test pools
         poolInventories[1] = _packInventory(500000000000000000000, 750000000000000000000);
         poolInventories[2] = _packInventory(100000000000000000, 200000000000000000);
         poolInventories[3] = _packInventory(777000000000000000000, 888000000000000000000);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        EXACT ERC6909 GETINVENTORY REPLICA
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Get current pool inventory - SINGLE STORAGE READ!
-    /// @dev This is the EXACT same implementation as ERC6909.getInventory()
-    function getInventory(uint256 poolId) public view returns (uint128 asset0, uint128 asset1) {
-        uint256 packed = poolInventories[poolId]; // Single SLOAD!
-        asset0 = uint128(packed);              // Lower 128 bits
-        asset1 = uint128(packed >> 128);       // Upper 128 bits
     }
 
     /*//////////////////////////////////////////////////////////////
