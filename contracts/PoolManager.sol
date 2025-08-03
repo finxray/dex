@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+// Custom errors for gas-efficient reverts
+error PoolManager__InsufficientWithdrawal(uint256 amount0, uint256 amount1);
+error PoolManager__InsufficientOutput(uint256 minOut, uint256 actual);
+
 import {ERC6909Claims} from "./ERC6909Claims.sol";
 import {QuoteRequester} from "./QuoteRequester.sol";
 import {PoolManagerLib} from "./libraries/PoolManagerLib.sol";
@@ -14,6 +18,7 @@ contract PoolManager is ERC6909Claims, QuoteRequester {
     // Library storage for total liquidity tracking
     PoolManagerLib.PoolManagerStorage private _storage;
     
+    // PoolID: 42955307580170980946467815337668002166680498660974576864971747189779899351040
     /// @notice Creates a new pool using library logic
     function createPool(
         address asset0,
@@ -85,7 +90,7 @@ contract PoolManager is ERC6909Claims, QuoteRequester {
         // Calculate proportional amounts - simple math, inline
         amount0 = (liquidity * poolAsset0) / _storage.totalLiquidity[poolID];
         amount1 = (liquidity * poolAsset1) / _storage.totalLiquidity[poolID];
-        require(amount0 > 0 || amount1 > 0, "Insufficient assets to withdraw");
+        if (amount0 == 0 && amount1 == 0) revert PoolManager__InsufficientWithdrawal(amount0, amount1);
         
         // Burn shares and update total directly
         _burn(msg.sender, poolID, liquidity);
@@ -117,11 +122,13 @@ contract PoolManager is ERC6909Claims, QuoteRequester {
         // Get inventory and calculate output in one flow
         (uint128 poolAsset0, uint128 poolAsset1) = PoolManagerLib.getInventory(_storage, poolID);
         uint256 rate = dummyQuoter(asset0, asset1, poolAsset0, poolAsset1);
-        amountOut = zeroForOne ? (amountIn * rate) / 1e18 : (amountIn * 1e18) / rate;
+        unchecked {
+            amountOut = zeroForOne ? (amountIn * rate) / 1e18 : (amountIn * 1e18) / rate;
+        }
         
         // Validate and check minimums
         PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, amountOut, zeroForOne);
-        require(amountOut >= minAmountOut, "Insufficient output amount");
+        if (amountOut < minAmountOut) revert PoolManager__InsufficientOutput(minAmountOut, amountOut);
 
         // Update inventory - inline delta calculation
         PoolManagerLib.updateInventory(

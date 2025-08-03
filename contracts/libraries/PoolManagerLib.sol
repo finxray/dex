@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+// Custom errors for gas-efficient reverts
+error PoolManager__InsufficientLiquidityMinted();
+error PoolManager__InsufficientAsset0(uint256 required, uint256 available);
+error PoolManager__InsufficientAsset1(uint256 required, uint256 available);
+
 import {PoolIDAssembly} from "./PoolIDAssembly.sol";
 import {AssetTransferLib} from "./AssetTransferLib.sol";
 
@@ -81,7 +86,7 @@ library PoolManagerLib {
             // Proportional to pool
             liquidity = (valueAdded * self.totalLiquidity[poolID]) / poolValue;
         }
-        require(liquidity > 0, "Insufficient liquidity minted");
+        if (liquidity == 0) revert PoolManager__InsufficientLiquidityMinted();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -121,8 +126,11 @@ library PoolManagerLib {
         asset0 = uint128(int128(asset0) + asset0Delta);
         asset1 = uint128(int128(asset1) + asset1Delta);
         
-        // Pack and store - Single SSTORE!
-        self.poolInventories[poolId] = uint256(asset0) | (uint256(asset1) << 128);
+        // Pack and store only if changed - saves gas on no-op updates
+        uint256 newPacked = uint256(asset0) | (uint256(asset1) << 128);
+        if (newPacked != packed) {
+            self.poolInventories[poolId] = newPacked; // Single SSTORE when needed
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -143,10 +151,10 @@ library PoolManagerLib {
         // Check if pool has enough of the output asset
         if (zeroForOne) {
             // Swapping asset0 for asset1 - need enough asset1
-            require(poolAsset1 >= amountOut, "Insufficient asset1 in pool");
+            if (poolAsset1 < amountOut) revert PoolManager__InsufficientAsset1(amountOut, poolAsset1);
         } else {
             // Swapping asset1 for asset0 - need enough asset0
-            require(poolAsset0 >= amountOut, "Insufficient asset0 in pool");
+            if (poolAsset0 < amountOut) revert PoolManager__InsufficientAsset0(amountOut, poolAsset0);
         }
     }
 
