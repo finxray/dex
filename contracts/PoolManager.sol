@@ -5,13 +5,14 @@ import {QuoteRequester} from "./QuoteRequester.sol";
 import {PoolIDAssembly} from "./libraries/PoolIDAssembly.sol";
 import {LiquidityManager} from "./LiquidityManager.sol";
 import {SwapManager} from "./SwapManager.sol";
-import {Inventory} from "./structs/Inventory.sol";
 
 contract PoolManager is LiquidityManager, SwapManager {
     constructor(address _defaultAlpha, address _defaultBeta) QuoteRequester(_defaultAlpha, _defaultBeta) {}
 
     event PoolCreated(uint256 indexed poolID, address asset0, address asset1, address quoter, bytes3 markings);
 
+    // execution cost 4,358 gas, transaction cost 26,690
+    // poolID 72353868998521619888681860453528528367784827584629633463205622674719133138944
     function createPool(
         address asset0,
         address asset1,
@@ -23,9 +24,9 @@ contract PoolManager is LiquidityManager, SwapManager {
         poolID = PoolIDAssembly.assemblePoolID(sortedAsset0, sortedAsset1, quoter, markings);
         emit PoolCreated(poolID, sortedAsset0, sortedAsset1, quoter, markings);
     }
-
-    // Inventory function - SINGLE STORAGE READ using packed struct!
-    function inventory(uint256 poolID) public view override(LiquidityManager, SwapManager) returns (Inventory memory) {
+    // execution cost should now be ~2,800 gas (struct overhead eliminated!)
+    // Inventory function - SINGLE STORAGE READ with direct uint128 return!
+    function inventory(uint256 poolID) public view override(LiquidityManager, SwapManager) returns (uint128 asset0, uint128 asset1) {
         return getInventory(poolID); // Delegates to ERC6909's packed storage
     }
 }

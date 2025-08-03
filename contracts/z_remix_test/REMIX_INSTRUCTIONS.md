@@ -76,7 +76,7 @@ amount: 115792089237316195423570985008687907853269984665640564039457584007913129
 Function: assemblePoolID (from PoolIDAssembly library)
 asset0: 0x0000000000000000000000000000000000000000
 asset1: YOUR_TOKENA_ADDRESS
-quoter: 0x1111111111111111111111111111111111111111
+quoter: 0x3333333333333333333333333333333333333333
 markings: 0x123456
 ```
 **Note**: Copy the returned poolID for next steps
@@ -86,7 +86,7 @@ markings: 0x123456
 Function: createPool
 asset0: 0x0000000000000000000000000000000000000000
 asset1: YOUR_TOKENA_ADDRESS
-quoter: 0x1111111111111111111111111111111111111111
+quoter: 0x3333333333333333333333333333333333333333
 markings: 0x123456
 ```
 
@@ -99,7 +99,7 @@ markings: 0x123456
 Function: createPool
 asset0: LOWER_ADDRESS_TOKEN
 asset1: HIGHER_ADDRESS_TOKEN
-quoter: 0x1111111111111111111111111111111111111111
+quoter: 0x3333333333333333333333333333333333333333
 markings: 0xabcdef
 ```
 
@@ -233,3 +233,105 @@ liquidity: HALF_OF_YOUR_LP_BALANCE
 - ✅ All balances updated correctly
 
 **🎉 If all tests pass, your PoolManager is working correctly!**
+
+---
+
+## **⚡ Gas Testing: TestSlotRead Contract**
+
+### **Deploy TestSlotRead Contract**
+1. Copy `TestSlotRead.sol` from the z_remix_test folder
+2. Deploy with no constructor parameters
+3. Note the deployment gas cost
+
+### **Test Storage Slot Reads**
+```
+Function: getValue
+id: 3
+Expected Return: 777
+```
+
+**📊 Expected Gas Costs:**
+- **Cold read**: ~2,100 gas (first access)
+- **Warm read**: ~100 gas (subsequent access)
+
+### **Test Multiple Reads (Warm vs Cold)**
+```
+Function: getMultipleValues
+ids: [1, 2, 3, 4, 5]
+Expected Return: [100, 200, 777, 888, 999]
+```
+
+**🔍 Gas Analysis:**
+- First call: Cold reads for all slots
+- Second call: Warm reads (much cheaper!)
+
+### **Additional Testing**
+```
+Function: setValue
+id: 10
+value: 1234
+```
+Then test:
+```
+Function: getValue  
+id: 10
+Expected Return: 1234
+```
+
+**💡 Use this to verify the gas estimates we discussed for `inventory()` function!**
+
+---
+
+## **🎯 Exact Inventory Testing: TestInventories Contract**
+
+### **Deploy TestInventories Contract**
+1. Copy `TestInventories.sol` from the z_remix_test folder
+2. Deploy with no constructor parameters
+3. Pre-loaded with test inventory data
+
+### **Test Exact `getInventory()` Function**
+```
+Function: getInventory
+poolId: 72353868998521619888681860453528528367784827584629633463205622674719133138944
+Expected Return: [1000000000000000000000, 2000000000000000000000]
+```
+
+**📊 Expected Gas Cost: ~2,800 gas** (struct overhead eliminated!)
+
+### **Additional Test Cases**
+```
+Function: getInventory
+poolId: 1
+Expected Return: [500000000000000000000, 750000000000000000000]
+```
+
+```
+Function: getInventory  
+poolId: 3
+Expected Return: [777000000000000000000, 888000000000000000000]
+```
+
+### **Comparative Gas Testing**
+```
+Function: getAsset0Only
+poolId: 1
+Expected Return: 500000000000000000000
+Expected Gas: Same ~2,800 gas (same SLOAD!)
+```
+
+```
+Function: getBothAssetsSeparately
+poolId: 1
+Expected Return: [500000000000000000000, 750000000000000000000]  
+Expected Gas: Same ~2,800 gas (single SLOAD + bit operations)
+```
+
+### **Warm vs Cold Testing**
+```
+Function: getMultipleInventories
+poolIds: [1, 2, 3]
+Expected Return: Two arrays - asset0s: [500000000000000000000, 100000000000000000, 777000000000000000000], asset1s: [750000000000000000000, 200000000000000000, 888000000000000000000]
+Expected Gas: First call = 3x cold reads, Second call = 3x warm reads
+```
+
+**🔬 This contract replicates the EXACT optimized `getInventory()` implementation - now WITHOUT struct overhead!**

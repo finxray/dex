@@ -18,14 +18,14 @@
     "ETH_TokenA_Pool": {
       "asset0": "0x0000000000000000000000000000000000000000",
       "asset1": "TOKEN_A_ADDRESS_HERE",
-      "quoter": "0x1111111111111111111111111111111111111111",
+      "quoter": "0x3333333333333333333333333333333333333333",
       "markings": "0x123456",
       "description": "ETH + ERC20 pool (ETH is always asset0)"
     },
     "TokenA_TokenB_Pool": {
       "asset0": "LOWER_ADDRESS_TOKEN",
       "asset1": "HIGHER_ADDRESS_TOKEN", 
-      "quoter": "0x1111111111111111111111111111111111111111",
+      "quoter": "0x3333333333333333333333333333333333333333",
       "markings": "0xabcdef",
       "description": "ERC20 + ERC20 pool (sort addresses first)"
     }
@@ -107,7 +107,7 @@
     "Test1": {
       "asset0": "0x0000000000000000000000000000000000000000",
       "asset1": "0x1234567890123456789012345678901234567890",
-      "quoter": "0x1111111111111111111111111111111111111111", 
+      "quoter": "0x3333333333333333333333333333333333333333", 
       "markings": "0x123456",
       "expected_note": "Calculate this to verify assemblePoolID works"
     },
@@ -117,6 +117,83 @@
       "quoter": "0x3333333333333333333333333333333333333333",
       "markings": "0xabcdef",
       "expected_note": "Different parameters for comparison"
+    }
+  },
+
+  "GAS_TESTING": {
+    "TestSlotRead_Deploy": {
+      "constructor_params": "none",
+      "description": "Deploy TestSlotRead contract to test storage gas costs"
+    },
+    "TestSlotRead_getValue_Test": {
+      "function": "getValue",
+      "id": 3,
+      "expected_return": 777,
+      "expected_gas_cold": "~2100",
+      "expected_gas_warm": "~100",
+      "description": "Test single storage slot read"
+    },
+    "TestSlotRead_getMultipleValues_Test": {
+      "function": "getMultipleValues", 
+      "ids": [1, 2, 3, 4, 5],
+      "expected_return": [100, 200, 777, 888, 999],
+      "description": "Test multiple storage reads (warm vs cold)"
+    },
+    "TestSlotRead_setValue_Test": {
+      "function": "setValue",
+      "id": 10,
+      "value": 1234,
+      "description": "Set new value for testing"
+    },
+    "TestInventories_Deploy": {
+      "constructor_params": "none",
+      "description": "Deploy TestInventories contract - exact ERC6909 replica"
+    },
+    "TestInventories_getInventory_MainTest": {
+      "function": "getInventory",
+      "poolId": "72353868998521619888681860453528528367784827584629633463205622674719133138944",
+      "expected_return": ["1000000000000000000000", "2000000000000000000000"],
+      "expected_gas": "~2800",
+      "description": "Test exact same poolID as PoolManager comment - NO struct overhead!"
+    },
+    "TestInventories_getInventory_Simple": {
+      "function": "getInventory",
+      "poolId": 1,
+      "expected_return": ["500000000000000000000", "750000000000000000000"],
+      "expected_gas": "~2800",
+      "description": "Simple poolID test - returns tuple instead of struct"
+    },
+    "TestInventories_getInventory_Pattern": {
+      "function": "getInventory",
+      "poolId": 3,
+      "expected_return": ["777000000000000000000", "888000000000000000000"],
+      "expected_gas": "~2800", 
+      "description": "Pattern matching test (777/888) - optimized gas usage"
+    },
+    "TestInventories_getAsset0Only": {
+      "function": "getAsset0Only",
+      "poolId": 1,
+      "expected_return": "500000000000000000000",
+      "expected_gas": "~2800",
+      "description": "Same SLOAD but return only asset0 - bit manipulation"
+    },
+    "TestInventories_getBothAssetsSeparately": {
+      "function": "getBothAssetsSeparately", 
+      "poolId": 1,
+      "expected_return": ["500000000000000000000", "750000000000000000000"],
+      "expected_gas": "~2800",
+      "description": "Single SLOAD + bit operations (same as getInventory now)"
+    },
+    "TestInventories_getMultipleInventories": {
+      "function": "getMultipleInventories",
+      "poolIds": [1, 2, 3],
+      "expected_return": {
+        "asset0s": ["500000000000000000000", "100000000000000000", "777000000000000000000"],
+        "asset1s": ["750000000000000000000", "200000000000000000", "888000000000000000000"]
+      },
+      "expected_gas_cold": "~8400",
+      "expected_gas_warm": "~600",
+      "description": "Multiple inventories - returns separate arrays, optimized gas"
     }
   }
 }

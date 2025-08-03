@@ -4,7 +4,6 @@ pragma solidity ^0.8.30;
 import {ERC6909} from "./ERC6909.sol";
 import {QuoteRequester} from "./QuoteRequester.sol";
 import {AssetTransferLib} from "./libraries/AssetTransferLib.sol";
-import {Inventory} from "./structs/Inventory.sol";
 import {Delta} from "./structs/Delta.sol";
 
 // Clean abstract contract inheriting ERC6909 directly
@@ -21,9 +20,7 @@ abstract contract LiquidityManager is ERC6909, QuoteRequester {
         uint256 amount1
     ) external payable returns (uint256 liquidity) {
         // Get current pool balances BEFORE adding new liquidity
-        Inventory memory poolInventory = inventory(poolID);
-        uint256 poolAsset0 = poolInventory.asset0;
-        uint256 poolAsset1 = poolInventory.asset1;
+        (uint128 poolAsset0, uint128 poolAsset1) = inventory(poolID);
         
         // Calculate rate and values
         uint256 rate = dummyQuoter(asset0, asset1); // asset0/asset1 rate, 1e18 fixed point
@@ -71,9 +68,7 @@ abstract contract LiquidityManager is ERC6909, QuoteRequester {
         // Balance check will be done in _burn function
         
         // Get current pool balances
-        Inventory memory poolInventory = inventory(poolID);
-        uint256 poolAsset0 = poolInventory.asset0;
-        uint256 poolAsset1 = poolInventory.asset1;
+        (uint128 poolAsset0, uint128 poolAsset1) = inventory(poolID);
         require(totalLiquidity[poolID] > 0, "No liquidity in pool");
         
         // Calculate proportional amounts to withdraw
@@ -104,5 +99,5 @@ abstract contract LiquidityManager is ERC6909, QuoteRequester {
     }
 
     // Virtual inventory function - to be implemented by concrete contracts
-    function inventory(uint256 poolID) public view virtual override returns (Inventory memory);
+    function inventory(uint256 poolID) public view virtual override returns (uint128 asset0, uint128 asset1);
 }

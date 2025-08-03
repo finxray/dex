@@ -12,7 +12,7 @@ import {IDataBridge} from "./interfaces/internal/IDataBridge.sol";
 
 import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol"; 
-import {Inventory, QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
+import {QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 
 abstract contract QuoteRequester {
     using TransientStorage for address;
@@ -29,7 +29,7 @@ abstract contract QuoteRequester {
         defaultBeta = _defaultBeta;
     }
 
-    function inventory(uint256 poolID) public virtual view returns (Inventory memory);
+    function inventory(uint256 poolID) public virtual view returns (uint128 asset0, uint128 asset1);
 
     // Dummy quoter returns a fixed exchange rate (asset0/asset1 = 1.3)
     function dummyQuoter(address asset0, address asset1) public pure returns (uint256 rate) {
@@ -56,11 +56,13 @@ abstract contract QuoteRequester {
             zeroForOne: p.zeroForOne
         }); 
 
+        (uint128 asset0Balance, uint128 asset1Balance) = inventory(poolID);
         QuoteParams memory params = QuoteParams({
             base: baseParams,
             quoter: p.quoter,
             amount: p.amount[0],
-            inventory: inventory(poolID), 
+            asset0Balance: asset0Balance,
+            asset1Balance: asset1Balance,
             bucketID: m.bucketID
         });
 
@@ -84,12 +86,13 @@ abstract contract QuoteRequester {
     function getQuoteBatch(SwapParams calldata p) internal returns (uint256[] memory quote, uint256[] memory poolID) {
         poolID = new uint256[](p.marking.length);
         quote = new uint256[](p.marking.length);
-        Inventory[] memory inventories = new Inventory[](p.marking.length);
+        uint128[] memory asset0Balances = new uint128[](p.marking.length);
+        uint128[] memory asset1Balances = new uint128[](p.marking.length);
         uint16[] memory bucketIDs = new uint16[](p.marking.length);
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
             for (uint i = 0; i < p.marking.length ;i++) {
             poolID[i] = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[i]);
-            inventories[i]= inventory(poolID[i]);
+            (asset0Balances[i], asset1Balances[i]) = inventory(poolID[i]);
             bucketIDs[i]= MarkingHelper.decodeMarkings(p.marking[i]).bucketID;
         }
 
@@ -103,7 +106,8 @@ abstract contract QuoteRequester {
             base: baseParams,
             quoter: p.quoter,
             amount: p.amount,
-            inventory: inventories,
+            asset0Balances: asset0Balances,
+            asset1Balances: asset1Balances,
             bucketID: bucketIDs
         });  
 

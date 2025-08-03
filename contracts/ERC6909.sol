@@ -2,7 +2,6 @@
 pragma solidity ^0.8.30;
 
 import {IERC6909Claims} from "./interfaces/external/IERC6909Claims.sol";
-import {Inventory} from "./structs/Inventory.sol";
 import {Delta} from "./structs/Delta.sol";
 
 /// @notice Minimalist and gas efficient standard ERC6909 implementation.
@@ -18,8 +17,9 @@ abstract contract ERC6909 is IERC6909Claims {
     // User LP share balances (address owner -> poolID -> balance)
     mapping(address owner => mapping(uint256 id => uint256 balance)) public balanceOf;
 
-    // Pool asset balances (poolID -> Inventory struct) - PACKED IN SINGLE SLOT!
-    mapping(uint256 poolId => Inventory inventory) public poolInventories;
+    // Pool asset balances (poolID -> packed uint256) - BOTH ASSETS IN SINGLE SLOT!
+    // Lower 128 bits = asset0, Upper 128 bits = asset1
+    mapping(uint256 poolId => uint256 packedInventory) public poolInventories;
 
     mapping(address owner => mapping(address spender => mapping(uint256 id => uint256 amount))) public allowance;
 
@@ -82,8 +82,10 @@ abstract contract ERC6909 is IERC6909Claims {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Get current pool inventory - SINGLE STORAGE READ!
-    function getInventory(uint256 poolId) public view returns (Inventory memory) {
-        return poolInventories[poolId]; // Direct struct access - most efficient!
+    function getInventory(uint256 poolId) public view returns (uint128 asset0, uint128 asset1) {
+        uint256 packed = poolInventories[poolId]; // Single SLOAD!
+        asset0 = uint128(packed);              // Lower 128 bits
+        asset1 = uint128(packed >> 128);       // Upper 128 bits
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -106,10 +108,15 @@ abstract contract ERC6909 is IERC6909Claims {
     /// @param poolId The pool to update
     /// @param delta The changes to apply (positive = add, negative = subtract)
     function updateInventory(uint256 poolId, Delta memory delta) internal virtual {
-        Inventory storage inv = poolInventories[poolId]; // Single SLOAD
+        uint256 packed = poolInventories[poolId]; // Single SLOAD
+        uint128 asset0 = uint128(packed);         // Lower 128 bits
+        uint128 asset1 = uint128(packed >> 128);  // Upper 128 bits
+        
         // Apply delta changes (int128 -> uint128 with proper bounds checking)
-        inv.asset0 = uint128(int128(inv.asset0) + delta.asset0);
-        inv.asset1 = uint128(int128(inv.asset1) + delta.asset1);
-        // Single SSTORE for both asset updates!
+        asset0 = uint128(int128(asset0) + delta.asset0);
+        asset1 = uint128(int128(asset1) + delta.asset1);
+        
+        // Pack both assets back into single uint256 and store - Single SSTORE!
+        poolInventories[poolId] = uint256(asset0) | (uint256(asset1) << 128);
     }
 }

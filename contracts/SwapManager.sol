@@ -4,7 +4,6 @@ pragma solidity ^0.8.30;
 import {ERC6909} from "./ERC6909.sol";
 import {QuoteRequester} from "./QuoteRequester.sol";
 import {AssetTransferLib} from "./libraries/AssetTransferLib.sol";
-import {Inventory} from "./structs/Inventory.sol";
 import {Delta} from "./structs/Delta.sol";
 
 // Clean abstract contract inheriting ERC6909 directly
@@ -53,5 +52,5 @@ abstract contract SwapManager is ERC6909, QuoteRequester {
     }
 
     // Virtual inventory function - to be implemented by concrete contracts
-    function inventory(uint256 poolID) public view virtual override returns (Inventory memory);
+    function inventory(uint256 poolID) public view virtual override returns (uint128 asset0, uint128 asset1);
 }
