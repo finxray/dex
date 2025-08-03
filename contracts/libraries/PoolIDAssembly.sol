@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-library PoolIDCreator {
+library PoolIDAssembly {
     /// @notice Creates a pool ID as a uint256 for use with ERC6909.
     /// @dev Uses assembly for gas efficiency.
-    function createPoolID(
+    function assemblePoolID(
         address asset0,
         address asset1,
         address quoter,

@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import "./ERC6909.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract PoolManager is ERC6909 {
+contract _Swap is ERC6909 {
     struct Pool {
         uint asset0Balance;
         uint asset1Balance;

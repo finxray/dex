@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {MarkingHelper} from "./libraries/MarkingHelper.sol";
-import {PoolIDCreator} from "./libraries/PoolIDCreator.sol";
+import {PoolIDAssembly} from "./libraries/PoolIDAssembly.sol";
 import {TransientStorage} from "./libraries/TransientStorage.sol";
 
 import {IQuoterNoData} from "./interfaces/internal/quoters/IQuoterNoData.sol";
@@ -31,6 +31,12 @@ abstract contract QuoteRequester {
 
     function inventory(uint256 poolID) public virtual view returns (Inventory memory);
 
+    // Dummy quoter returns a fixed exchange rate (asset0/asset1 = 1.3)
+    function dummyQuoter(address asset0, address asset1) public pure returns (uint256 rate) {
+        // Return 1.3 * 1e18 for fixed-point math
+        rate = 1300000000000000000; // 1.3 * 1e18
+    }
+
     // function inventories(uint256 poolID) public virtual view returns (Inventory memory);
     function getMarketData(address addr, QuoteParamsBase memory base) internal  returns (bytes memory data) {
         data = addr.loadTransient();
@@ -42,7 +48,7 @@ abstract contract QuoteRequester {
     }
 
     function getQuote(SwapParams calldata p) internal returns (uint256 quote, uint256 poolID) {
-        poolID = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.marking[0]);
+        poolID = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[0]);
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
         QuoteParamsBase memory baseParams = QuoteParamsBase({
             asset0: p.asset0,
@@ -76,11 +82,13 @@ abstract contract QuoteRequester {
     } 
 
     function getQuoteBatch(SwapParams calldata p) internal returns (uint256[] memory quote, uint256[] memory poolID) {
-        Inventory[] memory inventories = new Inventory[](poolID.length);
-        uint16[] memory bucketIDs = new uint16[](poolID.length);
+        poolID = new uint256[](p.marking.length);
+        quote = new uint256[](p.marking.length);
+        Inventory[] memory inventories = new Inventory[](p.marking.length);
+        uint16[] memory bucketIDs = new uint16[](p.marking.length);
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
             for (uint i = 0; i < p.marking.length ;i++) {
-            poolID[i] = PoolIDCreator.createPoolID(p.asset0, p.asset1, p.quoter, p.marking[i]);
+            poolID[i] = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[i]);
             inventories[i]= inventory(poolID[i]);
             bucketIDs[i]= MarkingHelper.decodeMarkings(p.marking[i]).bucketID;
         }

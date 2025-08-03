@@ -2,6 +2,8 @@
 pragma solidity ^0.8.30;
 
 import {IERC6909Claims} from "./interfaces/external/IERC6909Claims.sol";
+import {Inventory} from "./structs/Inventory.sol";
+import {Delta} from "./structs/Delta.sol";
 
 /// @notice Minimalist and gas efficient standard ERC6909 implementation.
 /// @author Uniswap V4 (https://github.com/Uniswap/v4-core/blob/main/src/ERC6909.sol)
@@ -13,7 +15,11 @@ abstract contract ERC6909 is IERC6909Claims {
 
     mapping(address owner => mapping(address operator => bool isOperator)) public isOperator;
 
+    // User LP share balances (address owner -> poolID -> balance)
     mapping(address owner => mapping(uint256 id => uint256 balance)) public balanceOf;
+
+    // Pool asset balances (poolID -> Inventory struct) - PACKED IN SINGLE SLOT!
+    mapping(uint256 poolId => Inventory inventory) public poolInventories;
 
     mapping(address owner => mapping(address spender => mapping(uint256 id => uint256 amount))) public allowance;
 
@@ -72,18 +78,38 @@ abstract contract ERC6909 is IERC6909Claims {
     }
 
     /*//////////////////////////////////////////////////////////////
+                        POOL ASSET FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Get current pool inventory - SINGLE STORAGE READ!
+    function getInventory(uint256 poolId) public view returns (Inventory memory) {
+        return poolInventories[poolId]; // Direct struct access - most efficient!
+    }
+
+    /*//////////////////////////////////////////////////////////////
                         INTERNAL MINT/BURN LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Mint LP shares to user
     function _mint(address receiver, uint256 id, uint256 amount) internal virtual {
         balanceOf[receiver][id] += amount;
-
         emit Transfer(msg.sender, address(0), receiver, id, amount);
     }
 
+    /// @notice Burn LP shares from user
     function _burn(address sender, uint256 id, uint256 amount) internal virtual {
         balanceOf[sender][id] -= amount;
-
         emit Transfer(msg.sender, sender, address(0), id, amount);
+    }
+
+    /// @notice Update pool inventory with delta changes - SINGLE STORAGE OPERATION!
+    /// @param poolId The pool to update
+    /// @param delta The changes to apply (positive = add, negative = subtract)
+    function updateInventory(uint256 poolId, Delta memory delta) internal virtual {
+        Inventory storage inv = poolInventories[poolId]; // Single SLOAD
+        // Apply delta changes (int128 -> uint128 with proper bounds checking)
+        inv.asset0 = uint128(int128(inv.asset0) + delta.asset0);
+        inv.asset1 = uint128(int128(inv.asset1) + delta.asset1);
+        // Single SSTORE for both asset updates!
     }
 }
