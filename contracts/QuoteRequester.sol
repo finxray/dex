@@ -14,7 +14,7 @@ import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol"; 
 import {QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 
-contract QuoteRequester {
+abstract contract QuoteRequester {
     using TransientStorage for address;
     // Temproraly constructotr and immutable variable. Later will be replaced by a function with ownership access or can 
     // be left as it but in that case MarketQuoter will be executed via a proxy contract

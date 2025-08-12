@@ -8,7 +8,7 @@ import {QuoteParams, QuoteParamsBatch} from "../structs/QuoteParams.sol";
 /// @notice A quoter that requires both alpha and beta market data for sophisticated pricing
 /// @dev This is a skeleton implementation with dummy logic - real pricing logic will be added later
 contract DualDataQuoter is IQuoterDualData {
-    
+    // execution cost around 16,000 gas
     /// @notice Calculate quote using both alpha and beta market data
     /// @param params Quote parameters containing asset balances and swap amount
     /// @param alphaData Encoded alpha market data (spot price and TWAP)

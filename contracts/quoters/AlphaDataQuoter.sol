@@ -8,7 +8,7 @@ import {QuoteParams, QuoteParamsBatch} from "../structs/QuoteParams.sol";
 /// @notice A quoter that requires alpha market data (spot price and TWAP)
 /// @dev This is a skeleton implementation with dummy logic - real pricing logic will be added later
 contract AlphaDataQuoter is IQuoterSingleData {
-    
+    // execution cost around 13,000 gas
     /// @notice Calculate quote using alpha market data
     /// @param params Quote parameters containing asset balances and swap amount
     /// @param data Encoded alpha market data (spot price and TWAP)

@@ -8,7 +8,7 @@ import {QuoteParams, QuoteParamsBatch} from "../structs/QuoteParams.sol";
 /// @notice A quoter that doesn't require external market data - uses only on-chain information
 /// @dev This is a skeleton implementation with dummy logic - real pricing logic will be added later
 contract SimpleQuoter is IQuoterNoData {
-    
+    // execution cost around 10,000 gas
     /// @notice Calculate quote using only on-chain data (balances, amounts)
     /// @param params Quote parameters containing asset balances and swap amount
     /// @return quote The calculated quote amount
