@@ -4,6 +4,32 @@ pragma solidity ^0.8.30;
 import {IERC20} from "../interfaces/external/IERC20.sol";
 
 /**
+ * @notice Interface for PoolManager contract
+ */
+interface IPoolManager {
+    function addLiquidity(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amount0,
+        uint256 amount1
+    ) external payable returns (uint256 liquidity);
+    
+    function swap(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut
+    ) external payable returns (uint256 amountOut);
+    
+    function getInventory(uint256 poolId) external view returns (uint128 asset0, uint128 asset1);
+}
+
+/**
  * @title PoolManagerSwapTester
  * @notice Comprehensive test contract for PoolManager swap function using dual data
  * @dev Copy-paste this into Remix and update addresses after deployment
@@ -51,31 +77,6 @@ contract PoolManagerSwapTester {
         bytes3 marking
     );
     
-    /**
-     * @notice Interface for PoolManager contract
-     */
-    interface IPoolManager {
-        function addLiquidity(
-            address asset0,
-            address asset1,
-            address quoter,
-            bytes3 markings,
-            uint256 amount0,
-            uint256 amount1
-        ) external payable returns (uint256 liquidity);
-        
-        function swap(
-            address asset0,
-            address asset1,
-            address quoter,
-            bytes3 markings,
-            uint256 amountIn,
-            bool zeroForOne,
-            uint256 minAmountOut
-        ) external payable returns (uint256 amountOut);
-        
-        function getInventory(uint256 poolId) external view returns (uint128 asset0, uint128 asset1);
-    }
     
     /**
      * @notice Setup test environment - call this first
