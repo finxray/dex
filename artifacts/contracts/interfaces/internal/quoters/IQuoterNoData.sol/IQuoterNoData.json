@@ -1,0 +1,133 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "IQuoterNoData",
+  "sourceName": "contracts/interfaces/internal/quoters/IQuoterNoData.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset0Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset1Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint16",
+              "name": "bucketID",
+              "type": "uint16"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            }
+          ],
+          "internalType": "struct QuoteParams",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "name": "quote",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "amount",
+              "type": "uint256[]"
+            },
+            {
+              "internalType": "uint128[]",
+              "name": "asset0Balances",
+              "type": "uint128[]"
+            },
+            {
+              "internalType": "uint128[]",
+              "name": "asset1Balances",
+              "type": "uint128[]"
+            },
+            {
+              "internalType": "uint16[]",
+              "name": "bucketID",
+              "type": "uint16[]"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            }
+          ],
+          "internalType": "struct QuoteParamsBatch",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "name": "quoteBatch",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

@@ -12,7 +12,7 @@ import {IDataBridge} from "./interfaces/internal/IDataBridge.sol";
 
 import {SwapParams} from "./structs/SwapParams.sol";
 import {Marking} from "./structs/Marking.sol"; 
-import {QuoteParamsBase, QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
+import {QuoteParams, QuoteParamsBatch} from "./structs/QuoteParams.sol";
 
 contract QuoteRequester {
     using TransientStorage for address;
@@ -29,6 +29,52 @@ contract QuoteRequester {
         defaultBeta = _defaultBeta;
     }
 
+    /// @notice Add or update alpha market data address at specified pointer
+    /// @param pointer Index (0-15) where to store the alpha address
+    /// @param alphaAddress Address of the alpha market data contract
+    function addAlphaMarketAddress(uint8 pointer, address alphaAddress) external {
+        require(pointer < 16, "Invalid pointer: must be 0-15");
+        alphaAddressStorage[pointer] = alphaAddress;
+    }
+
+    /// @notice Add or update beta market data address at specified pointer
+    /// @param pointer Index (0-15) where to store the beta address
+    /// @param betaAddress Address of the beta market data contract
+    function addBetaMarketAddress(uint8 pointer, address betaAddress) external {
+        require(pointer < 16, "Invalid pointer: must be 0-15");
+        betaAddressStorage[pointer] = betaAddress;
+    }
+
+    /// @notice Remove alpha market data address at specified pointer
+    /// @param pointer Index (0-15) from which to remove the alpha address
+    function removeAlphaMarketAddress(uint8 pointer) external {
+        require(pointer < 16, "Invalid pointer: must be 0-15");
+        delete alphaAddressStorage[pointer];
+    }
+
+    /// @notice Remove beta market data address at specified pointer
+    /// @param pointer Index (0-15) from which to remove the beta address
+    function removeBetaMarketAddress(uint8 pointer) external {
+        require(pointer < 16, "Invalid pointer: must be 0-15");
+        delete betaAddressStorage[pointer];
+    }
+
+    /// @notice Get alpha market data address at specified pointer
+    /// @param pointer Index (0-15) to query
+    /// @return alphaAddress Address stored at the pointer
+    function getAlphaMarketAddress(uint8 pointer) external view returns (address alphaAddress) {
+        require(pointer < 16, "Invalid pointer: must be 0-15");
+        alphaAddress = alphaAddressStorage[pointer];
+    }
+
+    /// @notice Get beta market data address at specified pointer
+    /// @param pointer Index (0-15) to query
+    /// @return betaAddress Address stored at the pointer
+    function getBetaMarketAddress(uint8 pointer) external view returns (address betaAddress) {
+        require(pointer < 16, "Invalid pointer: must be 0-15");
+        betaAddress = betaAddressStorage[pointer];
+    }
+
 
 
     // Dummy quoter returns a fixed exchange rate (asset0/asset1 = 1.3)
@@ -43,95 +89,126 @@ contract QuoteRequester {
         rate = 1300000000000000000; // 1.3 * 1e18
     }
 
-    // function inventories(uint256 poolID) public virtual view returns (Inventory memory);
-    function getMarketData(address addr, QuoteParamsBase memory base) internal  returns (bytes memory data) {
-        data = addr.loadTransient();
+    /// @notice Get market data with caching via transient storage
+    /// @param dataAddress Address of the market data provider (alpha/beta)
+    /// @param params Quote parameters containing all necessary context
+    /// @return data Cached or freshly fetched market data
+    function getMarketData(address dataAddress, QuoteParams memory params) internal returns (bytes memory data) {
+        // Try to load from transient storage cache first
+        data = dataAddress.loadTransient();
+        
         if (data.length == 0) {
-            data = IDataBridge(addr).getData(base);
-            addr.storeTransient(data);
-        } 
+            // Cache miss - fetch fresh data from data bridge
+            data = IDataBridge(dataAddress).getData(params);
+            // Store in transient storage for reuse within this transaction
+            dataAddress.storeTransient(data);
+        }
+        
         return data;
     }
 
-    function getQuote(SwapParams calldata p) internal returns (uint256 quote, uint256 poolID) {
+    function getQuote(SwapParams memory p, uint128 asset0Balance, uint128 asset1Balance) internal returns (uint256 quote, uint256 poolID) {
         poolID = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[0]);
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
-        QuoteParamsBase memory baseParams = QuoteParamsBase({
-            asset0: p.asset0,
-            asset1: p.asset1, 
-            zeroForOne: p.zeroForOne
-        }); 
-
+        
+        // Create flattened struct with provided balances
         QuoteParams memory params = QuoteParams({
-            base: baseParams,
+            asset0: p.asset0,
+            asset1: p.asset1,
             quoter: p.quoter,
             amount: p.amount[0],
-            asset0Balance: 0, // Will be set by caller
-            asset1Balance: 0, // Will be set by caller  
-            bucketID: m.bucketID
+            asset0Balance: asset0Balance,
+            asset1Balance: asset1Balance,
+            bucketID: m.bucketID,
+            zeroForOne: p.zeroForOne
         });
 
         address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
         address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
+        
         if (m.isAlpha && m.isBeta) {
-            // Both `m.isAlpha` and `m.isBeta` are true: Placeholder for combined logic
-            quote = IQuoterDualData(params.quoter).quote(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
+            // Both alpha and beta data required - dual data quoter
+            quote = IQuoterDualData(params.quoter).quote(
+                params, 
+                getMarketData(alpha, params), 
+                getMarketData(beta, params)
+            );
         } else if (!m.isAlpha && !m.isBeta) {
-            // Both `m.isAlpha` and `m.isBeta` are false: Call IQuoter
+            // No external market data required - pure on-chain quoter
             quote = IQuoterNoData(params.quoter).quote(params);
         } else if (m.isAlpha && !m.isBeta) {
-            // `m.isAlpha` is true, `m.isBeta` is false: Call IQuoterDex
-            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(alpha, baseParams));
+            // Only alpha data required - single data quoter
+            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(alpha, params));
         } else if (!m.isAlpha && m.isBeta) {
-            // `m.isAlpha` is false, `m.isBeta` is true: Call IQuoterOracle
-            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, baseParams));
+            // Only beta data required - single data quoter  
+            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, params));
         } 
     } 
 
-    function getQuoteBatch(SwapParams calldata p) internal returns (uint256[] memory quote, uint256[] memory poolID) {
+    function getQuoteBatch(SwapParams memory p, uint128[] memory asset0Balances, uint128[] memory asset1Balances) internal returns (uint256[] memory quote, uint256[] memory poolID) {
         poolID = new uint256[](p.marking.length);
         quote = new uint256[](p.marking.length);
-        uint128[] memory asset0Balances = new uint128[](p.marking.length);
-        uint128[] memory asset1Balances = new uint128[](p.marking.length);
         uint16[] memory bucketIDs = new uint16[](p.marking.length);
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
-            for (uint i = 0; i < p.marking.length ;i++) {
+        
+        for (uint i = 0; i < p.marking.length; i++) {
             poolID[i] = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[i]);
-            asset0Balances[i] = 0; // Will be set by caller
-            asset1Balances[i] = 0; // Will be set by caller
-            bucketIDs[i]= MarkingHelper.decodeMarkings(p.marking[i]).bucketID;
+            bucketIDs[i] = MarkingHelper.decodeMarkings(p.marking[i]).bucketID;
         }
 
-        QuoteParamsBase memory baseParams = QuoteParamsBase({
+        // Create flattened struct - no nesting!
+        QuoteParamsBatch memory params = QuoteParamsBatch({
             asset0: p.asset0,
-            asset1: p.asset1, 
-            zeroForOne: p.zeroForOne
-        }); 
-
-        QuoteParamsBatch memory params = QuoteParamsBatch({        
-            base: baseParams,
+            asset1: p.asset1,
             quoter: p.quoter,
             amount: p.amount,
             asset0Balances: asset0Balances,
             asset1Balances: asset1Balances,
-            bucketID: bucketIDs
-        });  
+            bucketID: bucketIDs,
+            zeroForOne: p.zeroForOne
+        });
 
         address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
         address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
+        
+        // Create base params for market data fetching
+        QuoteParams memory baseParams = QuoteParams({
+            asset0: p.asset0,
+            asset1: p.asset1,
+            quoter: p.quoter,
+            amount: 0, // Not used for market data
+            asset0Balance: 0, // Not used for market data
+            asset1Balance: 0, // Not used for market data
+            bucketID: 0, // Not used for market data
+            zeroForOne: p.zeroForOne
+        });
+        
         // Routing logic based on marking
         if (m.isAlpha && m.isBeta) {
-            // Both `m.isAlpha` and `m.isBeta` are true: Placeholder for combined logic
-            quote = IQuoterDualData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams), getMarketData(beta, baseParams));
+            // Both alpha and beta data required - dual data quoter
+            quote = IQuoterDualData(params.quoter).quoteBatch(
+                params, 
+                getMarketData(alpha, baseParams), 
+                getMarketData(beta, baseParams)
+            );
         } else if (!m.isAlpha && !m.isBeta) {
-            // Both `m.isAlpha` and `m.isBeta` are false: Call IQuoter
+            // No external market data required - pure on-chain quoter
             quote = IQuoterNoData(params.quoter).quoteBatch(params);
         } else if (m.isAlpha && !m.isBeta) {
-            // `m.isAlpha` is true, `m.isBeta` is false: Call IQuoterDex
+            // Only alpha data required - single data quoter
             quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams));
         } else if (!m.isAlpha && m.isBeta) {
-            // `m.isAlpha` is false, `m.isBeta` is true: Call IQuoterOracle
+            // Only beta data required - single data quoter
             quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(beta, baseParams));
         } 
-    } 
+    }
+
+    /// @notice Backward compatibility version of getQuoteBatch without balances
+    function getQuoteBatch(SwapParams calldata p) internal returns (uint256[] memory quote, uint256[] memory poolID) {
+        // Create empty balance arrays - quoters will use default/zero balances
+        uint128[] memory emptyAsset0Balances = new uint128[](p.marking.length);
+        uint128[] memory emptyAsset1Balances = new uint128[](p.marking.length);
+        
+        return getQuoteBatch(p, emptyAsset0Balances, emptyAsset1Balances);
+    }
 }

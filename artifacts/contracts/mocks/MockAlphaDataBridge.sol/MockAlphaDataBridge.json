@@ -1,0 +1,132 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MockAlphaDataBridge",
+  "sourceName": "contracts/mocks/MockAlphaDataBridge.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_spotPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_twapPrice",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset0Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset1Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint16",
+              "name": "bucketID",
+              "type": "uint16"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            }
+          ],
+          "internalType": "struct QuoteParams",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "name": "getData",
+      "outputs": [
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "spotPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "twapPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_spotPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_twapPrice",
+          "type": "uint256"
+        }
+      ],
+      "name": "updatePrices",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600e575f5ffd5b506040516102e83803806102e8833981016040819052602b916037565b5f919091556001556058565b5f5f604083850312156047575f5ffd5b505080516020909101519092909150565b610283806100655f395ff3fe608060405234801561000f575f5ffd5b506004361061004a575f3560e01c8063398482d81461004e5780633bd1104b14610069578063a20a41cf146100b3578063ef88d7f0146100bc575b5f5ffd5b6100565f5481565b6040519081526020015b60405180910390f35b6100a6610077366004610130565b5f5460015460408051602081019390935282015260609081016040516020818303038152906040529050919050565b60405161006091906101f8565b61005660015481565b6100d46100ca36600461022d565b5f91909155600155565b005b80356001600160a01b03811681146100ec575f5ffd5b919050565b80356fffffffffffffffffffffffffffffffff811681146100ec575f5ffd5b803561ffff811681146100ec575f5ffd5b803580151581146100ec575f5ffd5b5f610100828403128015610142575f5ffd5b50604051610100810167ffffffffffffffff8111828210171561017357634e487b7160e01b5f52604160045260245ffd5b60405261017f836100d6565b815261018d602084016100d6565b602082015261019e604084016100d6565b6040820152606083810135908201526101b9608084016100f1565b60808201526101ca60a084016100f1565b60a08201526101db60c08401610110565b60c08201526101ec60e08401610121565b60e08201529392505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b5f5f6040838503121561023e575f5ffd5b5050803592602090910135915056fea26469706673582212207fa62aa44bbaf2ab2897b681286beae5177659755fa0c22fa4ecece4cbbac05664736f6c634300081e0033",
+  "deployedBytecode": "0x608060405234801561000f575f5ffd5b506004361061004a575f3560e01c8063398482d81461004e5780633bd1104b14610069578063a20a41cf146100b3578063ef88d7f0146100bc575b5f5ffd5b6100565f5481565b6040519081526020015b60405180910390f35b6100a6610077366004610130565b5f5460015460408051602081019390935282015260609081016040516020818303038152906040529050919050565b60405161006091906101f8565b61005660015481565b6100d46100ca36600461022d565b5f91909155600155565b005b80356001600160a01b03811681146100ec575f5ffd5b919050565b80356fffffffffffffffffffffffffffffffff811681146100ec575f5ffd5b803561ffff811681146100ec575f5ffd5b803580151581146100ec575f5ffd5b5f610100828403128015610142575f5ffd5b50604051610100810167ffffffffffffffff8111828210171561017357634e487b7160e01b5f52604160045260245ffd5b60405261017f836100d6565b815261018d602084016100d6565b602082015261019e604084016100d6565b6040820152606083810135908201526101b9608084016100f1565b60808201526101ca60a084016100f1565b60a08201526101db60c08401610110565b60c08201526101ec60e08401610121565b60e08201529392505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b5f5f6040838503121561023e575f5ffd5b5050803592602090910135915056fea26469706673582212207fa62aa44bbaf2ab2897b681286beae5177659755fa0c22fa4ecece4cbbac05664736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
