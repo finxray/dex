@@ -27,6 +27,7 @@ interface IPoolManager {
     ) external payable returns (uint256 amountOut);
     
     function getInventory(uint256 poolId) external view returns (uint128 asset0, uint128 asset1);
+    function addBetaMarketAddress(uint8 pointer, address betaAddress) external;
 }
 
 /**
@@ -50,9 +51,9 @@ contract PoolManagerSwapTester {
     uint256 constant LIQUIDITY_AMOUNT_0 = 1000 ether;  // Initial liquidity
     uint256 constant LIQUIDITY_AMOUNT_1 = 1300 ether;  // Initial liquidity
     
-    // Dual data marking: isAlpha=1, isBeta=1, both default=1, bucket=0
-    // Binary: 000000000000 0000 0000 1 1 1 1 = 0x00000F
-    bytes3 constant DUAL_DATA_MARKING = 0x00000F;
+    // Dual data marking: isAlpha=1, isBeta=1, alphaDefault=1, betaDefault=0, betaPointer=1, bucket=0
+    // Binary: 000000000000 0001 0000 0 1 1 1 = 0x000017
+    bytes3 constant DUAL_DATA_MARKING = 0x000017;
     
     // Events for logging results
     event SwapResult(
@@ -80,6 +81,7 @@ contract PoolManagerSwapTester {
     
     /**
      * @notice Setup test environment - call this first
+     * @dev Also sets up non-default beta bridge at pointer 1
      */
     function setupTest() external {
         emit TestSetup(TOKEN_A, TOKEN_B, POOL_MANAGER, DUAL_QUOTER, DUAL_DATA_MARKING);
@@ -87,6 +89,9 @@ contract PoolManagerSwapTester {
         // Approve tokens for PoolManager
         IERC20(TOKEN_A).approve(POOL_MANAGER, type(uint256).max);
         IERC20(TOKEN_B).approve(POOL_MANAGER, type(uint256).max);
+        
+        // Setup non-default beta bridge at pointer 1
+        IPoolManager(POOL_MANAGER).addBetaMarketAddress(1, MOCK_BETA_BRIDGE);
     }
     
     /**
@@ -315,13 +320,13 @@ contract PoolManagerSwapTester {
  * - Risk adjustments based on dual data correlation
  * - Transient storage caching for efficiency
  * 
- * MARKING BREAKDOWN (0x00000F):
+ * MARKING BREAKDOWN (0x000017):
  * - isAlpha: 1 (uses alpha data)
  * - isBeta: 1 (uses beta data)  
  * - isAlphaDefault: 1 (uses default alpha bridge)
- * - isBetaDefault: 1 (uses default beta bridge)
+ * - isBetaDefault: 0 (uses non-default beta bridge)
  * - alphaAddressPointer: 0 (not used when default)
- * - betaAddressPointer: 0 (not used when default)
+ * - betaAddressPointer: 1 (points to custom beta bridge at slot 1)
  * - bucketID: 0 (default bucket)
  * 
  * VERIFICATION:
