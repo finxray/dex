@@ -72,7 +72,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
         // Get current pool balances
-        (uint128 poolAsset0, uint128 poolAsset1) = PoolManagerLib.getInventory(_storage, poolID);
+        (uint128 poolAsset0, uint128 poolAsset1) = _storage.getInventory(poolID);
         
         // For simplicity, use a fixed rate of 1.3 for liquidity calculation
         // This avoids the complex quoter system during liquidity provision
@@ -89,7 +89,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         PoolManagerLib.handleAssetTransfers(a0, a1, amt0, amt1, msg.value, true, msg.sender);
 
         // Update inventory with canonical amounts
-        PoolManagerLib.updateInventory(_storage, poolID, int128(uint128(amt0)), int128(uint128(amt1)));
+        _storage.updateInventory(poolID, int128(uint128(amt0)), int128(uint128(amt1)));
 
         // Mint shares and update total directly
         _mint(msg.sender, poolID, liquidity);
@@ -110,7 +110,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
         // Get current pool balances
-        (uint128 poolAsset0, uint128 poolAsset1) = PoolManagerLib.getInventory(_storage, poolID);
+        (uint128 poolAsset0, uint128 poolAsset1) = _storage.getInventory(poolID);
         require(_storage.totalLiquidity[poolID] > 0, "No liquidity in pool");
         
         // Calculate proportional amounts - simple math, inline
@@ -123,7 +123,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         _storage.totalLiquidity[poolID] -= liquidity;
         
         // Update inventory via library
-        PoolManagerLib.updateInventory(_storage, poolID, -int128(uint128(amount0)), -int128(uint128(amount1)));
+        _storage.updateInventory(poolID, -int128(uint128(amount0)), -int128(uint128(amount1)));
 
         // Transfer assets using library
         bool canonicalOrder = asset0 < asset1;
@@ -152,7 +152,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         emit SwapStep(2, poolID);
         
         // Get inventory and calculate output using quoter system
-        (uint128 poolAsset0, uint128 poolAsset1) = PoolManagerLib.getInventory(_storage, poolID);
+        (uint128 poolAsset0, uint128 poolAsset1) = _storage.getInventory(poolID);
         emit SwapStep(3, uint256(poolAsset0) << 128 | uint256(poolAsset1));
         
         // Create swap params for quoter
@@ -183,8 +183,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         // Update inventory in canonical asset order
         bool canonicalOrder = asset0 < asset1;
         bool canonicalZeroForOne = canonicalOrder ? zeroForOne : !zeroForOne;
-        PoolManagerLib.updateInventory(
-            _storage,
+        _storage.updateInventory(
             poolID,
             canonicalZeroForOne ? int128(uint128(amountIn)) : -int128(uint128(amountOut)),
             canonicalZeroForOne ? -int128(uint128(amountOut)) : int128(uint128(amountIn))
@@ -259,7 +258,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
             );
         }
 
-        (uint128 poolAsset0, uint128 poolAsset1) = PoolManagerLib.getInventory(_storage, poolID);
+        (uint128 poolAsset0, uint128 poolAsset1) = _storage.getInventory(poolID);
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = inputAmount;
@@ -279,10 +278,9 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
             ? quote
             : (zeroForOne ? (inputAmount * 1300000000000000000) / 1e18 : (inputAmount * 1e18) / 1300000000000000000);
 
-        PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, outputAmount, zeroForOne);git 
+        PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, outputAmount, zeroForOne);git
 
-        PoolManagerLib.updateInventory(
-            _storage,
+        _storage.updateInventory(
             poolID,
             zeroForOne ? int128(uint128(inputAmount)) : -int128(uint128(outputAmount)),
             zeroForOne ? -int128(uint128(outputAmount)) : int128(uint128(inputAmount))
