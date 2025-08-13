@@ -68,7 +68,7 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         uint256 amount0,
         uint256 amount1
     ) external payable returns (uint256 liquidity) {
-        // Calculate poolID on-the-fly with provided order to match tests
+        // Calculate poolID (canonicalizes asset order internally)
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
         // Get current pool balances
@@ -82,13 +82,14 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
             _storage, amount0, amount1, poolAsset0, poolAsset1, poolID, rate
         );
 
-        // Handle transfers using library as provided
-        PoolManagerLib.handleAssetTransfers(
-            asset0, asset1, amount0, amount1, msg.value, true, msg.sender
-        );
+        // Canonicalize amounts to match asset ordering used in poolID
+        (address a0, address a1) = asset0 < asset1 ? (asset0, asset1) : (asset1, asset0);
+        (uint256 amt0, uint256 amt1) = asset0 < asset1 ? (amount0, amount1) : (amount1, amount0);
+        // Handle transfers using canonical order
+        PoolManagerLib.handleAssetTransfers(a0, a1, amt0, amt1, msg.value, true, msg.sender);
 
-        // Update inventory via library with provided amounts
-        PoolManagerLib.updateInventory(_storage, poolID, int128(uint128(amount0)), int128(uint128(amount1)));
+        // Update inventory with canonical amounts
+        PoolManagerLib.updateInventory(_storage, poolID, int128(uint128(amt0)), int128(uint128(amt1)));
 
         // Mint shares and update total directly
         _mint(msg.sender, poolID, liquidity);
@@ -125,9 +126,9 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         PoolManagerLib.updateInventory(_storage, poolID, -int128(uint128(amount0)), -int128(uint128(amount1)));
 
         // Transfer assets using library
-        PoolManagerLib.handleAssetTransfers(
-            asset0, asset1, amount0, amount1, 0, false, msg.sender
-        );
+        bool canonicalOrder = asset0 < asset1;
+        (uint256 out0, uint256 out1) = canonicalOrder ? (amount0, amount1) : (amount1, amount0);
+        PoolManagerLib.handleAssetTransfers(asset0, asset1, out0, out1, 0, false, msg.sender);
     }
 
     // Execution cost: 67,670
@@ -146,10 +147,8 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         // Calculate poolID on-the-fly
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
-        // Transfer in input asset - inline asset determination
-        PoolManagerLib.handleAssetTransfers(
-            zeroForOne ? asset0 : asset1, address(0), amountIn, 0, msg.value, true, msg.sender
-        );
+        // Transfer in input asset - inline asset determination (as provided)
+        PoolManagerLib.handleAssetTransfers(zeroForOne ? asset0 : asset1, address(0), amountIn, 0, msg.value, true, msg.sender);
         emit SwapStep(2, poolID);
         
         // Get inventory and calculate output using quoter system
@@ -181,18 +180,19 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         emit SwapStep(5, 0);
 
         // Update inventory - inline delta calculation
+        // Update inventory in canonical asset order
+        bool canonicalOrder = asset0 < asset1;
+        bool canonicalZeroForOne = canonicalOrder ? zeroForOne : !zeroForOne;
         PoolManagerLib.updateInventory(
-            _storage, 
-            poolID, 
-            zeroForOne ? int128(uint128(amountIn)) : -int128(uint128(amountOut)),
-            zeroForOne ? -int128(uint128(amountOut)) : int128(uint128(amountIn))
+            _storage,
+            poolID,
+            canonicalZeroForOne ? int128(uint128(amountIn)) : -int128(uint128(amountOut)),
+            canonicalZeroForOne ? -int128(uint128(amountOut)) : int128(uint128(amountIn))
         );
         emit SwapStep(6, 0);
         
         // Transfer out output asset - inline asset determination
-        PoolManagerLib.handleAssetTransfers(
-            zeroForOne ? asset1 : asset0, address(0), amountOut, 0, 0, false, msg.sender
-        );
+        PoolManagerLib.handleAssetTransfers(zeroForOne ? asset1 : asset0, address(0), amountOut, 0, 0, false, msg.sender);
         emit SwapStep(7, 0);
     }
 

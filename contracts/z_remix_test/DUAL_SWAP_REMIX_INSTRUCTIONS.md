@@ -18,7 +18,7 @@ This guide shows how to test `createPool`, `addLiquidity`, and `swap` in `PoolMa
   - `DualDataQuoter`: `0xDUAL_QUOTER_ADDRESS`
 - PoolManager (constructor):
   - `defaultAlpha = 0xALPHA_DATA_ADDRESS`
-  - `defaultBeta  = 0xBETA_DATA_ADDRESS`
+  - `defaultBeta  = 0xNON_BETA_PLACEHOLDER` (non-zero, NOT the beta bridge; e.g. `0x000000000000000000000000000000000000dEaD`)
   - Deployed as: `0xPOOL_MANAGER_ADDRESS`
 
 Notes:
@@ -31,7 +31,17 @@ In Remix, with TokenA and TokenB selected:
   - `spender = 0xPOOL_MANAGER_ADDRESS`
   - `amount  = 115792089237316195423570985008687907853269984665640564039457584007913129639935` (MaxUint256) or a large amount
 
-### 2) Create pool (PoolManager.createPool)
+### 2) Configure beta market data via pointer (QuoterRouter)
+We will route beta market data through a pointer (so it does NOT use the defaultBeta):
+
+1) Call `addBetaMarketAddress(pointer, betaAddress)` on `PoolManager`:
+   - `pointer = 1`
+   - `betaAddress = 0xBETA_DATA_ADDRESS`
+
+2) (Optional) Verify:
+   - `getBetaMarketAddress(1)` → `0xBETA_DATA_ADDRESS`
+
+### 3) Create pool (PoolManager.createPool)
 Select `PoolManager` at `0xPOOL_MANAGER_ADDRESS` and call:
 
 Inputs:
@@ -43,7 +53,7 @@ Inputs:
 Return:
 - `poolID` (uint256)
 
-### 3) Add liquidity (PoolManager.addLiquidity)
+### 4) Add liquidity (PoolManager.addLiquidity)
 Still on `PoolManager`:
 
 Inputs:
@@ -65,7 +75,7 @@ Optional verification:
   - `asset1 ≈ 1300e18`
 - Call `balanceOf(yourAddress, poolID)` > 0
 
-### 4) Swap A → B (PoolManager.swap)
+### 5) Swap A → B (PoolManager.swap)
 Inputs:
 - `asset0`: `0xTOKEN_A_ADDRESS`
 - `asset1`: `0xTOKEN_B_ADDRESS`
@@ -80,7 +90,7 @@ Expected:
 - Function returns `amountOut` (uint256) > `minAmountOut`
 - Your TokenB balance increases
 
-### 5) Swap B → A (optional)
+### 6) Swap B → A (optional)
 Inputs:
 - `asset0`: `0xTOKEN_A_ADDRESS`
 - `asset1`: `0xTOKEN_B_ADDRESS`
@@ -91,7 +101,7 @@ Inputs:
 - `minAmountOut`: `7000000000000000000`  // 7e18 (example; adjust per liquidity)
 - `msg.value`: `0`
 
-### 6) Multi-hop (optional, single-transaction caching)
+### 7) Multi-hop (optional, single-transaction caching)
 Use `batchSwap` to chain hops in one tx. Build an array of `Hop` structs in Remix (ABI-encoded) as follows:
 
 Example hops (Simple → Alpha → Dual) with same token pair:
@@ -130,12 +140,34 @@ Call `batchSwap(hops, amountIn, minAmountOut)`:
   - Simple: `0x00000C`
   - Alpha:  `0x00000E`
   - Beta:   `0x00000D`
-  - Dual:   `0x00000F`
+  - Dual (both defaults):   `0x00000F`
+  - Dual (alpha default, beta via pointer=1): `0x000107` (see bit layout below)
 
 - Suggested market data (if using mocks):
   - Alpha spot: `1300000000000000000` (1.3e18)
   - Alpha TWAP: `1280000000000000000` (1.28e18)
   - Beta spot:  `1320000000000000000` (1.32e18)
+
+#### Markings bit layout (LSB → MSB)
+Our marking is a 24-bit `bytes3`. Bits are interpreted as:
+
+```
+bit 0   = isBeta
+bit 1   = isAlpha
+bit 2   = isAlphaDefault
+bit 3   = isBetaDefault
+bits 4–7   = alphaAddressPointer (4 bits)
+bits 8–11  = betaAddressPointer  (4 bits)
+bits 12–23 = bucketID (12 bits)
+```
+
+Examples:
+- Dual (both defaults): isBeta=1, isAlpha=1, isAlphaDefault=1, isBetaDefault=1, alphaPtr=0, betaPtr=0, bucketID=0
+  - binary (lower 12 bits): `0000 0000 1111` → hex `0x00 00 0F` → `0x00000F`
+
+- Dual (alpha default, beta via pointer=1): isBeta=1, isAlpha=1, isAlphaDefault=1, isBetaDefault=0, alphaPtr=0, betaPtr=1, bucketID=0
+  - lower 12 bits: `betaPtr(0001) alphaPtr(0000) betaDef(0) alphaDef(1) isAlpha(1) isBeta(1)` → `0001 0000 0111`
+  - hex: `0x00 01 07` → `0x000107`
 
 ### Troubleshooting
 - Revert `Alpha/Beta address is zero`:

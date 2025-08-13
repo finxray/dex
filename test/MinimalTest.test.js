@@ -42,9 +42,12 @@ describe("Minimal PoolManager Test", function () {
     console.log("✅ Pool created successfully");
     
     // Test 2: Calculate pool ID manually to verify it matches
+    const a0 = (await tokenA.getAddress()).toLowerCase();
+    const a1 = (await tokenB.getAddress()).toLowerCase();
+    const [x0, x1] = a0 < a1 ? [await tokenA.getAddress(), await tokenB.getAddress()] : [await tokenB.getAddress(), await tokenA.getAddress()];
     const calculatedPoolID = ethers.solidityPackedKeccak256(
       ["address", "address", "address", "bytes3"],
-      [await tokenA.getAddress(), await tokenB.getAddress(), await simpleQuoter.getAddress(), SIMPLE_MARKING]
+      [x0, x1, await simpleQuoter.getAddress(), SIMPLE_MARKING]
     );
     console.log("📊 Calculated Pool ID:", calculatedPoolID);
     

@@ -35,7 +35,7 @@ library PoolManagerLib {
                             POOL CREATION
     //////////////////////////////////////////////////////////////*/
     
-    /// @notice Creates a new pool without reordering assets
+    /// @notice Creates a new pool with canonical asset ordering (asset0 < asset1)
     /// @param asset0 First asset address
     /// @param asset1 Second asset address  
     /// @param quoter Quoter contract address
@@ -47,10 +47,11 @@ library PoolManagerLib {
         address quoter,
         bytes3 markings
     ) internal returns (uint256 poolID) {
-        // Do not sort assets; pool identity depends on provided order
+        // PoolIDAssembly will canonicalize the order internally
         poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
-        
-        emit PoolCreated(poolID, asset0, asset1, quoter, markings);
+        // Emit with canonical order for consistency
+        (address sortedAsset0, address sortedAsset1) = asset0 < asset1 ? (asset0, asset1) : (asset1, asset0);
+        emit PoolCreated(poolID, sortedAsset0, sortedAsset1, quoter, markings);
     }
 
     /*//////////////////////////////////////////////////////////////

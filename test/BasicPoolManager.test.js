@@ -191,9 +191,12 @@ describe("Basic PoolManager Tests", function () {
 
   // Helper function to calculate pool ID
   async function calculatePoolID(asset0, asset1, quoter, marking) {
+    const a0 = asset0.toLowerCase();
+    const a1 = asset1.toLowerCase();
+    const [x0, x1] = a0 < a1 ? [asset0, asset1] : [asset1, asset0];
     return ethers.solidityPackedKeccak256(
       ["address", "address", "address", "bytes3"],
-      [asset0, asset1, quoter, marking]
+      [x0, x1, quoter, marking]
     );
   }
 });

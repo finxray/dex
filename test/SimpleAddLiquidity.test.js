@@ -89,9 +89,12 @@ describe("Simple Add Liquidity Test", function () {
       console.log("User balance B after:", ethers.formatEther(balanceB_after));
       
       // Check pool inventory
+      const a0 = (await tokenA.getAddress()).toLowerCase();
+      const a1 = (await tokenB.getAddress()).toLowerCase();
+      const [x0, x1] = a0 < a1 ? [await tokenA.getAddress(), await tokenB.getAddress()] : [await tokenB.getAddress(), await tokenA.getAddress()];
       const poolID = ethers.solidityPackedKeccak256(
         ["address", "address", "address", "bytes3"],
-        [await tokenA.getAddress(), await tokenB.getAddress(), await simpleQuoter.getAddress(), SIMPLE_MARKING]
+        [x0, x1, await simpleQuoter.getAddress(), SIMPLE_MARKING]
       );
       
       const [asset0, asset1] = await poolManager.getInventory(poolID);
@@ -108,8 +111,16 @@ describe("Simple Add Liquidity Test", function () {
       // Assertions
       expect(totalLiquidity).to.be.greaterThan(0);
       expect(userLPBalance).to.equal(totalLiquidity);
-      expect(asset0).to.equal(amount0);
-      expect(asset1).to.equal(amount1);
+      // Inventory is stored in canonical address order (asset0 < asset1)
+      const addrA = (await tokenA.getAddress()).toLowerCase();
+      const addrB = (await tokenB.getAddress()).toLowerCase();
+      if (addrA < addrB) {
+        expect(asset0).to.equal(amount0);
+        expect(asset1).to.equal(amount1);
+      } else {
+        expect(asset0).to.equal(amount1);
+        expect(asset1).to.equal(amount0);
+      }
       
     } catch (error) {
       console.error("Transaction failed:", error.message);
