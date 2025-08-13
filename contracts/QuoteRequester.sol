@@ -89,7 +89,7 @@ abstract contract QuoteRequester {
         rate = 1300000000000000000; // 1.3 * 1e18
     }
 
-    /// @notice Get market data with caching via transient storage
+    /// @notice Get market data with transient storage caching
     /// @param dataAddress Address of the market data provider (alpha/beta)
     /// @param params Quote parameters containing all necessary context
     /// @return data Cached or freshly fetched market data
@@ -100,18 +100,31 @@ abstract contract QuoteRequester {
         if (data.length == 0) {
             // Cache miss - fetch fresh data from data bridge
             data = IDataBridge(dataAddress).getData(params);
-            // Store in transient storage for reuse within this transaction
-            dataAddress.storeTransient(data);
+            // Only store in transient storage if data is not empty to avoid tstore void value issues
+            if (data.length > 0) {
+                dataAddress.storeTransient(data);
+            }
         }
         
         return data;
     }
 
     function getQuote(SwapParams memory p, uint128 asset0Balance, uint128 asset1Balance) internal returns (uint256 quote, uint256 poolID) {
+        // Calculate poolID using assembly function
         poolID = PoolIDAssembly.assemblePoolID(p.asset0, p.asset1, p.quoter, p.marking[0]);
+        
+        // Decode markings to determine quoter type and data requirements
         Marking memory m = MarkingHelper.decodeMarkings(p.marking[0]);
         
-        // Create flattened struct with provided balances
+        // Resolve addresses based on marking flags
+        address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
+        address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
+        
+        // Validate addresses
+        require(alpha != address(0), "Alpha address is zero");
+        require(beta != address(0), "Beta address is zero");
+        
+        // Create params struct
         QuoteParams memory params = QuoteParams({
             asset0: p.asset0,
             asset1: p.asset1,
@@ -123,9 +136,7 @@ abstract contract QuoteRequester {
             zeroForOne: p.zeroForOne
         });
 
-        address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
-        address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
-        
+        // Call appropriate quoter based on marking flags with transient storage caching
         if (m.isAlpha && m.isBeta) {
             // Both alpha and beta data required - dual data quoter
             quote = IQuoterDualData(params.quoter).quote(
@@ -143,7 +154,9 @@ abstract contract QuoteRequester {
             // Only beta data required - single data quoter  
             quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, params));
         } 
-    } 
+    }
+
+ 
 
     function getQuoteBatch(SwapParams memory p, uint128[] memory asset0Balances, uint128[] memory asset1Balances) internal returns (uint256[] memory quote, uint256[] memory poolID) {
         poolID = new uint256[](p.marking.length);

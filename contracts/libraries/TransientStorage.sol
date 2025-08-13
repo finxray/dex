@@ -2,61 +2,56 @@
 pragma solidity ^0.8.30;
 
 library TransientStorage {
-    // Store data in transient storage (memory version)
-    function storeTransient(address addr, bytes memory data) internal {
+    /// @notice Store data in transient storage using tstore opcode
+    /// @param key Address to use as storage key
+    /// @param data Bytes data to store
+    function storeTransient(address key, bytes memory data) internal {
         assembly {
-            // Derive collision-resistant base slot using keccak256(address)
-            let baseSlot := keccak256(0, add(addr, 32))
-            
-            // Store length in base slot (1 tstore)
-            let length := mload(data)
-            tstore(baseSlot, length)
-            
-            // Initialize pointers
-            let dataPtr := add(data, 32)  // Skip length field
-            let endPtr := add(dataPtr, length)
-            
-            // Store chunks in optimized loop
-            for { let i := 0 } lt(dataPtr, endPtr) { i := add(i, 1) } {
-                tstore(
-                    add(baseSlot, add(i, 1)), // Slot = baseSlot + i + 1
-                    mload(dataPtr)            // Load 32-byte word from memory
-                )
-                dataPtr := add(dataPtr, 32) // Move to next word
+            // Use address as the base slot directly for transient storage
+            let slot := key
+            // Store the data length first
+            let dataLength := mload(data)
+            tstore(slot, dataLength)
+            // Store data in 32-byte chunks sequentially in transient storage
+            let dataPtr := add(data, 0x20)
+            let chunks := div(add(dataLength, 31), 32)
+            for { let i := 0 } lt(i, chunks) { i := add(i, 1) } {
+                let chunkSlot := add(slot, add(i, 1))
+                let chunkData := mload(add(dataPtr, mul(i, 32)))
+                tstore(chunkSlot, chunkData)
             }
         }
     }
 
-    // Retrieve data from transient storage
-    function loadTransient(address addr) internal view returns (bytes memory result) {
+    /// @notice Load data from transient storage using tload opcode
+    /// @param key Address to use as storage key
+    /// @return result Bytes data retrieved from transient storage
+    function loadTransient(address key) internal view returns (bytes memory result) {
         assembly {
-            // Derive base slot using same keccak256 method
-            let baseSlot := keccak256(0, add(addr, 32))
-            
-            // Load length from base slot
-            let length := tload(baseSlot)
-            
-            // Handle empty case with minimal gas
-            if iszero(length) {
+            let slot := key
+            // Load the data length first
+            let dataLength := tload(slot)
+            // If no data, return empty bytes
+            if iszero(dataLength) {
                 result := mload(0x40)
                 mstore(result, 0)
-                mstore(0x40, add(result, 32))
-                return(result, 32)
+                mstore(0x40, add(result, 0x20))
             }
-            
-            // Allocate memory optimally
-            result := mload(0x40)
-            mstore(result, length) // Store length
-            
-            // Calculate chunks and update free pointer
-            let chunks := add(div(length, 32), gt(mod(length, 32), 0))
-            mstore(0x40, add(add(result, 32), mul(chunks, 32)))
-            
-            // Load chunks in assembly-optimized loop
-            let destPtr := add(result, 32)
-            for { let i := 0 } lt(i, chunks) { i := add(i, 1) } {
-                mstore(destPtr, tload(add(baseSlot, add(i, 1))))
-                destPtr := add(destPtr, 32)
+            // If data exists, load it
+            if gt(dataLength, 0) {
+                // Allocate memory for result
+                result := mload(0x40)
+                mstore(result, dataLength)
+                let resultPtr := add(result, 0x20)
+                // Load data in 32-byte chunks
+                let chunks := div(add(dataLength, 31), 32)
+                for { let i := 0 } lt(i, chunks) { i := add(i, 1) } {
+                    let chunkSlot := add(slot, add(i, 1))
+                    let chunkData := tload(chunkSlot)
+                    mstore(add(resultPtr, mul(i, 32)), chunkData)
+                }
+                // Update free memory pointer
+                mstore(0x40, add(result, add(0x20, mul(chunks, 32))))
             }
         }
     }

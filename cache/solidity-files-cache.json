@@ -12,6 +12,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -50,6 +51,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -86,6 +88,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -114,8 +117,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/PoolManager.sol": {
-      "lastModificationDate": 1754585940792,
-      "contentHash": "4301ce3e371c55536bb19c2dd3b4cddc",
+      "lastModificationDate": 1755054502218,
+      "contentHash": "2236e7f616601a82d5b5ad62482c150e",
       "sourceName": "contracts/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -124,6 +127,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -143,7 +147,7 @@
       },
       "imports": [
         "./ERC6909Claims.sol",
-        "./QuoteRequester.sol",
+        "./QuoterRouter.sol",
         "./libraries/PoolManagerLib.sol",
         "./libraries/PoolIDAssembly.sol",
         "./structs/SwapParams.sol"
@@ -156,8 +160,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/QuoteRequester.sol": {
-      "lastModificationDate": 1754662273777,
-      "contentHash": "22751d002f9977756edf3ac5b51b5126",
+      "lastModificationDate": 1755050129520,
+      "contentHash": "88469d364f18c5b4977550b2f6f7dbdf",
       "sourceName": "contracts/QuoteRequester.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -166,6 +170,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -203,8 +208,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1754248916358,
-      "contentHash": "ff8edce63d756ffad1d673360e396348",
+      "lastModificationDate": 1755051709459,
+      "contentHash": "383fd7a3528f4f78d8696c825c3abbeb",
       "sourceName": "contracts/libraries/PoolManagerLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -213,6 +218,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -242,8 +248,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/libraries/PoolIDAssembly.sol": {
-      "lastModificationDate": 1754246974262,
-      "contentHash": "a69db59ad239d0dc0b1d6ce73e27996c",
+      "lastModificationDate": 1755051709458,
+      "contentHash": "6b228b51c88aa342eb309198e2ccf918",
       "sourceName": "contracts/libraries/PoolIDAssembly.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -252,6 +258,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -288,6 +295,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -312,8 +320,8 @@
       "artifacts": []
     },
     "/Users/alexeygrigoryev/dex/contracts/libraries/MarkingHelper.sol": {
-      "lastModificationDate": 1754246974262,
-      "contentHash": "cf08626be67ad7026c0f6b608ddd939a",
+      "lastModificationDate": 1755052122360,
+      "contentHash": "40e35e48924b95df649c7cd064a4aa6c",
       "sourceName": "contracts/libraries/MarkingHelper.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -322,6 +330,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -350,8 +359,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/libraries/TransientStorage.sol": {
-      "lastModificationDate": 1754246974263,
-      "contentHash": "6faab22ed66790d20c07fcf9903893ed",
+      "lastModificationDate": 1755055005123,
+      "contentHash": "57b51134d89470c7d69c9ce2e1cf3c38",
       "sourceName": "contracts/libraries/TransientStorage.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -360,6 +369,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -396,6 +406,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -434,6 +445,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -472,6 +484,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -510,6 +523,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -548,6 +562,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -582,6 +597,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -616,6 +632,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -654,6 +671,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -680,8 +698,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/quoters/SimpleQuoter.sol": {
-      "lastModificationDate": 1754717705766,
-      "contentHash": "3e4fea0a24bef2465cff01febcb525b9",
+      "lastModificationDate": 1754983993111,
+      "contentHash": "d03f87e9b112f30a9651978c4abf3c46",
       "sourceName": "contracts/quoters/SimpleQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -690,6 +708,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -719,8 +738,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/quoters/DualDataQuoter.sol": {
-      "lastModificationDate": 1754661993048,
-      "contentHash": "2cf66b9237e7eb6060c606334b34885e",
+      "lastModificationDate": 1754983900928,
+      "contentHash": "7323fc01d665ee3c32fbc0136c55cf74",
       "sourceName": "contracts/quoters/DualDataQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -729,6 +748,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -758,8 +778,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/quoters/BetaDataQuoter.sol": {
-      "lastModificationDate": 1754661993042,
-      "contentHash": "ba4473d37820e87be49dacd521109ea7",
+      "lastModificationDate": 1754983909383,
+      "contentHash": "233d7ef209ddfb1e85fafb8b0c7d5a47",
       "sourceName": "contracts/quoters/BetaDataQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -768,6 +788,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -797,8 +818,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/quoters/AlphaDataQuoter.sol": {
-      "lastModificationDate": 1754662486526,
-      "contentHash": "78ff14831d6c9638ff89798375a0b3c9",
+      "lastModificationDate": 1754983956410,
+      "contentHash": "01dd32120f92a1b506df0bb05ff853f8",
       "sourceName": "contracts/quoters/AlphaDataQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -807,6 +828,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -846,6 +868,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -885,6 +908,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -924,6 +948,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -963,6 +988,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1002,6 +1028,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1040,6 +1067,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1081,6 +1109,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1117,6 +1146,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1155,6 +1185,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1193,6 +1224,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1221,7 +1253,7 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/ERC6909Extended.sol": {
-      "lastModificationDate": 1754847542608,
+      "lastModificationDate": 1754926816292,
       "contentHash": "2d6c6a233dc86e04915e3b9c9043c0df",
       "sourceName": "contracts/ERC6909Extended.sol",
       "solcConfig": {
@@ -1231,6 +1263,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1269,6 +1302,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1295,7 +1329,7 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/structs/Delta.sol": {
-      "lastModificationDate": 1754847538437,
+      "lastModificationDate": 1754926815141,
       "contentHash": "6f14974b38b315e815db49f7b4026253",
       "sourceName": "contracts/structs/Delta.sol",
       "solcConfig": {
@@ -1305,6 +1339,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1339,6 +1374,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1373,6 +1409,7 @@
             "enabled": true,
             "runs": 200
           },
+          "viaIR": true,
           "evmVersion": "cancun",
           "outputSelection": {
             "*": {
@@ -1395,6 +1432,93 @@
         "^0.8.30"
       ],
       "artifacts": []
+    },
+    "/Users/alexeygrigoryev/dex/contracts/QuoterRouter.sol": {
+      "lastModificationDate": 1755055189866,
+      "contentHash": "805be09b27856f308c3f04655cda16a7",
+      "sourceName": "contracts/QuoterRouter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./libraries/MarkingHelper.sol",
+        "./libraries/PoolIDAssembly.sol",
+        "./libraries/TransientStorage.sol",
+        "./interfaces/internal/quoters/IQuoterNoData.sol",
+        "./interfaces/internal/quoters/IQuoterSingleData.sol",
+        "./interfaces/internal/quoters/IQuoterDualData.sol",
+        "./interfaces/internal/IDataBridge.sol",
+        "./structs/SwapParams.sol",
+        "./structs/Marking.sol",
+        "./structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "QuoterRouter"
+      ]
+    },
+    "/Users/alexeygrigoryev/dex/contracts/z_remix_test/SwapTwiceHelper.sol": {
+      "lastModificationDate": 1755053870882,
+      "contentHash": "8885004fd8ac1bc0aaa65832ddf9c363",
+      "sourceName": "contracts/z_remix_test/SwapTwiceHelper.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../contracts/PoolManager.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "SwapTwiceHelper"
+      ]
     }
   }
 }

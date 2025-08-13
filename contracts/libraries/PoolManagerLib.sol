@@ -35,7 +35,7 @@ library PoolManagerLib {
                             POOL CREATION
     //////////////////////////////////////////////////////////////*/
     
-    /// @notice Creates a new pool with sorted assets
+    /// @notice Creates a new pool without reordering assets
     /// @param asset0 First asset address
     /// @param asset1 Second asset address  
     /// @param quoter Quoter contract address
@@ -47,11 +47,10 @@ library PoolManagerLib {
         address quoter,
         bytes3 markings
     ) internal returns (uint256 poolID) {
-        // Sort assets so asset0 < asset1
-        (address sortedAsset0, address sortedAsset1) = asset0 < asset1 ? (asset0, asset1) : (asset1, asset0);
-        poolID = PoolIDAssembly.assemblePoolID(sortedAsset0, sortedAsset1, quoter, markings);
+        // Do not sort assets; pool identity depends on provided order
+        poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
-        emit PoolCreated(poolID, sortedAsset0, sortedAsset1, quoter, markings);
+        emit PoolCreated(poolID, asset0, asset1, quoter, markings);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -76,16 +75,19 @@ library PoolManagerLib {
         uint256 poolID,
         uint256 rate
     ) internal view returns (uint256 liquidity) {
-        uint256 valueAdded = amount0 + (amount1 * rate) / 1e18;
-        uint256 poolValue = poolAsset0 + (poolAsset1 * rate) / 1e18;
-
-        if (self.totalLiquidity[poolID] == 0 || poolValue == 0) {
-            // First liquidity provider or empty pool: 1:1 value to shares
-            liquidity = valueAdded;
+        // For first liquidity provision, use simple geometric mean
+        if (self.totalLiquidity[poolID] == 0) {
+            // Simple approach: use the sum of both amounts as initial liquidity
+            liquidity = amount0 + amount1;
         } else {
+            // Convert amount1 to amount0 equivalent using rate: amount1 * 1e18 / rate
+            uint256 valueAdded = amount0 + (amount1 * 1e18) / rate;
+            uint256 poolValue = poolAsset0 + (poolAsset1 * 1e18) / rate;
+            
             // Proportional to pool
             liquidity = (valueAdded * self.totalLiquidity[poolID]) / poolValue;
         }
+        
         if (liquidity == 0) revert PoolManager__InsufficientLiquidityMinted();
     }
 
