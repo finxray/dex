@@ -283,23 +283,16 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
 
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
 
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = inputAmount;
-        bytes3[] memory marks = new bytes3[](1);
-        marks[0] = marking;
-        SwapParams memory p = SwapParams({
-            asset0: asset0,
-            asset1: asset1,
-            quoter: quoter,
-            amount: amounts,
-            zeroForOne: zeroForOne,
-            marking: marks
-        });
-
-        (uint256 quote, ) = getQuote(p, poolAsset0, poolAsset1);
-        outputAmount = quote > 0
-            ? quote
-            : (zeroForOne ? (inputAmount * 1300000000000000000) / 1e18 : (inputAmount * 1e18) / 1300000000000000000);
+        outputAmount = _getHopQuote(
+            asset0,
+            asset1,
+            quoter,
+            marking,
+            zeroForOne,
+            inputAmount,
+            poolAsset0,
+            poolAsset1
+        );
 
         PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, outputAmount, zeroForOne);
 
@@ -320,5 +313,33 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
                 recipient
             );
         }
+    }
+
+    function _getHopQuote(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 marking,
+        bool zeroForOne,
+        uint256 amountIn,
+        uint128 poolAsset0,
+        uint128 poolAsset1
+    ) internal returns (uint256 amountOut) {
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amountIn;
+        bytes3[] memory marks = new bytes3[](1);
+        marks[0] = marking;
+        SwapParams memory p = SwapParams({
+            asset0: asset0,
+            asset1: asset1,
+            quoter: quoter,
+            amount: amounts,
+            zeroForOne: zeroForOne,
+            marking: marks
+        });
+        (uint256 quote, ) = getQuote(p, poolAsset0, poolAsset1);
+        amountOut = quote > 0
+            ? quote
+            : (zeroForOne ? (amountIn * 1300000000000000000) / 1e18 : (amountIn * 1e18) / 1300000000000000000);
     }
 }
