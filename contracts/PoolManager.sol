@@ -216,7 +216,11 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
             bool isLast = i == numHops - 1;
             Hop calldata h = hops[i];
             intermediateAmount = _executeHop(
-                h,
+                h.asset0,
+                h.asset1,
+                h.quoter,
+                h.marking,
+                h.zeroForOne,
                 intermediateAmount,
                 isFirst ? msg.value : 0,
                 isFirst,
@@ -230,18 +234,22 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
     }
 
     function _executeHop(
-        Hop calldata h,
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 marking,
+        bool zeroForOne,
         uint256 inputAmount,
         uint256 msgValue,
         bool isFirstHop,
         bool isLastHop,
         address recipient
     ) internal returns (uint256 outputAmount) {
-        uint256 poolID = PoolIDAssembly.assemblePoolID(h.asset0, h.asset1, h.quoter, h.marking);
+        uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, marking);
 
         if (isFirstHop) {
             PoolManagerLib.handleAssetTransfers(
-                h.zeroForOne ? h.asset0 : h.asset1,
+                zeroForOne ? asset0 : asset1,
                 address(0),
                 inputAmount,
                 0,
@@ -256,33 +264,33 @@ contract PoolManager is ERC6909Claims, QuoterRouter {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = inputAmount;
         bytes3[] memory marks = new bytes3[](1);
-        marks[0] = h.marking;
+        marks[0] = marking;
         SwapParams memory p = SwapParams({
-            asset0: h.asset0,
-            asset1: h.asset1,
-            quoter: h.quoter,
+            asset0: asset0,
+            asset1: asset1,
+            quoter: quoter,
             amount: amounts,
-            zeroForOne: h.zeroForOne,
+            zeroForOne: zeroForOne,
             marking: marks
         });
 
         (uint256 quote, ) = getQuote(p, poolAsset0, poolAsset1);
         outputAmount = quote > 0
             ? quote
-            : (h.zeroForOne ? (inputAmount * 1300000000000000000) / 1e18 : (inputAmount * 1e18) / 1300000000000000000);
+            : (zeroForOne ? (inputAmount * 1300000000000000000) / 1e18 : (inputAmount * 1e18) / 1300000000000000000);
 
-        PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, outputAmount, h.zeroForOne);
+        PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, outputAmount, zeroForOne);git 
 
         PoolManagerLib.updateInventory(
             _storage,
             poolID,
-            h.zeroForOne ? int128(uint128(inputAmount)) : -int128(uint128(outputAmount)),
-            h.zeroForOne ? -int128(uint128(outputAmount)) : int128(uint128(inputAmount))
+            zeroForOne ? int128(uint128(inputAmount)) : -int128(uint128(outputAmount)),
+            zeroForOne ? -int128(uint128(outputAmount)) : int128(uint128(inputAmount))
         );
 
         if (isLastHop) {
             PoolManagerLib.handleAssetTransfers(
-                h.zeroForOne ? h.asset1 : h.asset0,
+                zeroForOne ? asset1 : asset0,
                 address(0),
                 outputAmount,
                 0,
