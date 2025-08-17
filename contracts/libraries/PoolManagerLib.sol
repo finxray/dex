@@ -5,13 +5,26 @@ pragma solidity ^0.8.30;
 error PoolManager__InsufficientLiquidityMinted();
 error PoolManager__InsufficientAsset0(uint256 required, uint256 available);
 error PoolManager__InsufficientAsset1(uint256 required, uint256 available);
+error PoolManager__PoolAlreadyExists(uint256 poolID);
 
 import {PoolIDAssembly} from "./PoolIDAssembly.sol";
 import {AssetTransferLib} from "./AssetTransferLib.sol";
+import {SwapParams} from "../structs/SwapParams.sol";
+import {IQuoteRouter} from "../interfaces/internal/IQuoteRouter.sol";
+import {Hop} from "../structs/Hop.sol";
+import {PoolInfo} from "../structs/PoolInfo.sol";
+
+// (interface moved to contracts/interfaces/internal/IQuoteRouter.sol)
 
 /// @notice Library containing core calculation logic for PoolManager
 /// @dev Pure calculation functions and simple storage management
 library PoolManagerLib {
+    
+    /*//////////////////////////////////////////////////////////////
+                                 STRUCTS
+    //////////////////////////////////////////////////////////////*/
+    
+    // PoolInfo and Hop moved to structs folder
     
     /*//////////////////////////////////////////////////////////////
                                  STORAGE
@@ -23,6 +36,8 @@ library PoolManagerLib {
         // Pool asset balances (poolID -> packed uint256) - BOTH ASSETS IN SINGLE SLOT!
         // Lower 128 bits = asset0, Upper 128 bits = asset1
         mapping(uint256 => uint256) poolInventories;
+        // Pool information for external queries (poolID -> PoolInfo)
+        mapping(uint256 => PoolInfo) poolInfos;
     }
     
     /*//////////////////////////////////////////////////////////////
@@ -36,12 +51,14 @@ library PoolManagerLib {
     //////////////////////////////////////////////////////////////*/
     
     /// @notice Creates a new pool with canonical asset ordering (asset0 < asset1)
+    /// @param self Storage reference
     /// @param asset0 First asset address
     /// @param asset1 Second asset address  
     /// @param quoter Quoter contract address
     /// @param markings Pool configuration markings
     /// @return poolID The unique identifier for the created pool
     function createPool(
+        PoolManagerStorage storage self,
         address asset0,
         address asset1,
         address quoter,
@@ -49,9 +66,34 @@ library PoolManagerLib {
     ) internal returns (uint256 poolID) {
         // PoolIDAssembly will canonicalize the order internally
         poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
-        // Emit with canonical order for consistency
+        
+        // Check if pool already exists by checking if quoter is non-zero
+        if (self.poolInfos[poolID].quoter != address(0)) {
+            revert PoolManager__PoolAlreadyExists(poolID);
+        }
+        
+        // Store pool information with canonical asset order
         (address sortedAsset0, address sortedAsset1) = asset0 < asset1 ? (asset0, asset1) : (asset1, asset0);
+        self.poolInfos[poolID] = PoolInfo({
+            asset0: sortedAsset0,
+            asset1: sortedAsset1,
+            quoter: quoter,
+            markings: markings
+        });
+        
+        // Emit with canonical order for consistency
         emit PoolCreated(poolID, sortedAsset0, sortedAsset1, quoter, markings);
+    }
+
+    /// @notice Get pool information by poolID
+    /// @param self Storage reference
+    /// @param poolID Pool identifier
+    /// @return poolInfo Pool information structure
+    function getPoolInfo(
+        PoolManagerStorage storage self,
+        uint256 poolID
+    ) internal view returns (PoolInfo memory poolInfo) {
+        return self.poolInfos[poolID];
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -199,5 +241,328 @@ library PoolManagerLib {
                 AssetTransferLib.transferOut(asset1, recipient, amount1);
             }
         }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            BATCH SWAP PROCESSING
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Execute batch swap with automatic quoter selection
+    /// @param self Storage reference
+    /// @param hops Array of hops to execute
+    /// @param amountIn Initial input amount
+    /// @param msgValue ETH value for first hop
+    /// @param recipient Recipient address
+    /// @param quoterRouter QuoterRouter contract for quote calls
+    /// @return amountOut Final output amount
+    function executeBatchSwap(
+        PoolManagerStorage storage self,
+        Hop[] calldata hops,
+        uint256 amountIn,
+        uint256 msgValue,
+        address recipient,
+        address quoterRouter
+    ) internal returns (uint256 amountOut) {
+        uint256 numHops = hops.length;
+        require(numHops > 0, "No hops");
+
+        uint256 intermediateAmount = amountIn;
+
+        for (uint256 i = 0; i < numHops; ) {
+            Hop calldata hop = hops[i];
+            bool isFirstHop = i == 0;
+            bool isLastHop = i == numHops - 1;
+            
+            intermediateAmount = executeHop(
+                self,
+                hop,
+                intermediateAmount,
+                isFirstHop ? msgValue : 0,
+                isFirstHop,
+                isLastHop,
+                recipient,
+                quoterRouter
+            );
+            unchecked { ++i; }
+        }
+
+        return intermediateAmount;
+    }
+
+    /// @notice Execute a single hop (individual or batch based on array length)
+    /// @param self Storage reference
+    /// @param hop Hop to execute
+    /// @param inputAmount Input amount for this hop
+    /// @param msgValue ETH value for first hop
+    /// @param isFirstHop Whether this is the first hop
+    /// @param isLastHop Whether this is the last hop
+    /// @param recipient Recipient address
+    /// @param quoterRouter QuoterRouter contract for quote calls
+    /// @return outputAmount Output amount from this hop
+    function executeHop(
+        PoolManagerStorage storage self,
+        Hop calldata hop,
+        uint256 inputAmount,
+        uint256 msgValue,
+        bool isFirstHop,
+        bool isLastHop,
+        address recipient,
+        address quoterRouter
+    ) internal returns (uint256 outputAmount) {
+        require(hop.markings.length > 0, "No markings");
+        require(hop.amounts.length == hop.markings.length, "Mismatched arrays");
+        
+        if (hop.markings.length == 1) {
+            // Single hop - use individual quote
+            return executeSingleHop(
+                self,
+                hop.asset0,
+                hop.asset1,
+                hop.quoter,
+                hop.markings[0],
+                hop.zeroForOne,
+                inputAmount,
+                msgValue,
+                isFirstHop,
+                isLastHop,
+                recipient,
+                quoterRouter
+            );
+        } else {
+            // Multiple hops with same quoter - use batch quote
+            return executeBatchHopsWithQuoter(
+                self,
+                hop,
+                inputAmount,
+                isFirstHop,
+                isLastHop,
+                recipient,
+                quoterRouter
+            );
+        }
+    }
+
+    /// @notice Execute multiple hops with the same quoter using batch quote
+    /// @param self Storage reference
+    /// @param hop Batch hop with multiple markings/amounts
+    /// @param inputAmount Input amount for this batch
+    /// @param isFirstHop Whether this is the first hop
+    /// @param isLastHop Whether this is the last hop
+    /// @param recipient Recipient address
+    /// @param quoterRouter QuoterRouter contract for quote calls
+    /// @return outputAmount Output amount from this batch
+    function executeBatchHopsWithQuoter(
+        PoolManagerStorage storage self,
+        Hop calldata hop,
+        uint256 inputAmount,
+        bool isFirstHop,
+        bool isLastHop,
+        address recipient,
+        address quoterRouter
+    ) internal returns (uint256 outputAmount) {
+        uint256 batchSize = hop.markings.length;
+        
+        // Handle asset transfers for first hop
+        if (isFirstHop) {
+            handleAssetTransfers(
+                hop.zeroForOne ? hop.asset0 : hop.asset1,
+                address(0),
+                inputAmount,
+                0,
+                0, // msgValue handled in batchSwap
+                true,
+                recipient
+            );
+        }
+        
+        // Prepare batch parameters for quoter
+        uint128[] memory asset0Balances = new uint128[](batchSize);
+        uint128[] memory asset1Balances = new uint128[](batchSize);
+        
+        // Get pool balances for all hops in the batch
+        for (uint256 i = 0; i < batchSize; ) {
+            uint256 poolID = PoolIDAssembly.assemblePoolID(hop.asset0, hop.asset1, hop.quoter, hop.markings[i]);
+            (asset0Balances[i], asset1Balances[i]) = getInventory(self, poolID);
+            unchecked { ++i; }
+        }
+        
+        // Create SwapParams for batch quote
+        SwapParams memory swapParams = SwapParams({
+            asset0: hop.asset0,
+            asset1: hop.asset1,
+            quoter: hop.quoter,
+            amount: hop.amounts,
+            zeroForOne: hop.zeroForOne,
+            marking: hop.markings
+        });
+        
+        // Get batch quotes using QuoteRouter
+        (uint256[] memory quotes, uint256[] memory poolIDs) = IQuoteRouter(quoterRouter).getQuoteBatch(swapParams, asset0Balances, asset1Balances);
+        
+        // Execute all hops in the batch
+        for (uint256 i = 0; i < batchSize; ) {
+            uint256 hopAmountIn = hop.amounts[i];
+            uint256 hopAmountOut = quotes[i];
+            
+            // Validate swap inventory
+            validateSwapInventory(
+                asset0Balances[i], 
+                asset1Balances[i], 
+                hopAmountOut, 
+                hop.zeroForOne
+            );
+            
+            // Update inventory
+            updateInventory(
+                self,
+                poolIDs[i],
+                hop.zeroForOne ? int128(uint128(hopAmountIn)) : -int128(uint128(hopAmountOut)),
+                hop.zeroForOne ? -int128(uint128(hopAmountOut)) : int128(uint128(hopAmountIn))
+            );
+            unchecked { ++i; }
+        }
+        
+        // Handle asset transfers for last hop
+        if (isLastHop) {
+            handleAssetTransfers(
+                hop.zeroForOne ? hop.asset1 : hop.asset0,
+                address(0),
+                quotes[batchSize - 1],
+                0,
+                0,
+                false,
+                recipient
+            );
+        }
+        
+        return quotes[batchSize - 1];
+    }
+
+    /// @notice Execute a single hop
+    /// @param self Storage reference
+    /// @param asset0 First asset address
+    /// @param asset1 Second asset address
+    /// @param quoter Quoter contract address
+    /// @param marking Pool marking
+    /// @param zeroForOne Swap direction
+    /// @param inputAmount Input amount
+    /// @param msgValue ETH value
+    /// @param isFirstHop Whether this is the first hop
+    /// @param isLastHop Whether this is the last hop
+    /// @param recipient Recipient address
+    /// @param quoterRouter QuoterRouter contract for quote calls
+    /// @return outputAmount Output amount
+    function executeSingleHop(
+        PoolManagerStorage storage self,
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 marking,
+        bool zeroForOne,
+        uint256 inputAmount,
+        uint256 msgValue,
+        bool isFirstHop,
+        bool isLastHop,
+        address recipient,
+        address quoterRouter
+    ) internal returns (uint256 outputAmount) {
+        uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, marking);
+
+        // Handle asset transfers
+        if (isFirstHop) {
+            // First hop: transfer in the input asset from user
+            handleAssetTransfers(
+                zeroForOne ? asset0 : asset1,
+                address(0),
+                inputAmount,
+                0,
+                msgValue,
+                true,
+                recipient
+            );
+        } else {
+            // Intermediate hop: the input asset is already in the contract from previous hop
+            // No transfer needed as the contract already holds the asset
+        }
+
+        (uint128 poolAsset0, uint128 poolAsset1) = getInventory(self, poolID);
+
+        outputAmount = getHopQuote(
+            self,
+            asset0,
+            asset1,
+            quoter,
+            marking,
+            zeroForOne,
+            inputAmount,
+            poolAsset0,
+            poolAsset1,
+            quoterRouter
+        );
+
+        validateSwapInventory(poolAsset0, poolAsset1, outputAmount, zeroForOne);
+
+        updateInventory(
+            self,
+            poolID,
+            zeroForOne ? int128(uint128(inputAmount)) : -int128(uint128(outputAmount)),
+            zeroForOne ? -int128(uint128(outputAmount)) : int128(uint128(inputAmount))
+        );
+
+        if (isLastHop) {
+            // Last hop: transfer out the final output asset to user
+            handleAssetTransfers(
+                zeroForOne ? asset1 : asset0,
+                address(0),
+                outputAmount,
+                0,
+                0,
+                false,
+                recipient
+            );
+        }
+        // For intermediate hops, the output asset stays in the contract for the next hop
+    }
+
+    /// @notice Get quote for a single hop
+    /// @param self_ Storage reference (unused)
+    /// @param asset0 First asset address
+    /// @param asset1 Second asset address
+    /// @param quoter Quoter contract address
+    /// @param marking Pool marking
+    /// @param zeroForOne Swap direction
+    /// @param amountIn Input amount
+    /// @param poolAsset0 Pool asset0 balance
+    /// @param poolAsset1 Pool asset1 balance
+    /// @param quoterRouter QuoterRouter contract for quote calls
+    /// @return amountOut Output amount
+    function getHopQuote(
+        PoolManagerStorage storage self_,
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 marking,
+        bool zeroForOne,
+        uint256 amountIn,
+        uint128 poolAsset0,
+        uint128 poolAsset1,
+        address quoterRouter
+    ) internal returns (uint256 amountOut) {
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amountIn;
+        bytes3[] memory marks = new bytes3[](1);
+        marks[0] = marking;
+        SwapParams memory p = SwapParams({
+            asset0: asset0,
+            asset1: asset1,
+            quoter: quoter,
+            amount: amounts,
+            zeroForOne: zeroForOne,
+            marking: marks
+        });
+        (uint256 quote, ) = IQuoteRouter(quoterRouter).getQuote(p, poolAsset0, poolAsset1);
+        amountOut = quote > 0
+            ? quote
+            : (zeroForOne ? (amountIn * 1300000000000000000) / 1e18 : (amountIn * 1e18) / 1300000000000000000);
     }
 }

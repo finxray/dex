@@ -72,7 +72,7 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
 
     // swap A->B
     const bBBefore = await tokenB.balanceOf(trader.address);
-    await poolManager.connect(trader).swap(
+    const tx1 = await poolManager.connect(trader).swap(
       await tokenA.getAddress(),
       await tokenB.getAddress(),
       await simpleQuoter.getAddress(),
@@ -81,12 +81,13 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
       true,
       ethers.parseEther("8")
     );
+    await tx1.wait();
     const bBAfter = await tokenB.balanceOf(trader.address);
     expect(bBAfter - bBBefore).to.be.gt(0);
 
     // swap B->A
     const bABefore = await tokenA.balanceOf(trader.address);
-    await poolManager.connect(trader).swap(
+    const tx2 = await poolManager.connect(trader).swap(
       await tokenA.getAddress(),
       await tokenB.getAddress(),
       await simpleQuoter.getAddress(),
@@ -95,6 +96,7 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
       false,
       ethers.parseEther("6")
     );
+    await tx2.wait();
     const bAAfter = await tokenA.balanceOf(trader.address);
     expect(bAAfter - bABefore).to.be.gt(0);
 
@@ -172,14 +174,16 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
         asset0: await tokenA.getAddress(),
         asset1: await tokenB.getAddress(),
         quoter: await dualQuoter.getAddress(),
-        marking: DUAL,
+        markings: [DUAL],
+        amounts: [SWAP],
         zeroForOne: true,
       },
       {
         asset0: await tokenA.getAddress(),
         asset1: await tokenB.getAddress(),
         quoter: await dualQuoter.getAddress(),
-        marking: DUAL,
+        markings: [DUAL],
+        amounts: [SWAP],
         zeroForOne: true,
       },
     ];
@@ -214,21 +218,24 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
         asset0: await tokenA.getAddress(),
         asset1: await tokenB.getAddress(),
         quoter: await simpleQuoter.getAddress(),
-        marking: SIMPLE,
+        markings: [SIMPLE],
+        amounts: [amountIn],
         zeroForOne: true,
       },
       {
         asset0: await tokenA.getAddress(),
         asset1: await tokenB.getAddress(),
         quoter: await alphaQuoter.getAddress(),
-        marking: ALPHA,
+        markings: [ALPHA],
+        amounts: [amountIn],
         zeroForOne: true,
       },
       {
         asset0: await tokenA.getAddress(),
         asset1: await tokenB.getAddress(),
         quoter: await betaQuoter.getAddress(),
-        marking: BETA,
+        markings: [BETA],
+        amounts: [amountIn],
         zeroForOne: true,
       },
     ];

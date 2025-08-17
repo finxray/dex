@@ -117,8 +117,8 @@
       ]
     },
     "/Users/alexeygrigoryev/dex/contracts/PoolManager.sol": {
-      "lastModificationDate": 1755081328592,
-      "contentHash": "af1785f4d51b09fcf8bf9ce468913ba4",
+      "lastModificationDate": 1755393451198,
+      "contentHash": "67b3d73f43627549d19ad92d18da78fa",
       "sourceName": "contracts/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -147,10 +147,13 @@
       },
       "imports": [
         "./ERC6909Claims.sol",
-        "./QuoterRouter.sol",
+        "./QuoteRouter.sol",
         "./libraries/PoolManagerLib.sol",
         "./libraries/PoolIDAssembly.sol",
-        "./structs/SwapParams.sol"
+        "./structs/SwapParams.sol",
+        "./structs/Hop.sol",
+        "./structs/PoolInfo.sol",
+        "./security/ReentrancyGuard.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -159,57 +162,9 @@
         "PoolManager"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/QuoteRequester.sol": {
-      "lastModificationDate": 1755050129520,
-      "contentHash": "88469d364f18c5b4977550b2f6f7dbdf",
-      "sourceName": "contracts/QuoteRequester.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./libraries/MarkingHelper.sol",
-        "./libraries/PoolIDAssembly.sol",
-        "./libraries/TransientStorage.sol",
-        "./interfaces/internal/quoters/IQuoterNoData.sol",
-        "./interfaces/internal/quoters/IQuoterSingleData.sol",
-        "./interfaces/internal/quoters/IQuoterDualData.sol",
-        "./interfaces/internal/IDataBridge.sol",
-        "./structs/SwapParams.sol",
-        "./structs/Marking.sol",
-        "./structs/QuoteParams.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "QuoteRequester"
-      ]
-    },
     "/Users/alexeygrigoryev/dex/contracts/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1755065619446,
-      "contentHash": "4fa605ce01d328dbe2e7ca153806d39c",
+      "lastModificationDate": 1755392123053,
+      "contentHash": "c1d4dd015af8cbe8aba77382ce7a80ff",
       "sourceName": "contracts/libraries/PoolManagerLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -238,7 +193,11 @@
       },
       "imports": [
         "./PoolIDAssembly.sol",
-        "./AssetTransferLib.sol"
+        "./AssetTransferLib.sol",
+        "../structs/SwapParams.sol",
+        "../interfaces/internal/IQuoteRouter.sol",
+        "../structs/Hop.sol",
+        "../structs/PoolInfo.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -937,86 +896,6 @@
         "MockAlphaDataBridge"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/MarketData/BetaMarketData.sol": {
-      "lastModificationDate": 1754662150783,
-      "contentHash": "9a50136394a10075091c042abe2db5e7",
-      "sourceName": "contracts/MarketData/BetaMarketData.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../interfaces/internal/IDataBridge.sol",
-        "../structs/QuoteParams.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "BetaMarketData"
-      ]
-    },
-    "/Users/alexeygrigoryev/dex/contracts/MarketData/AlphaMarketData.sol": {
-      "lastModificationDate": 1754662155254,
-      "contentHash": "34ab3fee77a59e952b2d21f713480b3d",
-      "sourceName": "contracts/MarketData/AlphaMarketData.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../interfaces/internal/IDataBridge.sol",
-        "../structs/QuoteParams.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "AlphaMarketData"
-      ]
-    },
     "/Users/alexeygrigoryev/dex/node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
       "lastModificationDate": 1754249657272,
       "contentHash": "794db3115001aa372c79326fcfd44b1f",
@@ -1433,10 +1312,49 @@
       ],
       "artifacts": []
     },
-    "/Users/alexeygrigoryev/dex/contracts/QuoterRouter.sol": {
-      "lastModificationDate": 1755055239819,
-      "contentHash": "805be09b27856f308c3f04655cda16a7",
-      "sourceName": "contracts/QuoterRouter.sol",
+    "/Users/alexeygrigoryev/dex/contracts/z_remix_test/SwapTwiceHelper.sol": {
+      "lastModificationDate": 1755053870882,
+      "contentHash": "8885004fd8ac1bc0aaa65832ddf9c363",
+      "sourceName": "contracts/z_remix_test/SwapTwiceHelper.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../contracts/PoolManager.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "SwapTwiceHelper"
+      ]
+    },
+    "/Users/alexeygrigoryev/dex/contracts/QuoteRouter.sol": {
+      "lastModificationDate": 1755391859408,
+      "contentHash": "9c9121d97ab5a656a8fb0b0c680c47aa",
+      "sourceName": "contracts/QuoteRouter.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1478,13 +1396,13 @@
         "^0.8.30"
       ],
       "artifacts": [
-        "QuoterRouter"
+        "QuoteRouter"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/z_remix_test/SwapTwiceHelper.sol": {
-      "lastModificationDate": 1755053870882,
-      "contentHash": "8885004fd8ac1bc0aaa65832ddf9c363",
-      "sourceName": "contracts/z_remix_test/SwapTwiceHelper.sol",
+    "/Users/alexeygrigoryev/dex/contracts/interfaces/internal/IQuoteRouter.sol": {
+      "lastModificationDate": 1755390698229,
+      "contentHash": "d02b71b6be7ffd2e20dc05dfaa560fa1",
+      "sourceName": "contracts/interfaces/internal/IQuoteRouter.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1511,13 +1429,160 @@
         }
       },
       "imports": [
-        "../../contracts/PoolManager.sol"
+        "../../structs/SwapParams.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "SwapTwiceHelper"
+        "IQuoteRouter"
+      ]
+    },
+    "/Users/alexeygrigoryev/dex/contracts/structs/Hop.sol": {
+      "lastModificationDate": 1755391160200,
+      "contentHash": "55e7c9d869af7d33d607f1229269f25a",
+      "sourceName": "contracts/structs/Hop.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": []
+    },
+    "/Users/alexeygrigoryev/dex/contracts/structs/PoolInfo.sol": {
+      "lastModificationDate": 1755391162123,
+      "contentHash": "ac62c1368dbdf89c48daab804f1dfdce",
+      "sourceName": "contracts/structs/PoolInfo.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": []
+    },
+    "/Users/alexeygrigoryev/dex/contracts/interfaces/external/IPoolManager.sol": {
+      "lastModificationDate": 1755392448500,
+      "contentHash": "4feae915580e51a2c44c184fea071cb1",
+      "sourceName": "contracts/interfaces/external/IPoolManager.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../structs/Hop.sol",
+        "../../structs/SwapParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IPoolManager"
+      ]
+    },
+    "/Users/alexeygrigoryev/dex/contracts/security/ReentrancyGuard.sol": {
+      "lastModificationDate": 1755393440971,
+      "contentHash": "627b91863006ecd20f1b0d1622f2ec6a",
+      "sourceName": "contracts/security/ReentrancyGuard.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "ReentrancyGuard"
       ]
     }
   }

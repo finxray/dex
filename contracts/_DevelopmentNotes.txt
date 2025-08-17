@@ -1,3 +1,0 @@
-1. Market data bytes are unpacked in quoters 
-2. Create StoixDexMarket and StoixOracleMarket 
-3. 
