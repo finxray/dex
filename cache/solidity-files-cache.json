@@ -1,8 +1,8 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "/Users/alexeygrigoryev/dex/contracts/ERC6909.sol": {
-      "lastModificationDate": 1754246974231,
+    "/Users/alexey/dex/contracts/ERC6909.sol": {
+      "lastModificationDate": 1754218325505,
       "contentHash": "5df0f686ab5da5c12dc75a839dec3f6e",
       "sourceName": "contracts/ERC6909.sol",
       "solcConfig": {
@@ -40,8 +40,8 @@
         "ERC6909"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/external/IERC6909Claims.sol": {
-      "lastModificationDate": 1754246974257,
+    "/Users/alexey/dex/contracts/interfaces/external/IERC6909Claims.sol": {
+      "lastModificationDate": 1753011385894,
       "contentHash": "0b547ccc6e2ad95ae71077e9a16b3a01",
       "sourceName": "contracts/interfaces/external/IERC6909Claims.sol",
       "solcConfig": {
@@ -77,8 +77,8 @@
         "IERC6909Claims"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/ERC6909Claims.sol": {
-      "lastModificationDate": 1754246974231,
+    "/Users/alexey/dex/contracts/ERC6909Claims.sol": {
+      "lastModificationDate": 1754219022149,
       "contentHash": "e1bef7e453c76847427ffcff48f5d283",
       "sourceName": "contracts/ERC6909Claims.sol",
       "solcConfig": {
@@ -116,9 +116,9 @@
         "ERC6909Claims"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/PoolManager.sol": {
-      "lastModificationDate": 1755393451198,
-      "contentHash": "67b3d73f43627549d19ad92d18da78fa",
+    "/Users/alexey/dex/contracts/PoolManager.sol": {
+      "lastModificationDate": 1755624137199,
+      "contentHash": "15574e60d3297c87748e5e018fe9f0b5",
       "sourceName": "contracts/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -153,7 +153,9 @@
         "./structs/SwapParams.sol",
         "./structs/Hop.sol",
         "./structs/PoolInfo.sol",
-        "./security/ReentrancyGuard.sol"
+        "./security/ReentrancyGuard.sol",
+        "./libraries/FlashAccounting.sol",
+        "./interfaces/internal/IFlashCallback.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -162,9 +164,55 @@
         "PoolManager"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1755392123053,
-      "contentHash": "c1d4dd015af8cbe8aba77382ce7a80ff",
+    "/Users/alexey/dex/contracts/QuoteRouter.sol": {
+      "lastModificationDate": 1755714446575,
+      "contentHash": "f31a4a86644aeed33c632546f1181c35",
+      "sourceName": "contracts/QuoteRouter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./libraries/MarkingHelper.sol",
+        "./libraries/PoolIDAssembly.sol",
+        "./libraries/TransientStorage.sol",
+        "./interfaces/internal/quoters/IQuoter.sol",
+        "./interfaces/internal/IDataBridge.sol",
+        "./structs/SwapParams.sol",
+        "./structs/Marking.sol",
+        "./structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "QuoteRouter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/libraries/PoolManagerLib.sol": {
+      "lastModificationDate": 1755622721672,
+      "contentHash": "a8e44c7dde382dd0d2174ee3e30a26e1",
       "sourceName": "contracts/libraries/PoolManagerLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -194,6 +242,7 @@
       "imports": [
         "./PoolIDAssembly.sol",
         "./AssetTransferLib.sol",
+        "./FlashAccounting.sol",
         "../structs/SwapParams.sol",
         "../interfaces/internal/IQuoteRouter.sol",
         "../structs/Hop.sol",
@@ -206,8 +255,8 @@
         "PoolManagerLib"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/libraries/PoolIDAssembly.sol": {
-      "lastModificationDate": 1755065608530,
+    "/Users/alexey/dex/contracts/libraries/PoolIDAssembly.sol": {
+      "lastModificationDate": 1755420220472,
       "contentHash": "0b1f2bc78c9ce20e46a844385aa2d1f1",
       "sourceName": "contracts/libraries/PoolIDAssembly.sol",
       "solcConfig": {
@@ -243,8 +292,8 @@
         "PoolIDAssembly"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/SwapParams.sol": {
-      "lastModificationDate": 1754246974272,
+    "/Users/alexey/dex/contracts/structs/SwapParams.sol": {
+      "lastModificationDate": 1753011411165,
       "contentHash": "8d869a73b3500f026cb76db3ab73c538",
       "sourceName": "contracts/structs/SwapParams.sol",
       "solcConfig": {
@@ -278,8 +327,115 @@
       ],
       "artifacts": []
     },
-    "/Users/alexeygrigoryev/dex/contracts/libraries/MarkingHelper.sol": {
-      "lastModificationDate": 1755052122360,
+    "/Users/alexey/dex/contracts/structs/Hop.sol": {
+      "lastModificationDate": 1755420220473,
+      "contentHash": "55e7c9d869af7d33d607f1229269f25a",
+      "sourceName": "contracts/structs/Hop.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": []
+    },
+    "/Users/alexey/dex/contracts/structs/PoolInfo.sol": {
+      "lastModificationDate": 1755420220473,
+      "contentHash": "ac62c1368dbdf89c48daab804f1dfdce",
+      "sourceName": "contracts/structs/PoolInfo.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": []
+    },
+    "/Users/alexey/dex/contracts/security/ReentrancyGuard.sol": {
+      "lastModificationDate": 1755420220473,
+      "contentHash": "627b91863006ecd20f1b0d1622f2ec6a",
+      "sourceName": "contracts/security/ReentrancyGuard.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "ReentrancyGuard"
+      ]
+    },
+    "/Users/alexey/dex/contracts/libraries/MarkingHelper.sol": {
+      "lastModificationDate": 1755420220472,
       "contentHash": "40e35e48924b95df649c7cd064a4aa6c",
       "sourceName": "contracts/libraries/MarkingHelper.sol",
       "solcConfig": {
@@ -317,8 +473,8 @@
         "MarkingHelper"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/libraries/TransientStorage.sol": {
-      "lastModificationDate": 1755055005123,
+    "/Users/alexey/dex/contracts/libraries/TransientStorage.sol": {
+      "lastModificationDate": 1755420220472,
       "contentHash": "57b51134d89470c7d69c9ce2e1cf3c38",
       "sourceName": "contracts/libraries/TransientStorage.sol",
       "solcConfig": {
@@ -354,8 +510,8 @@
         "TransientStorage"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/internal/quoters/IQuoterNoData.sol": {
-      "lastModificationDate": 1754246974259,
+    "/Users/alexey/dex/contracts/interfaces/internal/quoters/IQuoterNoData.sol": {
+      "lastModificationDate": 1753011392213,
       "contentHash": "6dee86976edc245065c9ace349c89367",
       "sourceName": "contracts/interfaces/internal/quoters/IQuoterNoData.sol",
       "solcConfig": {
@@ -393,8 +549,8 @@
         "IQuoterNoData"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/internal/quoters/IQuoterSingleData.sol": {
-      "lastModificationDate": 1754246974260,
+    "/Users/alexey/dex/contracts/interfaces/internal/quoters/IQuoterSingleData.sol": {
+      "lastModificationDate": 1753011401592,
       "contentHash": "7cdee1c222db51f54b5963db73004521",
       "sourceName": "contracts/interfaces/internal/quoters/IQuoterSingleData.sol",
       "solcConfig": {
@@ -432,8 +588,8 @@
         "IQuoterSingleData"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/internal/quoters/IQuoterDualData.sol": {
-      "lastModificationDate": 1754246974259,
+    "/Users/alexey/dex/contracts/interfaces/internal/quoters/IQuoterDualData.sol": {
+      "lastModificationDate": 1753011379649,
       "contentHash": "e5a3b537d8e25cd8677f62e1df0b2722",
       "sourceName": "contracts/interfaces/internal/quoters/IQuoterDualData.sol",
       "solcConfig": {
@@ -471,8 +627,8 @@
         "IQuoterDualData"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/internal/IDataBridge.sol": {
-      "lastModificationDate": 1754563960257,
+    "/Users/alexey/dex/contracts/interfaces/internal/IDataBridge.sol": {
+      "lastModificationDate": 1755420220472,
       "contentHash": "5479056fd08a16768a778385a894cdcc",
       "sourceName": "contracts/interfaces/internal/IDataBridge.sol",
       "solcConfig": {
@@ -510,8 +666,8 @@
         "IDataBridge"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/Marking.sol": {
-      "lastModificationDate": 1754246974270,
+    "/Users/alexey/dex/contracts/structs/Marking.sol": {
+      "lastModificationDate": 1753011408017,
       "contentHash": "4a8a080d47a1fb6296d83c0bd4ee08f4",
       "sourceName": "contracts/structs/Marking.sol",
       "solcConfig": {
@@ -545,8 +701,8 @@
       ],
       "artifacts": []
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/QuoteParams.sol": {
-      "lastModificationDate": 1754563960296,
+    "/Users/alexey/dex/contracts/structs/QuoteParams.sol": {
+      "lastModificationDate": 1755420220473,
       "contentHash": "fab3be3f43406ea14c38bd7167d09ef2",
       "sourceName": "contracts/structs/QuoteParams.sol",
       "solcConfig": {
@@ -580,8 +736,8 @@
       ],
       "artifacts": []
     },
-    "/Users/alexeygrigoryev/dex/contracts/libraries/AssetTransferLib.sol": {
-      "lastModificationDate": 1754246974260,
+    "/Users/alexey/dex/contracts/libraries/AssetTransferLib.sol": {
+      "lastModificationDate": 1753721873234,
       "contentHash": "4e3007bcf1783af33aa368080e0a673f",
       "sourceName": "contracts/libraries/AssetTransferLib.sol",
       "solcConfig": {
@@ -619,8 +775,47 @@
         "AssetTransferLib"
       ]
     },
-    "/Users/alexeygrigoryev/dex/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol": {
-      "lastModificationDate": 1754249657270,
+    "/Users/alexey/dex/contracts/interfaces/internal/IQuoteRouter.sol": {
+      "lastModificationDate": 1755420220472,
+      "contentHash": "d02b71b6be7ffd2e20dc05dfaa560fa1",
+      "sourceName": "contracts/interfaces/internal/IQuoteRouter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../structs/SwapParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IQuoteRouter"
+      ]
+    },
+    "/Users/alexey/dex/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol": {
+      "lastModificationDate": 1751801307572,
       "contentHash": "8f19f64d2adadf448840908bbaf431c8",
       "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
       "solcConfig": {
@@ -656,9 +851,88 @@
         "IERC20"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/quoters/SimpleQuoter.sol": {
-      "lastModificationDate": 1754983993111,
-      "contentHash": "d03f87e9b112f30a9651978c4abf3c46",
+    "/Users/alexey/dex/contracts/z_remix_test/SwapTwiceHelper.sol": {
+      "lastModificationDate": 1755420220473,
+      "contentHash": "8885004fd8ac1bc0aaa65832ddf9c363",
+      "sourceName": "contracts/z_remix_test/SwapTwiceHelper.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../contracts/PoolManager.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "SwapTwiceHelper"
+      ]
+    },
+    "/Users/alexey/dex/contracts/interfaces/external/IPoolManager.sol": {
+      "lastModificationDate": 1755420220471,
+      "contentHash": "4feae915580e51a2c44c184fea071cb1",
+      "sourceName": "contracts/interfaces/external/IPoolManager.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../structs/Hop.sol",
+        "../../structs/SwapParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IPoolManager"
+      ]
+    },
+    "/Users/alexey/dex/contracts/quoters/SimpleQuoter.sol": {
+      "lastModificationDate": 1755713337836,
+      "contentHash": "62e9396ebafa38d3fb1ce7ef997d7e75",
       "sourceName": "contracts/quoters/SimpleQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -686,7 +960,7 @@
         }
       },
       "imports": [
-        "../interfaces/internal/quoters/IQuoterNoData.sol",
+        "../interfaces/internal/quoters/IQuoter.sol",
         "../structs/QuoteParams.sol"
       ],
       "versionPragmas": [
@@ -696,9 +970,9 @@
         "SimpleQuoter"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/quoters/DualDataQuoter.sol": {
-      "lastModificationDate": 1754983900928,
-      "contentHash": "7323fc01d665ee3c32fbc0136c55cf74",
+    "/Users/alexey/dex/contracts/quoters/DualDataQuoter.sol": {
+      "lastModificationDate": 1755715781349,
+      "contentHash": "59792797662109b829ebc075af780cc0",
       "sourceName": "contracts/quoters/DualDataQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -726,7 +1000,7 @@
         }
       },
       "imports": [
-        "../interfaces/internal/quoters/IQuoterDualData.sol",
+        "../interfaces/internal/quoters/IQuoter.sol",
         "../structs/QuoteParams.sol"
       ],
       "versionPragmas": [
@@ -736,9 +1010,9 @@
         "DualDataQuoter"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/quoters/BetaDataQuoter.sol": {
-      "lastModificationDate": 1754983909383,
-      "contentHash": "233d7ef209ddfb1e85fafb8b0c7d5a47",
+    "/Users/alexey/dex/contracts/quoters/BetaDataQuoter.sol": {
+      "lastModificationDate": 1755714613123,
+      "contentHash": "d42cfea3ed67301a3ac3d466f4597171",
       "sourceName": "contracts/quoters/BetaDataQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -766,7 +1040,7 @@
         }
       },
       "imports": [
-        "../interfaces/internal/quoters/IQuoterSingleData.sol",
+        "../interfaces/internal/quoters/IQuoter.sol",
         "../structs/QuoteParams.sol"
       ],
       "versionPragmas": [
@@ -776,9 +1050,9 @@
         "BetaDataQuoter"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/quoters/AlphaDataQuoter.sol": {
-      "lastModificationDate": 1754983956410,
-      "contentHash": "01dd32120f92a1b506df0bb05ff853f8",
+    "/Users/alexey/dex/contracts/quoters/AlphaDataQuoter.sol": {
+      "lastModificationDate": 1755714876505,
+      "contentHash": "9874baaedf8607f16a3d6bab7c1766cc",
       "sourceName": "contracts/quoters/AlphaDataQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -806,7 +1080,7 @@
         }
       },
       "imports": [
-        "../interfaces/internal/quoters/IQuoterSingleData.sol",
+        "../interfaces/internal/quoters/IQuoter.sol",
         "../structs/QuoteParams.sol"
       ],
       "versionPragmas": [
@@ -816,88 +1090,8 @@
         "AlphaDataQuoter"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/mocks/MockBetaDataBridge.sol": {
-      "lastModificationDate": 1754846432587,
-      "contentHash": "40af4dcb498865bd861504303dd292ad",
-      "sourceName": "contracts/mocks/MockBetaDataBridge.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../interfaces/internal/IDataBridge.sol",
-        "../structs/QuoteParams.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MockBetaDataBridge"
-      ]
-    },
-    "/Users/alexeygrigoryev/dex/contracts/mocks/MockAlphaDataBridge.sol": {
-      "lastModificationDate": 1754846432597,
-      "contentHash": "f984c9f8610b17348dc5959cc9802a00",
-      "sourceName": "contracts/mocks/MockAlphaDataBridge.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../interfaces/internal/IDataBridge.sol",
-        "../structs/QuoteParams.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MockAlphaDataBridge"
-      ]
-    },
-    "/Users/alexeygrigoryev/dex/node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
-      "lastModificationDate": 1754249657272,
+    "/Users/alexey/dex/node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
+      "lastModificationDate": 1751801307572,
       "contentHash": "794db3115001aa372c79326fcfd44b1f",
       "sourceName": "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol",
       "solcConfig": {
@@ -935,8 +1129,8 @@
         "IERC20Metadata"
       ]
     },
-    "/Users/alexeygrigoryev/dex/node_modules/@openzeppelin/contracts/token/ERC20/ERC20.sol": {
-      "lastModificationDate": 1754249657183,
+    "/Users/alexey/dex/node_modules/@openzeppelin/contracts/token/ERC20/ERC20.sol": {
+      "lastModificationDate": 1751801307565,
       "contentHash": "57d79df281f57bbb1b09214c7914f877",
       "sourceName": "@openzeppelin/contracts/token/ERC20/ERC20.sol",
       "solcConfig": {
@@ -977,8 +1171,8 @@
         "ERC20"
       ]
     },
-    "/Users/alexeygrigoryev/dex/node_modules/@openzeppelin/contracts/utils/Context.sol": {
-      "lastModificationDate": 1754249657132,
+    "/Users/alexey/dex/node_modules/@openzeppelin/contracts/utils/Context.sol": {
+      "lastModificationDate": 1751801307559,
       "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
       "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
@@ -1014,8 +1208,8 @@
         "Context"
       ]
     },
-    "/Users/alexeygrigoryev/dex/node_modules/@openzeppelin/contracts/interfaces/draft-IERC6093.sol": {
-      "lastModificationDate": 1754249657154,
+    "/Users/alexey/dex/node_modules/@openzeppelin/contracts/interfaces/draft-IERC6093.sol": {
+      "lastModificationDate": 1751801307561,
       "contentHash": "267d92fe4de67b1bdb3302c08f387dbf",
       "sourceName": "@openzeppelin/contracts/interfaces/draft-IERC6093.sol",
       "solcConfig": {
@@ -1053,8 +1247,8 @@
         "IERC721Errors"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/z_remix_test/TestTokenB.sol": {
-      "lastModificationDate": 1754246974278,
+    "/Users/alexey/dex/contracts/z_remix_test/TestTokenB.sol": {
+      "lastModificationDate": 1754210912361,
       "contentHash": "0dff7ffac13a1176145eceb782a863ae",
       "sourceName": "contracts/z_remix_test/TestTokenB.sol",
       "solcConfig": {
@@ -1092,8 +1286,8 @@
         "TestTokenB"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/z_remix_test/TestTokenA.sol": {
-      "lastModificationDate": 1754246974278,
+    "/Users/alexey/dex/contracts/z_remix_test/TestTokenA.sol": {
+      "lastModificationDate": 1754210912361,
       "contentHash": "3807b6d54130fc765281eead252c324a",
       "sourceName": "contracts/z_remix_test/TestTokenA.sol",
       "solcConfig": {
@@ -1131,8 +1325,8 @@
         "TestTokenA"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/ERC6909Extended.sol": {
-      "lastModificationDate": 1754926816292,
+    "/Users/alexey/dex/contracts/ERC6909Extended.sol": {
+      "lastModificationDate": 1755420220471,
       "contentHash": "2d6c6a233dc86e04915e3b9c9043c0df",
       "sourceName": "contracts/ERC6909Extended.sol",
       "solcConfig": {
@@ -1170,8 +1364,8 @@
         "ERC6909Extended"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/external/IERC20.sol": {
-      "lastModificationDate": 1754246974257,
+    "/Users/alexey/dex/contracts/interfaces/external/IERC20.sol": {
+      "lastModificationDate": 1753011848422,
       "contentHash": "deb35e9fd278935ed138684a4f5015a5",
       "sourceName": "contracts/interfaces/external/IERC20.sol",
       "solcConfig": {
@@ -1207,10 +1401,10 @@
         "IERC20"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/Delta.sol": {
-      "lastModificationDate": 1754926815141,
-      "contentHash": "6f14974b38b315e815db49f7b4026253",
-      "sourceName": "contracts/structs/Delta.sol",
+    "/Users/alexey/dex/contracts/libraries/FlashAccounting.sol": {
+      "lastModificationDate": 1755623053266,
+      "contentHash": "9960387325d49df4ec9d120a965cb13c",
+      "sourceName": "contracts/libraries/FlashAccounting.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1240,12 +1434,14 @@
       "versionPragmas": [
         "^0.8.30"
       ],
-      "artifacts": []
+      "artifacts": [
+        "FlashAccounting"
+      ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/DexMarketData.sol": {
-      "lastModificationDate": 1754246974267,
-      "contentHash": "afc7a10f9f828a9cd745468228fb7739",
-      "sourceName": "contracts/structs/DexMarketData.sol",
+    "/Users/alexey/dex/contracts/interfaces/internal/IFlashCallback.sol": {
+      "lastModificationDate": 1755622626559,
+      "contentHash": "98e0cf985c3262af359b3303dc61af8e",
+      "sourceName": "contracts/interfaces/internal/IFlashCallback.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1275,47 +1471,14 @@
       "versionPragmas": [
         "^0.8.30"
       ],
-      "artifacts": []
+      "artifacts": [
+        "IFlashCallback"
+      ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/OracleMarketData.sol": {
-      "lastModificationDate": 1754246974271,
-      "contentHash": "f320194551656750c466b8735a2a1c98",
-      "sourceName": "contracts/structs/OracleMarketData.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": []
-    },
-    "/Users/alexeygrigoryev/dex/contracts/z_remix_test/SwapTwiceHelper.sol": {
-      "lastModificationDate": 1755053870882,
-      "contentHash": "8885004fd8ac1bc0aaa65832ddf9c363",
-      "sourceName": "contracts/z_remix_test/SwapTwiceHelper.sol",
+    "/Users/alexey/dex/contracts/z_remix_test/FlashSessionCallback.sol": {
+      "lastModificationDate": 1755716205775,
+      "contentHash": "b961b5c01cebdd0ebc0c7b8c4b57344b",
+      "sourceName": "contracts/z_remix_test/FlashSessionCallback.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1342,19 +1505,19 @@
         }
       },
       "imports": [
-        "../../contracts/PoolManager.sol"
+        "../interfaces/external/IPoolManager.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "SwapTwiceHelper"
+        "FlashSessionCallback"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/QuoteRouter.sol": {
-      "lastModificationDate": 1755391859408,
-      "contentHash": "9c9121d97ab5a656a8fb0b0c680c47aa",
-      "sourceName": "contracts/QuoteRouter.sol",
+    "/Users/alexey/dex/contracts/z_remix_test/FlashSessionComplexCallback.sol": {
+      "lastModificationDate": 1755623554775,
+      "contentHash": "0407b1bbb2ddacf8194b012f5f5a326f",
+      "sourceName": "contracts/z_remix_test/FlashSessionComplexCallback.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1381,28 +1544,20 @@
         }
       },
       "imports": [
-        "./libraries/MarkingHelper.sol",
-        "./libraries/PoolIDAssembly.sol",
-        "./libraries/TransientStorage.sol",
-        "./interfaces/internal/quoters/IQuoterNoData.sol",
-        "./interfaces/internal/quoters/IQuoterSingleData.sol",
-        "./interfaces/internal/quoters/IQuoterDualData.sol",
-        "./interfaces/internal/IDataBridge.sol",
-        "./structs/SwapParams.sol",
-        "./structs/Marking.sol",
-        "./structs/QuoteParams.sol"
+        "../interfaces/external/IPoolManager.sol",
+        "../structs/Hop.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "QuoteRouter"
+        "FlashSessionComplexCallback"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/internal/IQuoteRouter.sol": {
-      "lastModificationDate": 1755390698229,
-      "contentHash": "d02b71b6be7ffd2e20dc05dfaa560fa1",
-      "sourceName": "contracts/interfaces/internal/IQuoteRouter.sol",
+    "/Users/alexey/dex/contracts/z_remix_test/FlashTwoSwapsCallback.sol": {
+      "lastModificationDate": 1755623825378,
+      "contentHash": "2c15051d5087a4432c75fe2425aa2cdf",
+      "sourceName": "contracts/z_remix_test/FlashTwoSwapsCallback.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1429,19 +1584,59 @@
         }
       },
       "imports": [
-        "../../structs/SwapParams.sol"
+        "../interfaces/external/IPoolManager.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "IQuoteRouter"
+        "FlashTwoSwapsCallback"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/Hop.sol": {
-      "lastModificationDate": 1755391160200,
-      "contentHash": "55e7c9d869af7d33d607f1229269f25a",
-      "sourceName": "contracts/structs/Hop.sol",
+    "/Users/alexey/dex/contracts/z_remix_test/FlashSessionBatchSwapWrapper.sol": {
+      "lastModificationDate": 1755624053304,
+      "contentHash": "7a7649a85d9542d4b96ebef25c8b6ac3",
+      "sourceName": "contracts/z_remix_test/FlashSessionBatchSwapWrapper.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/external/IPoolManager.sol",
+        "../structs/Hop.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "FlashSessionBatchSwapWrapper"
+      ]
+    },
+    "/Users/alexey/dex/contracts/interfaces/external/uniswap/IUniswapV3Pool.sol": {
+      "lastModificationDate": 1755639131138,
+      "contentHash": "cbca730e4d79df880d6668dbec3a947c",
+      "sourceName": "contracts/interfaces/external/uniswap/IUniswapV3Pool.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1469,49 +1664,16 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.30"
+        "^0.8.13"
       ],
-      "artifacts": []
+      "artifacts": [
+        "IUniswapV3Pool"
+      ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/structs/PoolInfo.sol": {
-      "lastModificationDate": 1755391162123,
-      "contentHash": "ac62c1368dbdf89c48daab804f1dfdce",
-      "sourceName": "contracts/structs/PoolInfo.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": []
-    },
-    "/Users/alexeygrigoryev/dex/contracts/interfaces/external/IPoolManager.sol": {
-      "lastModificationDate": 1755392448500,
-      "contentHash": "4feae915580e51a2c44c184fea071cb1",
-      "sourceName": "contracts/interfaces/external/IPoolManager.sol",
+    "/Users/alexey/dex/contracts/z_remix_test/AggregatorGasMeasurer.sol": {
+      "lastModificationDate": 1755709474688,
+      "contentHash": "258de3771c33626bb61dda5a5d7e9b58",
+      "sourceName": "contracts/z_remix_test/AggregatorGasMeasurer.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1538,20 +1700,20 @@
         }
       },
       "imports": [
-        "../../structs/Hop.sol",
-        "../../structs/SwapParams.sol"
+        "../interfaces/internal/IDataBridge.sol",
+        "../structs/QuoteParams.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "IPoolManager"
+        "AggregatorGasMeasurer"
       ]
     },
-    "/Users/alexeygrigoryev/dex/contracts/security/ReentrancyGuard.sol": {
-      "lastModificationDate": 1755393440971,
-      "contentHash": "627b91863006ecd20f1b0d1622f2ec6a",
-      "sourceName": "contracts/security/ReentrancyGuard.sol",
+    "/Users/alexey/dex/contracts/interfaces/internal/quoters/IQuoter.sol": {
+      "lastModificationDate": 1755713330553,
+      "contentHash": "332a57fb59f48ff3cfb67ef0f9227932",
+      "sourceName": "contracts/interfaces/internal/quoters/IQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1577,12 +1739,177 @@
           }
         }
       },
-      "imports": [],
+      "imports": [
+        "../../../structs/QuoteParams.sol",
+        "../../../structs/QuoteParams.sol"
+      ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "ReentrancyGuard"
+        "IQuoter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/DataBridges/AlphaDataBridgeAdapter.sol": {
+      "lastModificationDate": 1755717656180,
+      "contentHash": "4e614e8b00e85747b0f62c8d1340a5a3",
+      "sourceName": "contracts/DataBridges/AlphaDataBridgeAdapter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/internal/IDataBridge.sol",
+        "../structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "AlphaDataBridgeAdapter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/DataBridges/MockBetaDataBridge.sol": {
+      "lastModificationDate": 1755717656183,
+      "contentHash": "40af4dcb498865bd861504303dd292ad",
+      "sourceName": "contracts/DataBridges/MockBetaDataBridge.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/internal/IDataBridge.sol",
+        "../structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MockBetaDataBridge"
+      ]
+    },
+    "/Users/alexey/dex/contracts/DataBridges/MockAlphaDataBridge.sol": {
+      "lastModificationDate": 1755717656182,
+      "contentHash": "f984c9f8610b17348dc5959cc9802a00",
+      "sourceName": "contracts/DataBridges/MockAlphaDataBridge.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/internal/IDataBridge.sol",
+        "../structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MockAlphaDataBridge"
+      ]
+    },
+    "/Users/alexey/dex/contracts/DataBridges/AlphaDataBridgeOnchainAggregator.sol": {
+      "lastModificationDate": 1755717656179,
+      "contentHash": "19b21afe28a793a5815c7f77c0398868",
+      "sourceName": "contracts/DataBridges/AlphaDataBridgeOnchainAggregator.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/internal/IDataBridge.sol",
+        "../structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "AlphaDataBridgeOnchainAggregator",
+        "IUniswapV2Pair",
+        "IUniswapV3PoolLike"
       ]
     }
   }

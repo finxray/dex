@@ -299,5 +299,74 @@ describe("BatchSwap Gas Test", function () {
 
             console.log(`\n✅ Gas usage (${gasUsedNum2.toLocaleString()}) is within expected range!`);
         });
+
+        it("Should compare 4-hop batchSwap gas: normal vs session", async function () {
+            const SIMPLE_MARKING = "0x00000C";
+            const ALPHA_MARKING = "0x00000E";
+            const DUAL_MARKING = "0x00000F";
+
+            // Re-create the pools and liquidity as above
+            await poolManager.connect(user1).createPool(
+                await testTokenA.getAddress(), await testTokenB.getAddress(), await dualQuoter.getAddress(), DUAL_MARKING
+            );
+            await poolManager.connect(user1).createPool(
+                await testTokenB.getAddress(), await testTokenC.getAddress(), await alphaQuoter.getAddress(), ALPHA_MARKING
+            );
+            await poolManager.connect(user1).createPool(
+                await testTokenC.getAddress(), await testTokenD.getAddress(), await alphaQuoter.getAddress(), ALPHA_MARKING
+            );
+            await poolManager.connect(user1).createPool(
+                await testTokenD.getAddress(), await testTokenE.getAddress(), await alphaQuoter.getAddress(), ALPHA_MARKING
+            );
+
+            const liquidityAmount = ethers.parseEther("10000");
+            await poolManager.connect(user1).addLiquidity(
+                await testTokenA.getAddress(), await testTokenB.getAddress(), await dualQuoter.getAddress(), DUAL_MARKING, liquidityAmount, liquidityAmount
+            );
+            await poolManager.connect(user1).addLiquidity(
+                await testTokenB.getAddress(), await testTokenC.getAddress(), await alphaQuoter.getAddress(), ALPHA_MARKING, liquidityAmount, liquidityAmount
+            );
+            await poolManager.connect(user1).addLiquidity(
+                await testTokenC.getAddress(), await testTokenD.getAddress(), await alphaQuoter.getAddress(), ALPHA_MARKING, liquidityAmount, liquidityAmount
+            );
+            await poolManager.connect(user1).addLiquidity(
+                await testTokenD.getAddress(), await testTokenE.getAddress(), await alphaQuoter.getAddress(), ALPHA_MARKING, liquidityAmount, liquidityAmount
+            );
+
+            const hops = [
+                {
+                    asset0: await testTokenA.getAddress(), asset1: await testTokenB.getAddress(), quoter: await dualQuoter.getAddress(),
+                    markings: [DUAL_MARKING], amounts: [ethers.parseEther("100")], zeroForOne: true
+                },
+                {
+                    asset0: await testTokenB.getAddress(), asset1: await testTokenC.getAddress(), quoter: await alphaQuoter.getAddress(),
+                    markings: [ALPHA_MARKING, ALPHA_MARKING, ALPHA_MARKING], amounts: [ethers.parseEther("80"), ethers.parseEther("60"), ethers.parseEther("40")], zeroForOne: true
+                }
+            ];
+            const swapAmount = ethers.parseEther("100");
+            const minAmountOut = ethers.parseEther("20");
+
+            // Normal (non-session) gas
+            const txNormal = await poolManager.connect(user1).batchSwap(hops, swapAmount, minAmountOut);
+            const rcNormal = await txNormal.wait();
+
+            // Session-based: wrap in a trivial callback that calls batchSwap once
+            const SessionWrapper = await ethers.getContractFactory("FlashSessionBatchSwapWrapper");
+            const wrapper = await SessionWrapper.deploy(await poolManager.getAddress(), hops, swapAmount, minAmountOut);
+            await wrapper.waitForDeployment();
+            const txSession = await poolManager.connect(user1).flashSession(await wrapper.getAddress(), "0x", [await testTokenA.getAddress(), await testTokenE.getAddress()]);
+            const rcSession = await txSession.wait();
+
+            // Print a concise table
+            const table = [
+                ["Scenario", "Gas Used"],
+                ["Normal 4-hop", rcNormal.gasUsed.toString()],
+                ["Session 4-hop", rcSession.gasUsed.toString()],
+            ];
+            console.table(table);
+
+            expect(rcNormal.status).to.equal(1);
+            expect(rcSession.status).to.equal(1);
+        });
     });
 }); 

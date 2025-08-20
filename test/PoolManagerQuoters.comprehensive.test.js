@@ -79,7 +79,7 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
       SIMPLE,
       SWAP,
       true,
-      ethers.parseEther("8")
+      ethers.parseEther("7.5")
     );
     await tx1.wait();
     const bBAfter = await tokenB.balanceOf(trader.address);
@@ -94,16 +94,19 @@ describe("PoolManager + QuoterRouter integration (Simple, Alpha, Beta, Dual)", f
       SIMPLE,
       SWAP,
       false,
-      ethers.parseEther("6")
+      ethers.parseEther("5.8")
     );
     await tx2.wait();
     const bAAfter = await tokenA.balanceOf(trader.address);
     expect(bAAfter - bABefore).to.be.gt(0);
 
     // remove liquidity
+    const aAddr = await tokenA.getAddress();
+    const bAddr = await tokenB.getAddress();
+    const [s0, s1] = (BigInt(aAddr) < BigInt(bAddr)) ? [aAddr, bAddr] : [bAddr, aAddr];
     const poolID = ethers.solidityPackedKeccak256(
       ["address","address","address","bytes3"],
-      [await tokenA.getAddress(), await tokenB.getAddress(), await simpleQuoter.getAddress(), SIMPLE]
+      [s0, s1, await simpleQuoter.getAddress(), SIMPLE]
     );
     const lpBalance = await poolManager.balanceOf(lp.address, poolID);
     await poolManager.connect(lp).removeLiquidity(

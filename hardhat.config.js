@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -17,7 +18,14 @@ module.exports = {
     hardhat: {
       chainId: 31337,
       hardfork: "cancun",
+      forking: process.env.MAINNET_RPC ? { 
+        url: process.env.MAINNET_RPC,
+        blockNumber: process.env.MAINNET_FORK_BLOCK ? Number(process.env.MAINNET_FORK_BLOCK) : undefined,
+      } : undefined,
     },
+  },
+  mocha: {
+    timeout: 120000,
   },
   paths: {
     sources: "./contracts",

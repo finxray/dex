@@ -9,6 +9,7 @@ error PoolManager__PoolAlreadyExists(uint256 poolID);
 
 import {PoolIDAssembly} from "./PoolIDAssembly.sol";
 import {AssetTransferLib} from "./AssetTransferLib.sol";
+import {FlashAccounting} from "./FlashAccounting.sol";
 import {SwapParams} from "../structs/SwapParams.sol";
 import {IQuoteRouter} from "../interfaces/internal/IQuoteRouter.sol";
 import {Hop} from "../structs/Hop.sol";
@@ -268,10 +269,20 @@ library PoolManagerLib {
 
         uint256 intermediateAmount = amountIn;
 
+        // Track user-facing input and output assets for settlement
+        address inputAsset;
+        address outputAsset;
+
         for (uint256 i = 0; i < numHops; ) {
             Hop calldata hop = hops[i];
             bool isFirstHop = i == 0;
             bool isLastHop = i == numHops - 1;
+            if (isFirstHop) {
+                inputAsset = hop.zeroForOne ? hop.asset0 : hop.asset1;
+            }
+            if (isLastHop) {
+                outputAsset = hop.zeroForOne ? hop.asset1 : hop.asset0;
+            }
             
             intermediateAmount = executeHop(
                 self,
@@ -284,6 +295,11 @@ library PoolManagerLib {
                 quoterRouter
             );
             unchecked { ++i; }
+        }
+
+        // Perform settlement only if a session is not active; otherwise defer to final session settle
+        if (!FlashAccounting.isSessionActive(recipient)) {
+            _settleUserDeltas(recipient, inputAsset, outputAsset, amountIn, intermediateAmount, msgValue);
         }
 
         return intermediateAmount;
@@ -362,17 +378,10 @@ library PoolManagerLib {
     ) internal returns (uint256 outputAmount) {
         uint256 batchSize = hop.markings.length;
         
-        // Handle asset transfers for first hop
+        // Flash accounting: record user owes input for first hop, defer transfer to settlement
         if (isFirstHop) {
-            handleAssetTransfers(
-                hop.zeroForOne ? hop.asset0 : hop.asset1,
-                address(0),
-                inputAmount,
-                0,
-                0, // msgValue handled in batchSwap
-                true,
-                recipient
-            );
+            address inAsset = hop.zeroForOne ? hop.asset0 : hop.asset1;
+            FlashAccounting.addDelta(recipient, inAsset, -int256(inputAmount));
         }
         
         // Prepare batch parameters for quoter
@@ -422,17 +431,10 @@ library PoolManagerLib {
             unchecked { ++i; }
         }
         
-        // Handle asset transfers for last hop
+        // Flash accounting: record user is owed output for last hop, defer transfer to settlement
         if (isLastHop) {
-            handleAssetTransfers(
-                hop.zeroForOne ? hop.asset1 : hop.asset0,
-                address(0),
-                quotes[batchSize - 1],
-                0,
-                0,
-                false,
-                recipient
-            );
+            address outAsset = hop.zeroForOne ? hop.asset1 : hop.asset0;
+            FlashAccounting.addDelta(recipient, outAsset, int256(quotes[batchSize - 1]));
         }
         
         return quotes[batchSize - 1];
@@ -468,21 +470,10 @@ library PoolManagerLib {
     ) internal returns (uint256 outputAmount) {
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, marking);
 
-        // Handle asset transfers
+        // Flash accounting: record user owes input for first hop, defer transfer to settlement
         if (isFirstHop) {
-            // First hop: transfer in the input asset from user
-            handleAssetTransfers(
-                zeroForOne ? asset0 : asset1,
-                address(0),
-                inputAmount,
-                0,
-                msgValue,
-                true,
-                recipient
-            );
-        } else {
-            // Intermediate hop: the input asset is already in the contract from previous hop
-            // No transfer needed as the contract already holds the asset
+            address inAsset = zeroForOne ? asset0 : asset1;
+            FlashAccounting.addDelta(recipient, inAsset, -int256(inputAmount));
         }
 
         (uint128 poolAsset0, uint128 poolAsset1) = getInventory(self, poolID);
@@ -510,16 +501,9 @@ library PoolManagerLib {
         );
 
         if (isLastHop) {
-            // Last hop: transfer out the final output asset to user
-            handleAssetTransfers(
-                zeroForOne ? asset1 : asset0,
-                address(0),
-                outputAmount,
-                0,
-                0,
-                false,
-                recipient
-            );
+            // Flash accounting: record user is owed output for last hop, defer transfer to settlement
+            address outAsset = zeroForOne ? asset1 : asset0;
+            FlashAccounting.addDelta(recipient, outAsset, int256(outputAmount));
         }
         // For intermediate hops, the output asset stays in the contract for the next hop
     }
@@ -564,5 +548,83 @@ library PoolManagerLib {
         amountOut = quote > 0
             ? quote
             : (zeroForOne ? (amountIn * 1300000000000000000) / 1e18 : (amountIn * 1e18) / 1300000000000000000);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            FLASH SETTLEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Settle user's net deltas for two tokens (input/output) with minimal transfers
+    function _settleUserDeltas(
+        address user,
+        address inputAsset,
+        address outputAsset,
+        uint256 /*amountIn*/,
+        uint256 /*amountOut*/,
+        uint256 msgValue
+    ) internal {
+        // Read deltas
+        int256 inDelta = FlashAccounting.getDelta(user, inputAsset);
+        int256 outDelta = FlashAccounting.getDelta(user, outputAsset);
+
+        // If both assets are the same token, merge deltas
+        if (inputAsset == outputAsset) {
+            int256 net = inDelta + outDelta; // could be positive (pay user) or negative (collect from user)
+            if (net < 0) {
+                // collect from user
+                uint256 collect = uint256(-net);
+                AssetTransferLib.transferIn(inputAsset, user, collect, inputAsset == address(0) ? msgValue : 0);
+            } else if (net > 0) {
+                // pay user
+                uint256 pay = uint256(net);
+                AssetTransferLib.transferOut(outputAsset, user, pay);
+            }
+            // clear
+            FlashAccounting.clearDelta(user, inputAsset);
+            return;
+        }
+
+        // Different tokens: settle separately
+        if (inDelta < 0) {
+            uint256 collectIn = uint256(-inDelta);
+            AssetTransferLib.transferIn(inputAsset, user, collectIn, inputAsset == address(0) ? msgValue : 0);
+        } else if (inDelta > 0) {
+            // Should not happen in this flow; clear defensively by paying out
+            AssetTransferLib.transferOut(inputAsset, user, uint256(inDelta));
+        }
+
+        if (outDelta > 0) {
+            AssetTransferLib.transferOut(outputAsset, user, uint256(outDelta));
+        } else if (outDelta < 0) {
+            // Should not happen in this flow; collect from user
+            AssetTransferLib.transferIn(outputAsset, user, uint256(-outDelta), outputAsset == address(0) ? msgValue : 0);
+        }
+
+        // clear
+        FlashAccounting.clearDelta(user, inputAsset);
+        FlashAccounting.clearDelta(user, outputAsset);
+    }
+
+    /// @notice Settle an arbitrary list of tokens for a user (session settle)
+    /// @dev Positive delta => pay user; Negative delta => collect from user
+    function settleUserTokens(
+        address user,
+        address[] memory tokens,
+        uint256 msgValue
+    ) internal {
+        uint256 length = tokens.length;
+        for (uint256 i = 0; i < length; ) {
+            address token = tokens[i];
+            int256 delta = FlashAccounting.getDelta(user, token);
+            if (delta != 0) {
+                if (delta > 0) {
+                    AssetTransferLib.transferOut(token, user, uint256(delta));
+                } else {
+                    AssetTransferLib.transferIn(token, user, uint256(-delta), token == address(0) ? msgValue : 0);
+                }
+                FlashAccounting.clearDelta(user, token);
+            }
+            unchecked { ++i; }
+        }
     }
 }

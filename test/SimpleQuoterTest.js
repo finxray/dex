@@ -55,7 +55,7 @@ describe("Simple Quoter Test (Minimal)", function () {
     console.log("- Direction: zeroForOne =", params.zeroForOne);
     
     try {
-      const quote = await simpleQuoter.quote(params);
+      const quote = await simpleQuoter.quote(params, "0x");
       console.log("Quote result:", ethers.formatEther(quote));
       expect(quote).to.be.gt(0);
     } catch (error) {

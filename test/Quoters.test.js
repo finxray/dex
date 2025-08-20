@@ -58,12 +58,12 @@ describe("Quoter System Tests", function () {
         bucketID: 0,
       zeroForOne: true,
     };
-    const q0 = await simpleQuoter.quote(paramsZero);
+    const q0 = await simpleQuoter.quote(paramsZero, "0x");
     const expected0 = (SWAP_AMOUNT * ASSET1_BALANCE) / (ASSET0_BALANCE + SWAP_AMOUNT) * 997n / 1000n;
     expect(q0).to.be.closeTo(expected0, ethers.parseEther("0.1"));
 
     const paramsOne = { ...paramsZero, zeroForOne: false };
-    const q1 = await simpleQuoter.quote(paramsOne);
+    const q1 = await simpleQuoter.quote(paramsOne, "0x");
     const expected1 = (SWAP_AMOUNT * ASSET0_BALANCE) / (ASSET1_BALANCE + SWAP_AMOUNT) * 997n / 1000n;
     expect(q1).to.be.closeTo(expected1, ethers.parseEther("0.1"));
   });
@@ -80,7 +80,8 @@ describe("Quoter System Tests", function () {
         bucketID: 0,
       zeroForOne: true,
       };
-      const quote = await alphaQuoter.quote(params, alphaData);
+      const wrapped = ethers.AbiCoder.defaultAbiCoder().encode(["bytes","bytes"],[alphaData, "0x"]);
+      const quote = await alphaQuoter.quote(params, wrapped);
     const weighted = (ALPHA_SPOT_PRICE * 70n + ALPHA_TWAP_PRICE * 30n) / 100n;
     const expected = (SWAP_AMOUNT * weighted) / ethers.parseEther("1") * 998n / 1000n;
     expect(quote).to.be.closeTo(expected, ethers.parseEther("0.1"));
@@ -98,7 +99,8 @@ describe("Quoter System Tests", function () {
       bucketID: 5,
       zeroForOne: true,
       };
-      const quote = await betaQuoter.quote(params, betaData);
+      const wrapped = ethers.AbiCoder.defaultAbiCoder().encode(["bytes","bytes"],["0x", betaData]);
+      const quote = await betaQuoter.quote(params, wrapped);
     const base = (SWAP_AMOUNT * BETA_SPOT_PRICE) / ethers.parseEther("1");
     const vol = 1000n - (5n % 10n);
     const expected = base * vol / 1000n * 997n / 1000n;
@@ -106,8 +108,8 @@ describe("Quoter System Tests", function () {
   });
 
   it("DualDataQuoter: combined data returns sane value", async function () {
-    const alphaData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [ALPHA_SPOT_PRICE, ALPHA_TWAP_PRICE]);
-    const betaData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [BETA_SPOT_PRICE]);
+    const alphaData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256[]", "uint256[]"], [[ALPHA_SPOT_PRICE,ALPHA_SPOT_PRICE,ALPHA_SPOT_PRICE],[ALPHA_TWAP_PRICE,ALPHA_TWAP_PRICE,ALPHA_TWAP_PRICE]]);
+    const betaData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256[]"], [[BETA_SPOT_PRICE]]);
       const params = {
         asset0: await tokenA.getAddress(),
         asset1: await tokenB.getAddress(),
@@ -118,7 +120,8 @@ describe("Quoter System Tests", function () {
         bucketID: 0,
       zeroForOne: true,
       };
-      const quote = await dualQuoter.quote(params, alphaData, betaData);
+      const both = ethers.AbiCoder.defaultAbiCoder().encode(["bytes","bytes"],[alphaData, betaData]);
+      const quote = await dualQuoter.quote(params, both);
       expect(quote).to.be.gt(0);
     expect(quote).to.be.lt(SWAP_AMOUNT * 2n);
   });

@@ -112,7 +112,7 @@ describe("Basic PoolManager Tests", function () {
         zeroForOne: true
       };
       
-      const quote = await simpleQuoter.quote(quoteParams);
+      const quote = await simpleQuoter.quote(quoteParams, "0x");
       console.log("💰 SimpleQuoter quote:", ethers.formatEther(quote));
       
       expect(quote).to.be.greaterThan(0);

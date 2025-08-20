@@ -15,6 +15,8 @@ import {SwapParams} from "./structs/SwapParams.sol";
 import {Hop} from "./structs/Hop.sol";
 import {PoolInfo} from "./structs/PoolInfo.sol";
 import {ReentrancyGuard} from "./security/ReentrancyGuard.sol";
+import {FlashAccounting} from "./libraries/FlashAccounting.sol";
+import {IFlashCallback} from "./interfaces/internal/IFlashCallback.sol";
 
 // Using library for clean storage access
 using PoolManagerLib for PoolManagerLib.PoolManagerStorage;
@@ -138,15 +140,28 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             _storage, amt0, amt1, poolAsset0, poolAsset1, poolID, rate
         );
 
-        // Handle transfers using canonical order
-        PoolManagerLib.handleAssetTransfers(a0, a1, amt0, amt1, msg.value, true, msg.sender);
+        // Determine beneficiary (session-aware originator)
+        address beneficiary = FlashAccounting.getActiveUser();
+        if (beneficiary == address(0)) beneficiary = msg.sender;
+
+        // Flash accounting: record user owes tokens; defer actual transfer to settlement
+        FlashAccounting.addDelta(beneficiary, a0, -int256(amt0));
+        FlashAccounting.addDelta(beneficiary, a1, -int256(amt1));
 
         // Update inventory with canonical amounts
         _updateInventory(poolID, int128(uint128(amt0)), int128(uint128(amt1)));
 
         // Mint shares and update total directly
-        _mint(msg.sender, poolID, liquidity);
+        _mint(beneficiary, poolID, liquidity);
         _storage.totalLiquidity[poolID] += liquidity;
+
+        // If not in a session, settle immediately
+        if (!FlashAccounting.isSessionActive(beneficiary)) {
+            address[] memory tokens = new address[](2);
+            tokens[0] = a0;
+            tokens[1] = a1;
+            PoolManagerLib.settleUserTokens(beneficiary, tokens, msg.value);
+        }
     }
 
     /// @notice Remove liquidity from a pool - OPTIMAL IMPLEMENTATION
@@ -171,17 +186,32 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         amount1 = (liquidity * poolAsset1) / _storage.totalLiquidity[poolID];
         if (amount0 == 0 && amount1 == 0) revert PoolManager__InsufficientWithdrawal(amount0, amount1);
         
+        // Determine beneficiary (session-aware originator)
+        address beneficiary = FlashAccounting.getActiveUser();
+        if (beneficiary == address(0)) beneficiary = msg.sender;
+
         // Burn shares and update total directly
-        _burn(msg.sender, poolID, liquidity);
+        _burn(beneficiary, poolID, liquidity);
         _storage.totalLiquidity[poolID] -= liquidity;
         
         // Update inventory via helper
         _updateInventory(poolID, -int128(uint128(amount0)), -int128(uint128(amount1)));
 
-        // Transfer assets using library
+        // Flash accounting: record user is owed tokens; defer actual transfer to settlement
         bool canonicalOrder = asset0 < asset1;
         (uint256 out0, uint256 out1) = canonicalOrder ? (amount0, amount1) : (amount1, amount0);
-        PoolManagerLib.handleAssetTransfers(asset0, asset1, out0, out1, 0, false, msg.sender);
+        address a0 = canonicalOrder ? asset0 : asset1;
+        address a1 = canonicalOrder ? asset1 : asset0;
+        FlashAccounting.addDelta(beneficiary, a0, int256(out0));
+        FlashAccounting.addDelta(beneficiary, a1, int256(out1));
+
+        // If not in a session, settle immediately
+        if (!FlashAccounting.isSessionActive(beneficiary)) {
+            address[] memory tokens = new address[](2);
+            tokens[0] = a0;
+            tokens[1] = a1;
+            PoolManagerLib.settleUserTokens(beneficiary, tokens, 0);
+        }
     }
 
     // Execution (without market) cost: 67,670 
@@ -197,14 +227,13 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         bool zeroForOne,
         uint256 minAmountOut
     ) external payable nonReentrant returns (uint256 amountOut) {
-        
+        // Determine beneficiary (session-aware originator)
+        address beneficiary = FlashAccounting.getActiveUser();
+        if (beneficiary == address(0)) beneficiary = msg.sender;
+
         // Calculate poolID on-the-fly
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
-        
-        // Transfer in input asset - inline asset determination (as provided)
-        PoolManagerLib.handleAssetTransfers(zeroForOne ? asset0 : asset1, address(0), amountIn, 0, msg.value, true, msg.sender);
-        
-        
+
         // Get inventory and calculate output using quoter system
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
         
@@ -242,9 +271,15 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             canonicalZeroForOne ? -int128(uint128(amountOut)) : int128(uint128(amountIn))
         );
         
-        
-        // Transfer out output asset - inline asset determination
-        PoolManagerLib.handleAssetTransfers(zeroForOne ? asset1 : asset0, address(0), amountOut, 0, 0, false, msg.sender);
+        // Flash accounting: record deltas for input and output; settle if not in session
+        address inAsset = zeroForOne ? asset0 : asset1;
+        address outAsset = zeroForOne ? asset1 : asset0;
+        FlashAccounting.addDelta(beneficiary, inAsset, -int256(amountIn));
+        FlashAccounting.addDelta(beneficiary, outAsset, int256(amountOut));
+
+        if (!FlashAccounting.isSessionActive(beneficiary)) {
+            PoolManagerLib._settleUserDeltas(beneficiary, inAsset, outAsset, 0, 0, msg.value);
+        }
         
     }
 
@@ -259,16 +294,62 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         uint256 amountIn,
         uint256 minAmountOut
     ) external payable nonReentrant returns (uint256 amountOut) {
+        // Determine effective recipient (session-aware originator)
+        address recipient = FlashAccounting.getActiveUser();
+        if (recipient == address(0)) recipient = msg.sender;
+
         amountOut = PoolManagerLib.executeBatchSwap(
             _storage,
             hops,
             amountIn,
             msg.value,
-            msg.sender,
+            recipient,
             address(this)
         );
         
         if (amountOut < minAmountOut) revert PoolManager__InsufficientOutput(minAmountOut, amountOut);
+    }
+
+    /// @notice Start a flash session to compose multiple operations with net settlement
+    /// @param callback Address implementing IFlashCallback
+    /// @param data Calldata forwarded to callback
+    /// @param tokens List of tokens to settle at the end (scope what might be touched)
+    function flashSession(address callback, bytes calldata data, address[] calldata tokens) external payable nonReentrantKey(keccak256("flashSession")) {
+        // Mark session active and set active user context
+        FlashAccounting.startSession(msg.sender);
+        FlashAccounting.setActiveUser(msg.sender);
+
+        // Execute user-provided logic
+        IFlashCallback(callback).flashCallback(data);
+
+        // Settle all touched tokens
+        PoolManagerLib.settleUserTokens(msg.sender, tokens, msg.value);
+
+        // End session and clear context
+        FlashAccounting.clearActiveUser();
+        FlashAccounting.endSession(msg.sender);
+    }
+
+    /// @notice Same as flashSession but returns per-token deltas for verification (should be zeros)
+    function flashSessionWithReturn(address callback, bytes calldata data, address[] calldata tokens)
+        external payable nonReentrantKey(keccak256("flashSession")) returns (int256[] memory deltas)
+    {
+        FlashAccounting.startSession(msg.sender);
+        FlashAccounting.setActiveUser(msg.sender);
+        IFlashCallback(callback).flashCallback(data);
+        PoolManagerLib.settleUserTokens(msg.sender, tokens, msg.value);
+        deltas = getUserDeltas(msg.sender, tokens);
+        FlashAccounting.clearActiveUser();
+        FlashAccounting.endSession(msg.sender);
+    }
+
+    /// @notice View helper to read current deltas for a user and tokens (transient storage)
+    function getUserDeltas(address user, address[] calldata tokens) public view returns (int256[] memory deltas) {
+        deltas = new int256[](tokens.length);
+        for (uint256 i = 0; i < tokens.length; ) {
+            deltas[i] = FlashAccounting.getDelta(user, tokens[i]);
+            unchecked { ++i; }
+        }
     }
 
     // Expose QuoterRouter's internal quote functions for library calls

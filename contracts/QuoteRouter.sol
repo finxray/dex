@@ -5,9 +5,7 @@ import {MarkingHelper} from "./libraries/MarkingHelper.sol";
 import {PoolIDAssembly} from "./libraries/PoolIDAssembly.sol";
 import {TransientStorage} from "./libraries/TransientStorage.sol";
 
-import {IQuoterNoData} from "./interfaces/internal/quoters/IQuoterNoData.sol";
-import {IQuoterSingleData} from "./interfaces/internal/quoters/IQuoterSingleData.sol";
-import {IQuoterDualData} from "./interfaces/internal/quoters/IQuoterDualData.sol";
+import {IQuoter} from "./interfaces/internal/quoters/IQuoter.sol";
 import {IDataBridge} from "./interfaces/internal/IDataBridge.sol";
 
 import {SwapParams} from "./structs/SwapParams.sol";
@@ -86,27 +84,22 @@ abstract contract QuoteRouter {
             zeroForOne: p.zeroForOne
         });
 
-        if (m.isAlpha && m.isBeta) {
-            address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
-            address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
-            require(alpha != address(0), "Alpha address is zero");
-            require(beta != address(0), "Beta address is zero");
-            quote = IQuoterDualData(params.quoter).quote(
-                params, 
-                getMarketData(alpha, params), 
-                getMarketData(beta, params)
-            );
-        } else if (!m.isAlpha && !m.isBeta) {
-            quote = IQuoterNoData(params.quoter).quote(params);
-        } else if (m.isAlpha && !m.isBeta) {
+        bytes memory data;
+        bytes memory alphaData;
+        bytes memory betaData;
+        if (m.isAlpha) {
             address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
             require(alpha != address(0), "Alpha address is zero");
-            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(alpha, params));
-        } else if (!m.isAlpha && m.isBeta) {
-            address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
-            require(beta != address(0), "Beta address is zero");
-            quote = IQuoterSingleData(params.quoter).quote(params, getMarketData(beta, params));
+            alphaData = getMarketData(alpha, params);
         }
+        if (m.isBeta) {
+            address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
+            require(beta != address(0), "Beta address is zero");
+            betaData = getMarketData(beta, params);
+        }
+        // Always wrap as (bytes alphaData, bytes betaData)
+        data = abi.encode(alphaData, betaData);
+        quote = IQuoter(params.quoter).quote(params, data);
     }
 
     function getQuoteBatch(SwapParams memory p, uint128[] memory asset0Balances, uint128[] memory asset1Balances) public returns (uint256[] memory quote, uint256[] memory poolID) {
@@ -130,37 +123,42 @@ abstract contract QuoteRouter {
             bucketID: bucketIDs,
             zeroForOne: p.zeroForOne
         });
-        QuoteParams memory baseParams = QuoteParams({
-            asset0: p.asset0,
-            asset1: p.asset1,
-            quoter: p.quoter,
-            amount: 0,
-            asset0Balance: 0,
-            asset1Balance: 0,
-            bucketID: 0,
-            zeroForOne: p.zeroForOne
-        });
-        if (m.isAlpha && m.isBeta) {
-            address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
-            address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
-            require(alpha != address(0), "Alpha address is zero");
-            require(beta != address(0), "Beta address is zero");
-            quote = IQuoterDualData(params.quoter).quoteBatch(
-                params, 
-                getMarketData(alpha, baseParams), 
-                getMarketData(beta, baseParams)
-            );
-        } else if (!m.isAlpha && !m.isBeta) {
-            quote = IQuoterNoData(params.quoter).quoteBatch(params);
-        } else if (m.isAlpha && !m.isBeta) {
+        bytes memory data;
+        bytes memory alphaDataB;
+        bytes memory betaDataB;
+        if (m.isAlpha) {
             address alpha = (m.isAlphaDefault) ? defaultAlpha : alphaAddressStorage[m.alphaAddressPointer];
             require(alpha != address(0), "Alpha address is zero");
-            quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(alpha, baseParams));
-        } else if (!m.isAlpha && m.isBeta) {
-            address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
-            require(beta != address(0), "Beta address is zero");
-            quote = IQuoterSingleData(params.quoter).quoteBatch(params, getMarketData(beta, baseParams));
+            // For batch, fetch once per marking set; alpha quoter unpacks per item if needed
+            QuoteParams memory baseParams = QuoteParams({
+                asset0: p.asset0,
+                asset1: p.asset1,
+                quoter: p.quoter,
+                amount: 0,
+                asset0Balance: 0,
+                asset1Balance: 0,
+                bucketID: 0,
+                zeroForOne: p.zeroForOne
+            });
+            alphaDataB = getMarketData(alpha, baseParams);
         }
+        if (m.isBeta) {
+            address beta = (m.isBetaDefault) ? defaultBeta : betaAddressStorage[m.betaAddressPointer];
+            require(beta != address(0), "Beta address is zero");
+            QuoteParams memory baseParams = QuoteParams({
+                asset0: p.asset0,
+                asset1: p.asset1,
+                quoter: p.quoter,
+                amount: 0,
+                asset0Balance: 0,
+                asset1Balance: 0,
+                bucketID: 0,
+                zeroForOne: p.zeroForOne
+            });
+            betaDataB = getMarketData(beta, baseParams);
+        }
+        data = abi.encode(alphaDataB, betaDataB);
+        quote = IQuoter(p.quoter).quoteBatch(params, data);
     }
 }
 
