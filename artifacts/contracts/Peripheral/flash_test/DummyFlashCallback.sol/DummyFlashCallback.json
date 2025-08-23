@@ -1,0 +1,37 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "DummyFlashCallback",
+  "sourceName": "contracts/Peripheral/flash_test/DummyFlashCallback.sol",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "Called",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "flashCallback",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080806040523460145760f490816100198239f35b5f80fdfe60808060405260043610156011575f80fd5b5f3560e01c63e3739238146023575f80fd5b3460ba57602036600319011260ba576004359067ffffffffffffffff821160ba573660238301121560ba57816004013567ffffffffffffffff811160ba57366024828501011160ba57818160409260247f43728e47c6f378312077a49106659446a23766fc65b3674c995b89121d8efeea966020855282602086015201848401375f828201840152601f01601f19168101030190a1005b5f80fdfea26469706673582212203e58ce1ef1af30d48b1b8dd19c235ef3fc1e68662849237be70260865dbb9ef864736f6c634300081e0033",
+  "deployedBytecode": "0x60808060405260043610156011575f80fd5b5f3560e01c63e3739238146023575f80fd5b3460ba57602036600319011260ba576004359067ffffffffffffffff821160ba573660238301121560ba57816004013567ffffffffffffffff811160ba57366024828501011160ba57818160409260247f43728e47c6f378312077a49106659446a23766fc65b3674c995b89121d8efeea966020855282602086015201848401375f828201840152601f01601f19168101030190a1005b5f80fdfea26469706673582212203e58ce1ef1af30d48b1b8dd19c235ef3fc1e68662849237be70260865dbb9ef864736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

@@ -16,6 +16,8 @@
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.1.1",
     "@nomicfoundation/ignition-core": "^0.15.13",
+    "@redstone-finance/evm-connector": "^0.9.0",
+    "@redstone-finance/sdk": "^0.9.0",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
     "@types/chai": "^4.3.20",

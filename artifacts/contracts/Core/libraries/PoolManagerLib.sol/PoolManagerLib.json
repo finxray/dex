@@ -1,0 +1,48 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "PoolManagerLib",
+  "sourceName": "contracts/Core/libraries/PoolManagerLib.sol",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "poolID",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "asset0",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "asset1",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "quoter",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes3",
+          "name": "markings",
+          "type": "bytes3"
+        }
+      ],
+      "name": "PoolCreated",
+      "type": "event"
+    }
+  ],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220fa4d3d4369f515712d71ab5e95c5fc8071f23845c6d015e3ff40490c2eac4e9d64736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220fa4d3d4369f515712d71ab5e95c5fc8071f23845c6d015e3ff40490c2eac4e9d64736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

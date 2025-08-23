@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "AssetTransferLib",
+  "sourceName": "contracts/Core/libraries/AssetTransferLib.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220f06d38bef2de5613271dd9df5ad3509bfa767bd97820f634bd5e34e6eca0524464736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220f06d38bef2de5613271dd9df5ad3509bfa767bd97820f634bd5e34e6eca0524464736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

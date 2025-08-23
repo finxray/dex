@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "PoolIDAssembly",
+  "sourceName": "contracts/Core/libraries/PoolIDAssembly.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220782bc1ddadc3f9224232282631817c3d73e35595530c847076c826ae8786bd3a64736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220782bc1ddadc3f9224232282631817c3d73e35595530c847076c826ae8786bd3a64736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

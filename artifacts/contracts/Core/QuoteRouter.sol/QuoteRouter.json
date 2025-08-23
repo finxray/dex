@@ -1,0 +1,219 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "QuoteRouter",
+  "sourceName": "contracts/Core/QuoteRouter.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "_decodeTwoBytes",
+      "outputs": [
+        {
+          "internalType": "bytes",
+          "name": "a",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "b",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "defaultData0Bridge",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "defaultData1Bridge",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "defaultData2Bridge",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "defaultData3Bridge",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "amount",
+              "type": "uint256[]"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes3[]",
+              "name": "marking",
+              "type": "bytes3[]"
+            }
+          ],
+          "internalType": "struct SwapParams",
+          "name": "p",
+          "type": "tuple"
+        },
+        {
+          "internalType": "uint128",
+          "name": "asset0Balance",
+          "type": "uint128"
+        },
+        {
+          "internalType": "uint128",
+          "name": "asset1Balance",
+          "type": "uint128"
+        }
+      ],
+      "name": "getQuote",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "quote",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "poolID",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "amount",
+              "type": "uint256[]"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes3[]",
+              "name": "marking",
+              "type": "bytes3[]"
+            }
+          ],
+          "internalType": "struct SwapParams",
+          "name": "p",
+          "type": "tuple"
+        },
+        {
+          "internalType": "uint128[]",
+          "name": "asset0Balances",
+          "type": "uint128[]"
+        },
+        {
+          "internalType": "uint128[]",
+          "name": "asset1Balances",
+          "type": "uint128[]"
+        }
+      ],
+      "name": "getQuoteBatch",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "quote",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "poolID",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
