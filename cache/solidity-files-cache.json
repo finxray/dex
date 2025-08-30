@@ -3973,6 +3973,359 @@
       "artifacts": [
         "UniversalDataAdapter"
       ]
+    },
+    "/Users/alexey/dex/contracts/Core/libraries/BatchOperations.sol": {
+      "lastModificationDate": 1756552837022,
+      "contentHash": "72a0ebdd0a4cb25ab3ac7a3998aaf31f",
+      "sourceName": "contracts/Core/libraries/BatchOperations.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./PoolIDAssembly.sol",
+        "./FlashAccounting.sol",
+        "../structs/PoolInfo.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "BatchOperations"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/libraries/ArbitrageDetector.sol": {
+      "lastModificationDate": 1756553046011,
+      "contentHash": "4e64f35ca08b8f1ba7fdcd68d4438e3f",
+      "sourceName": "contracts/Core/libraries/ArbitrageDetector.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/internal/quoters/IQuoter.sol",
+        "../structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "ArbitrageDetector"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/structs/ExtendedMarkings.sol": {
+      "lastModificationDate": 1756552837022,
+      "contentHash": "1cbd89e5fab8773f83b4a1e1417fb565",
+      "sourceName": "contracts/Core/structs/ExtendedMarkings.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./Markings.sol",
+        "../libraries/MarkingHelper.sol",
+        "./MEVProtectionLevel.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "ExtendedMarkings"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/structs/MEVProtectionLevel.sol": {
+      "lastModificationDate": 1756551863147,
+      "contentHash": "b6775cb8e18b14ab5c425870ab9c757e",
+      "sourceName": "contracts/Core/structs/MEVProtectionLevel.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MEVProtectionLevel"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/security/MEVProtection.sol": {
+      "lastModificationDate": 1756551863147,
+      "contentHash": "1cfb0a6f1295bdd5ee79075743f1682a",
+      "sourceName": "contracts/Core/security/MEVProtection.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../structs/MEVProtectionLevel.sol",
+        "../libraries/TransientStorage.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MEVProtection"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/libraries/MEVIntegration.sol": {
+      "lastModificationDate": 1756551863147,
+      "contentHash": "0cb916f92b28edfdd2d618d3fc98bb5a",
+      "sourceName": "contracts/Core/libraries/MEVIntegration.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../security/MEVProtection.sol",
+        "../structs/MEVProtectionLevel.sol",
+        "../structs/ExtendedMarkings.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MEVIntegration"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/PoolRegistry.sol": {
+      "lastModificationDate": 1756551058471,
+      "contentHash": "7a7bb3b7ed91dcea1c4ffac20ec2292d",
+      "sourceName": "contracts/Core/PoolRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./structs/PoolInfo.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "PoolRegistry"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/interfaces/internal/IPoolEvents.sol": {
+      "lastModificationDate": 1756551058471,
+      "contentHash": "3b05fb784ef821836f8570a398e16729",
+      "sourceName": "contracts/Core/interfaces/internal/IPoolEvents.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IPoolEvents"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/security/CircuitBreaker.sol": {
+      "lastModificationDate": 1756551058471,
+      "contentHash": "07f2c8a056c198ebbf71147dd177e49d",
+      "sourceName": "contracts/Core/security/CircuitBreaker.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "CircuitBreaker"
+      ]
     }
   }
 }

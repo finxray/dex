@@ -1,0 +1,464 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+// Core imports
+import {ERC6909Claims} from "./ERC6909Claims.sol";
+import {QuoteRouter} from "./QuoteRouter.sol";
+import {PoolManagerLib} from "./libraries/PoolManagerLib.sol";
+import {PoolIDAssembly} from "./libraries/PoolIDAssembly.sol";
+import {SwapParams} from "./structs/SwapParams.sol";
+import {Hop} from "./structs/Hop.sol";
+import {PoolInfo} from "./structs/PoolInfo.sol";
+import {ReentrancyGuard} from "./security/ReentrancyGuard.sol";
+import {FlashAccounting} from "./libraries/FlashAccounting.sol";
+import {IFlashCallback} from "./interfaces/internal/IFlashCallback.sol";
+
+// New component imports
+import {PoolRegistry} from "./PoolRegistry.sol";
+import {CircuitBreaker} from "./security/CircuitBreaker.sol";
+import {MEVProtection} from "./security/MEVProtection.sol";
+import {BatchOperations} from "./libraries/BatchOperations.sol";
+import {ArbitrageDetector} from "./libraries/ArbitrageDetector.sol";
+import {MEVIntegration} from "./libraries/MEVIntegration.sol";
+import {ExtendedMarkings} from "./structs/ExtendedMarkings.sol";
+import {IPoolEvents} from "./interfaces/internal/IPoolEvents.sol";
+
+// Custom errors
+error PoolManager__InsufficientWithdrawal(uint256 amount0, uint256 amount1);
+error PoolManager__InsufficientOutput(uint256 minOut, uint256 actual);
+error PoolManager__InvalidQuote();
+error PoolManager__Reentrancy();
+error PoolManager__CircuitBreakerTriggered(string reason);
+error PoolManager__MEVProtectionRequired(string reason);
+error PoolManager__PoolNotActive();
+
+/**
+ * @title PoolManagerV2
+ * @notice Enhanced PoolManager with all new protection and optimization features
+ * @dev Integrates PoolRegistry, CircuitBreaker, MEVProtection, and BatchOperations
+ */
+contract PoolManagerV2 is ERC6909Claims, QuoteRouter, ReentrancyGuard, IPoolEvents {
+    using PoolManagerLib for PoolManagerLib.PoolManagerStorage;
+    using ExtendedMarkings for bytes4;
+    
+    /*//////////////////////////////////////////////////////////////
+                                 STATE
+    //////////////////////////////////////////////////////////////*/
+    
+    // Core storage
+    PoolManagerLib.PoolManagerStorage private _storage;
+    
+    // New component contracts
+    PoolRegistry public immutable poolRegistry;
+    CircuitBreaker public immutable circuitBreaker;
+    MEVProtection public immutable mevProtection;
+    
+    // Arbitrage tracking
+    mapping(uint256 => ArbitrageDetector.PoolPriceInfo) public poolPrices;
+    
+    /*//////////////////////////////////////////////////////////////
+                                CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+    
+    constructor(
+        address _defaultData0Bridge,
+        address _defaultData1Bridge,
+        address _defaultData2Bridge,
+        address _defaultData3Bridge
+    ) QuoteRouter(_defaultData0Bridge, _defaultData1Bridge, _defaultData2Bridge, _defaultData3Bridge) {
+        // Deploy new components
+        poolRegistry = new PoolRegistry(address(this));
+        circuitBreaker = new CircuitBreaker(address(this));
+        mevProtection = new MEVProtection(address(this));
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                            POOL CREATION
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Creates a new pool with extended configuration
+    function createPool(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings
+    ) external nonReentrant returns (uint256 poolID) {
+        // Create pool using library
+        poolID = PoolManagerLib.createPool(_storage, asset0, asset1, quoter, markings);
+        
+        // Register in PoolRegistry
+        poolRegistry.registerPool(poolID, asset0, asset1, quoter, markings);
+        
+        // Configure MEV protection if specified
+        bytes4 extended = bytes4(uint32(uint24(markings)) << 8);
+        if (extended.requiresMEVProtection()) {
+            ExtendedMarkings.ExtendedPoolConfig memory config = extended.decode();
+            mevProtection.configurePoolProtection(
+                poolID,
+                config.mevProtection,
+                1 ether // Default threshold
+            );
+        }
+        
+        // Set default circuit breaker limits
+        circuitBreaker.setPoolLimits(
+            poolID,
+            100 ether,      // maxSwapSize
+            10000 ether,    // dailyVolumeLimit
+            1 minutes,      // cooldownPeriod
+            500            // maxPriceImpact (5%)
+        );
+        
+        emit PoolCreated(poolID, asset0, asset1, quoter, markings, block.timestamp);
+    }
+    
+    /// @notice Create pool with full extended configuration
+    function createPoolExtended(
+        address asset0,
+        address asset1,
+        address quoter,
+        ExtendedMarkings.ExtendedPoolConfig memory config
+    ) external nonReentrant returns (uint256 poolID) {
+        bytes4 extended = ExtendedMarkings.encode(config);
+        bytes3 markings = bytes3(extended);
+        
+        // Create pool
+        poolID = PoolManagerLib.createPool(_storage, asset0, asset1, quoter, markings);
+        
+        // Register with all metadata
+        poolRegistry.registerPool(poolID, asset0, asset1, quoter, markings);
+        
+        // Configure MEV protection
+        if (config.mevProtection > 0) {
+            mevProtection.configurePoolProtection(
+                poolID,
+                config.mevProtection,
+                1 ether
+            );
+        }
+        
+        emit PoolCreated(poolID, asset0, asset1, quoter, markings, block.timestamp);
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                            LIQUIDITY OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Add liquidity with circuit breaker and event tracking
+    function addLiquidity(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amount0,
+        uint256 amount1
+    ) external payable nonReentrant returns (uint256 liquidity) {
+        uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
+        
+        // Check if pool is active
+        if (!poolRegistry.isPoolActive(poolID)) {
+            revert PoolManager__PoolNotActive();
+        }
+        
+        // Check circuit breaker
+        (bool allowed, string memory reason) = circuitBreaker.checkOperation(
+            poolID,
+            amount0 + amount1,
+            false
+        );
+        if (!allowed) {
+            revert PoolManager__CircuitBreakerTriggered(reason);
+        }
+        
+        // Execute liquidity addition
+        liquidity = PoolManagerLib.addLiquidity(
+            _storage,
+            asset0,
+            asset1,
+            quoter,
+            markings,
+            amount0,
+            amount1,
+            msg.value,
+            msg.sender
+        );
+        
+        // Update registry statistics
+        poolRegistry.recordLiquidityEvent(poolID, _storage.totalLiquidity[poolID]);
+        
+        // Record success in circuit breaker
+        circuitBreaker.recordSuccess(poolID, amount0 + amount1, false);
+        
+        emit LiquidityAdded(
+            poolID,
+            msg.sender,
+            amount0,
+            amount1,
+            liquidity,
+            _storage.totalLiquidity[poolID]
+        );
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                            SWAP OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Execute swap with full protection suite
+    function swap(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
+        
+        // Check pool is active
+        if (!poolRegistry.isPoolActive(poolID)) {
+            revert PoolManager__PoolNotActive();
+        }
+        
+        // MEV protection checks
+        bytes4 extended = bytes4(uint32(uint24(markings)) << 8);
+        MEVIntegration.MEVContext memory mevContext = MEVIntegration.checkSwapMEV(
+            mevProtection,
+            poolID,
+            msg.sender,
+            amountIn,
+            extended
+        );
+        
+        if (!mevContext.canProceed) {
+            revert PoolManager__MEVProtectionRequired(mevContext.rejectReason);
+        }
+        
+        // Circuit breaker checks
+        (bool allowed, string memory reason) = circuitBreaker.checkOperation(
+            poolID,
+            amountIn,
+            amountIn > 10 ether // Large operation threshold
+        );
+        if (!allowed) {
+            revert PoolManager__CircuitBreakerTriggered(reason);
+        }
+        
+        // Apply MEV fee adjustments
+        uint256 effectiveAmountIn = amountIn;
+        if (mevContext.adjustedFee > 0) {
+            uint256 feeAmount = (amountIn * mevContext.adjustedFee) / 10000;
+            effectiveAmountIn = amountIn - feeAmount;
+            // Fee applied event would go here
+        }
+        
+        // Execute swap
+        amountOut = PoolManagerLib.executeSwap(
+            _storage,
+            asset0,
+            asset1,
+            quoter,
+            markings,
+            effectiveAmountIn,
+            zeroForOne,
+            msg.value,
+            msg.sender,
+            address(this)
+        );
+        
+        if (amountOut < minAmountOut) {
+            revert PoolManager__InsufficientOutput(minAmountOut, amountOut);
+        }
+        
+        // Update statistics
+        poolRegistry.recordSwap(poolID, amountIn, amountIn, mevContext.adjustedFee);
+        circuitBreaker.recordSuccess(poolID, amountIn, amountIn > 10 ether);
+        
+        // Check for arbitrage opportunities
+        _checkArbitrage(poolID, amountIn, amountOut, zeroForOne);
+        
+        emit SwapExecuted(
+            poolID,
+            msg.sender,
+            zeroForOne,
+            amountIn,
+            amountOut,
+            _getCurrentPrice(poolID),
+            mevContext.adjustedFee
+        );
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                        BATCH OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Add liquidity to multiple pools atomically
+    function batchAddLiquidity(
+        BatchOperations.BatchLiquidityParams calldata params
+    ) external payable nonReentrant returns (
+        uint256[] memory poolIds,
+        uint256[] memory liquidities
+    ) {
+        // Check all pools are active
+        for (uint256 i = 0; i < params.markings.length; i++) {
+            uint256 poolId = PoolIDAssembly.assemblePoolID(
+                params.asset0,
+                params.asset1,
+                params.quoter,
+                params.markings[i]
+            );
+            if (!poolRegistry.isPoolActive(poolId)) {
+                revert PoolManager__PoolNotActive();
+            }
+        }
+        
+        // Execute batch operation
+        (poolIds, liquidities) = BatchOperations.batchAddLiquidity(
+            _storage.totalLiquidity,
+            _storage.poolInventories,
+            params,
+            msg.sender
+        );
+        
+        // Settle all deltas
+        address[] memory tokens = new address[](2);
+        tokens[0] = params.asset0;
+        tokens[1] = params.asset1;
+        PoolManagerLib.settleUserTokens(msg.sender, tokens, msg.value);
+    }
+    
+    /// @notice Create multiple pools in one transaction
+    function batchCreatePools(
+        BatchOperations.BatchPoolCreation calldata params
+    ) external nonReentrant returns (BatchOperations.BatchResult memory result) {
+        result = BatchOperations.batchCreatePools(_storage.poolInfos, params);
+        
+        // Register successful pools
+        for (uint256 i = 0; i < result.success.length; i++) {
+            if (result.success[i]) {
+                poolRegistry.registerPool(
+                    result.values[i],
+                    params.asset0s[i],
+                    params.asset1s[i],
+                    params.quoters[i],
+                    params.markings[i]
+                );
+            }
+        }
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                        COMMIT-REVEAL SWAPS
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Commit to a swap (MEV protection phase 1)
+    function commitSwap(
+        uint256 poolId,
+        bytes32 commitHash
+    ) external returns (uint256 revealDeadline) {
+        return mevProtection.commitTrade(poolId, commitHash);
+    }
+    
+    /// @notice Reveal and execute committed swap (phase 2)
+    function revealSwap(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut,
+        uint256 nonce
+    ) external payable returns (uint256 amountOut) {
+        uint256 poolId = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
+        
+        // Verify commitment
+        require(
+            mevProtection.verifyAndReveal(
+                poolId,
+                msg.sender,
+                amountIn,
+                zeroForOne,
+                minAmountOut,
+                nonce
+            ),
+            "Invalid reveal"
+        );
+        
+        // Execute swap (protection already verified)
+        return this.swap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut);
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                        HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    
+    function _checkArbitrage(
+        uint256 poolId,
+        uint256 amountIn,
+        uint256 amountOut,
+        bool zeroForOne
+    ) private {
+        // Update pool price info
+        uint256 price = zeroForOne 
+            ? (amountOut * 1e18) / amountIn
+            : (amountIn * 1e18) / amountOut;
+            
+        poolPrices[poolId] = ArbitrageDetector.PoolPriceInfo({
+            poolId: poolId,
+            price: price,
+            liquidity: _storage.totalLiquidity[poolId],
+            quoter: _storage.poolInfos[poolId].quoter,
+            lastUpdate: block.timestamp
+        });
+        
+        // Emit event if significant price change
+        emit PriceUpdated(poolId, price, price, block.timestamp);
+    }
+    
+    function _getCurrentPrice(uint256 poolId) private view returns (uint256) {
+        return poolPrices[poolId].price;
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                        ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Emergency pause a pool
+    function pausePool(uint256 poolId, uint256 duration) external {
+        require(msg.sender == address(this), "Only governance");
+        circuitBreaker.pausePool(poolId, duration);
+        emit EmergencyPause(poolId, msg.sender, "Admin pause", duration);
+    }
+    
+    /// @notice Resume a paused pool
+    function resumePool(uint256 poolId) external {
+        require(msg.sender == address(this), "Only governance");
+        circuitBreaker.resumePool(poolId);
+        emit EmergencyResume(poolId, msg.sender);
+    }
+    
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    
+    function getPoolInfo(uint256 poolID) external view returns (
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings
+    ) {
+        PoolInfo memory poolInfo = PoolManagerLib.getPoolInfo(_storage, poolID);
+        return (poolInfo.asset0, poolInfo.asset1, poolInfo.quoter, poolInfo.markings);
+    }
+    
+    function totalLiquidity(uint256 poolID) external view returns (uint256) {
+        return _storage.totalLiquidity[poolID];
+    }
+    
+    function getInventory(uint256 poolId) external view returns (uint128 asset0, uint128 asset1) {
+        uint256 packed = _storage.poolInventories[poolId];
+        asset0 = uint128(packed);
+        asset1 = uint128(packed >> 128);
+    }
+}
