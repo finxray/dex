@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "SimpleDataAdapterLibrary",
+  "sourceName": "contracts/Peripheral/quoters/adapters/SimpleDataAdapterLibrary.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220d99315e97475c9c3cac11391e42b10ae989dcffd941fd6be4be7ea354ad9b0ed64736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220d99315e97475c9c3cac11391e42b10ae989dcffd941fd6be4be7ea354ad9b0ed64736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

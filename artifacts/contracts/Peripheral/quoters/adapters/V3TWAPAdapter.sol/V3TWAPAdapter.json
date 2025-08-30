@@ -1,0 +1,35 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "V3TWAPAdapter",
+  "sourceName": "contracts/Peripheral/quoters/adapters/V3TWAPAdapter.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "rawData",
+          "type": "bytes"
+        }
+      ],
+      "name": "decodeV3TWAPData",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "spot",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "twap",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

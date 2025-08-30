@@ -1,0 +1,72 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MockChainlinkBridge",
+  "sourceName": "contracts/Peripheral/DataBridges/dummy/MockChainlinkBridge.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset0Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset1Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint16",
+              "name": "bucketID",
+              "type": "uint16"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            }
+          ],
+          "internalType": "struct QuoteParams",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "name": "getData",
+      "outputs": [
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x608080604052346015576101c6908161001a8239f35b5f80fdfe6080806040526004361015610012575f80fd5b5f3560e01c633bd1104b14610025575f80fd5b3461018c5761010036600319011261018c57610100810181811067ffffffffffffffff821117610164576040526004356001600160a01b038116810361018c5781526024356001600160a01b038116810361018c5760208201526044356001600160a01b038116810361018c57604082015260643560608201526084356001600160801b038116810361018c57608082015260a4356001600160801b038116810361018c5760a082015260c43561ffff8116810361018c5760c082015260e43590811515820361018c5760e00152603b19420142811161017857604051602081019168e88fb5ae9b19c800008352604082015260408152606081019080821067ffffffffffffffff8311176101645760409182528151928391602083525180918160208501528484015e5f828201840152601f01601f19168101030190f35b634e487b7160e01b5f52604160045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b5f80fdfea2646970667358221220416210df86ce9bdb24cc3a8034162637ad5f0e61de42eb8495f95702fd0b3c2264736f6c634300081e0033",
+  "deployedBytecode": "0x6080806040526004361015610012575f80fd5b5f3560e01c633bd1104b14610025575f80fd5b3461018c5761010036600319011261018c57610100810181811067ffffffffffffffff821117610164576040526004356001600160a01b038116810361018c5781526024356001600160a01b038116810361018c5760208201526044356001600160a01b038116810361018c57604082015260643560608201526084356001600160801b038116810361018c57608082015260a4356001600160801b038116810361018c5760a082015260c43561ffff8116810361018c5760c082015260e43590811515820361018c5760e00152603b19420142811161017857604051602081019168e88fb5ae9b19c800008352604082015260408152606081019080821067ffffffffffffffff8311176101645760409182528151928391602083525180918160208501528484015e5f828201840152601f01601f19168101030190f35b634e487b7160e01b5f52604160045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b5f80fdfea2646970667358221220416210df86ce9bdb24cc3a8034162637ad5f0e61de42eb8495f95702fd0b3c2264736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

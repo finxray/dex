@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "DataAdapterLibrary",
+  "sourceName": "contracts/Peripheral/quoters/adapters/DataAdapterLibrary.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220b343051381ec4f416a373b23c87c5ab2d98e97652af6bdb6b8f8932e692dbd5b64736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220b343051381ec4f416a373b23c87c5ab2d98e97652af6bdb6b8f8932e692dbd5b64736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

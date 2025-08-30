@@ -1,0 +1,35 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "RedStoneAdapter",
+  "sourceName": "contracts/Peripheral/quoters/adapters/RedStoneAdapter.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "rawData",
+          "type": "bytes"
+        }
+      ],
+      "name": "decodeRedStoneData",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "spot",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "updatedAt",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
