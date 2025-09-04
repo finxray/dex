@@ -6,6 +6,9 @@ error PoolManager__InsufficientWithdrawal(uint256 amount0, uint256 amount1);
 error PoolManager__InsufficientOutput(uint256 minOut, uint256 actual);
 error PoolManager__InvalidQuote();
 error PoolManager__Reentrancy();
+error PoolManager__InvalidInitialAmounts();
+error PoolManager__InvalidLiquidityAmount();
+error PoolManager__NoLiquidity();
 
 import {ERC6909Claims} from "./ERC6909Claims.sol";
 import {QuoteRouter} from "./QuoteRouter.sol";
@@ -123,7 +126,7 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         // Define rate as asset0 per 1e18 units of asset1 (1e18 fixed point)
         uint256 rate;
         if (_storage.totalLiquidity[poolID] == 0) {
-            require(amt0 > 0 && amt1 > 0, "Invalid initial amounts");
+            if (!(amt0 > 0 && amt1 > 0)) revert PoolManager__InvalidInitialAmounts();
             rate = (amt0 * 1e18) / amt1;
         } else {
             SwapParams memory p = SwapParams({
@@ -177,14 +180,14 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         bytes3 markings,
         uint256 liquidity
     ) external nonReentrant returns (uint256 amount0, uint256 amount1) {
-        require(liquidity > 0, "Invalid liquidity amount");
+        if (liquidity == 0) revert PoolManager__InvalidLiquidityAmount();
         
         // Calculate poolID on-the-fly
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
         // Get current pool balances
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
-        require(_storage.totalLiquidity[poolID] > 0, "No liquidity in pool");
+        if (!(_storage.totalLiquidity[poolID] > 0)) revert PoolManager__NoLiquidity();
         
         // Calculate proportional amounts - simple math, inline
         amount0 = (liquidity * poolAsset0) / _storage.totalLiquidity[poolID];

@@ -8,10 +8,17 @@ import {IUniswapV3FactoryLike} from "../../../Core/interfaces/external/uniswap/I
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {BaseAlias} from "./BaseAlias.sol";
 
+error Math__DivByZero();
+error Math__Overflow();
+
 contract UniswapV3DataBridge is IDataBridge, BaseAlias {
     address public immutable factory;
     uint24 public immutable fee;
     
+    error UniswapV3__PoolMissing();
+    error UniswapV3__PoolUninitialized();
+    error UniswapV3__SpotZero();
+    error UniswapV3__PairMismatch();
 
     constructor(address _factory, uint24 _fee, uint24 /*_window*/, address _ext0, address _ext1, address _alias0, address _alias1)
         BaseAlias(_ext0, _ext1, _alias0, _alias1)
@@ -20,10 +27,10 @@ contract UniswapV3DataBridge is IDataBridge, BaseAlias {
     function getData(QuoteParams memory params) external view override returns (bytes memory) {
         (address a, address b) = _sortedCanonical();
         address pool = IUniswapV3FactoryLike(factory).getPool(a, b, fee);
-        require(pool != address(0), "UniswapV3: pool missing");
+        if (pool == address(0)) revert UniswapV3__PoolMissing();
         IUniswapV3PoolLike p = IUniswapV3PoolLike(pool);
         (uint160 sqrtPriceX96, ,,,,,) = p.slot0();
-        require(sqrtPriceX96 != 0, "UniswapV3: pool uninitialized");
+        if (sqrtPriceX96 == 0) revert UniswapV3__PoolUninitialized();
         address t0 = p.token0();
         address t1 = p.token1();
         uint8 d0 = IERC20Metadata(t0).decimals();
@@ -38,10 +45,10 @@ contract UniswapV3DataBridge is IDataBridge, BaseAlias {
             spot = price1Per0;
         } else if (params.asset0 == t0 && params.asset1 == t1) {
             // want token0 per token1
-            require(price1Per0 > 0, "spot=0");
+            if (!(price1Per0 > 0)) revert UniswapV3__SpotZero();
             spot = (1e36) / price1Per0;
         } else {
-            revert("pair mismatch");
+            revert UniswapV3__PairMismatch();
         }
         return abi.encode(spot, spot);
     }
@@ -70,11 +77,11 @@ function mulDiv(uint256 a, uint256 b, uint256 denominator) pure returns (uint256
             prod1 := sub(sub(mm, prod0), lt(mm, prod0))
         }
         if (prod1 == 0) {
-            require(denominator > 0, "div0");
+            if (!(denominator > 0)) revert Math__DivByZero();
             assembly { result := div(prod0, denominator) }
             return result;
         }
-        require(denominator > prod1, "oflow");
+        if (!(denominator > prod1)) revert Math__Overflow();
         uint256 remainder;
         assembly {
             remainder := mulmod(a, b, denominator)

@@ -31,12 +31,15 @@ contract ERC6909Extended {
         emit ApprovalForAll(msg.sender, operator, approved);
     }
     
+    error ERC6909__InsufficientBalance();
+    error ERC6909__NotApproved();
+
     function transfer(
         address to,
         uint256 id,
         uint256 amount
     ) external returns (bool) {
-        require(balanceOf[id][msg.sender] >= amount, "Insufficient balance");
+        if (balanceOf[id][msg.sender] < amount) revert ERC6909__InsufficientBalance();
         balanceOf[id][msg.sender] -= amount;
         balanceOf[id][to] += amount;
         emit Transfer(msg.sender, to, id, amount);
@@ -49,11 +52,8 @@ contract ERC6909Extended {
         uint256 id,
         uint256 amount
     ) external returns (bool) {
-        require(
-            from == msg.sender || isApprovedForAll[from][msg.sender],
-            "Not approved"
-        );
-        require(balanceOf[id][from] >= amount, "Insufficient balance");
+        if (!(from == msg.sender || isApprovedForAll[from][msg.sender])) revert ERC6909__NotApproved();
+        if (balanceOf[id][from] < amount) revert ERC6909__InsufficientBalance();
         
         balanceOf[id][from] -= amount;
         balanceOf[id][to] += amount;
@@ -67,7 +67,7 @@ contract ERC6909Extended {
     }
     
     function _burn(address from, uint256 id, uint256 amount) internal {
-        require(balanceOf[id][from] >= amount, "Insufficient balance");
+        if (balanceOf[id][from] < amount) revert ERC6909__InsufficientBalance();
         balanceOf[id][from] -= amount;
         emit Transfer(from, address(0), id, amount);
     }

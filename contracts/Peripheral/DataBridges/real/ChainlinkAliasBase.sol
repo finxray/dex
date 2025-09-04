@@ -15,11 +15,13 @@ abstract contract ChainlinkAliasBase {
     // Optional additional aliases provided by deployer
     mapping(address => address) internal baseAlias; // token -> canonical sentinel/base
 
+    error ChainlinkAliasBase__AliasLengthMismatch();
+
     constructor(address[] memory aliases, address[] memory targets) {
         // Defaults
         baseAlias[WETH_MAINNET] = ETH_SENTINEL;
         baseAlias[WBTC_MAINNET] = BTC_SENTINEL;
-        require(aliases.length == targets.length, "alias len");
+        if (aliases.length != targets.length) revert ChainlinkAliasBase__AliasLengthMismatch();
         for (uint256 i = 0; i < aliases.length; i++) {
             baseAlias[aliases[i]] = targets[i];
         }

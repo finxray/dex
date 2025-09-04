@@ -11,6 +11,9 @@ abstract contract RedstoneOnDemandBridge is IDataBridge, RedstoneConsumerNumeric
     
     event DebugValues(uint256 p0, uint256 p1, uint8 d0, uint8 d1, uint256 spot, uint256 ts);
 
+    error RedstoneOnDemandBridge__BadPrice();
+    error RedstoneOnDemandBridge__P1Zero();
+
     constructor(address _aliasRegistry) { aliasRegistry = _aliasRegistry; }
 
     // Returns abi.encode(spot1e18, updatedAtMilliseconds)
@@ -27,8 +30,8 @@ abstract contract RedstoneOnDemandBridge is IDataBridge, RedstoneConsumerNumeric
         (uint256[] memory vals, uint256 ts) = getOracleNumericValuesAndTimestampFromTxMsg(ids);
         uint256 p0 = vals[0]; // asset0 in USD (1e{d0})
         uint256 p1 = vals[1]; // asset1 in USD (1e{d1})
-        require(p0 > 0 && p1 > 0, "bad price");
-        require(p1 != 0, "p1 zero");
+        if (!(p0 > 0 && p1 > 0)) revert RedstoneOnDemandBridge__BadPrice();
+        if (p1 == 0) revert RedstoneOnDemandBridge__P1Zero();
         // RedStone USD feeds appear to be in 18 decimal format
         // Calculate spot with proper precision: (p0 * 1e18) / p1
         // This preserves decimal places instead of truncating like p0/p1 would

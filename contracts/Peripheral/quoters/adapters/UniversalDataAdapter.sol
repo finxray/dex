@@ -151,7 +151,7 @@ library UniversalDataAdapter {
         NormalizedPriceData[] memory prices,
         uint256[] memory weights
     ) internal view returns (NormalizedPriceData memory) {
-        require(prices.length == weights.length, "Length mismatch");
+        if (prices.length != weights.length) revert();
         
         uint256 totalSpot = 0;
         uint256 totalTwap = 0;

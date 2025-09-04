@@ -2,7 +2,13 @@
   "_format": "hh-sol-artifact-1",
   "contractName": "ChainlinkAliasBase",
   "sourceName": "contracts/Peripheral/DataBridges/real/ChainlinkAliasBase.sol",
-  "abi": [],
+  "abi": [
+    {
+      "inputs": [],
+      "name": "ChainlinkAliasBase__AliasLengthMismatch",
+      "type": "error"
+    }
+  ],
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "linkReferences": {},

@@ -27,7 +27,8 @@ contract TokenAliasRegistry is ITokenAliasRegistry {
     address constant ETH_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address constant BTC_SENTINEL = address(0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB);
 
-    modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
+    error TokenAliasRegistry__NotOwner();
+    modifier onlyOwner() { if (msg.sender != owner) revert TokenAliasRegistry__NotOwner(); _; }
 
     constructor() {
         owner = msg.sender;

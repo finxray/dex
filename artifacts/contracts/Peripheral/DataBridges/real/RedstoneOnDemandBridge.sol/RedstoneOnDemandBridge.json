@@ -87,6 +87,16 @@
     },
     {
       "inputs": [],
+      "name": "RedstoneOnDemandBridge__BadPrice",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "RedstoneOnDemandBridge__P1Zero",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "RedstonePayloadMustHaveAtLeastOneDataPackage",
       "type": "error"
     },

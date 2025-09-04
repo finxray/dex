@@ -14,6 +14,11 @@ contract ChainlinkDataBridge is IDataBridge {
 
     address internal constant USD_SENTINEL = address(840);
 
+    error Chainlink__DenominatorZero();
+    error Chainlink__BadAnswer();
+    error Chainlink__BadInverse();
+    error Chainlink__FeedMissing();
+
     constructor(address _registry, address _aliasRegistry) {
         registry = _registry;
         aliasRegistry = _aliasRegistry;
@@ -26,7 +31,7 @@ contract ChainlinkDataBridge is IDataBridge {
         (uint256 p1, uint8 d1, uint256 u1) = _latestUsd(b1);
         uint256 num = p0 * (10 ** (18 + d1));
         uint256 den = p1 * (10 ** d0);
-        require(den != 0, "den=0");
+        if (den == 0) revert Chainlink__DenominatorZero();
         uint256 spot = num / den;
         uint256 updatedAt = u0 < u1 ? u0 : u1;
         return abi.encode(spot, updatedAt);
@@ -41,18 +46,18 @@ contract ChainlinkDataBridge is IDataBridge {
         IChainlinkFeedRegistry r = IChainlinkFeedRegistry(registry);
         // Try base/USD
         try r.latestRoundData(base, USD_SENTINEL) returns (uint80, int256 answer, uint256, uint256 updatedAt, uint80) {
-            require(answer > 0, "bad ans");
+            if (!(answer > 0)) revert Chainlink__BadAnswer();
             uint8 dec = r.decimals(base, USD_SENTINEL);
             return (uint256(answer), dec, updatedAt);
         } catch {}
         // Try USD/base and invert
         try r.latestRoundData(USD_SENTINEL, base) returns (uint80, int256 answerInv, uint256, uint256 updatedAtInv, uint80) {
-            require(answerInv > 0, "bad inv");
+            if (!(answerInv > 0)) revert Chainlink__BadInverse();
             uint8 decInv = r.decimals(USD_SENTINEL, base);
             uint256 tenPow = 10 ** decInv;
             uint256 p = (tenPow * tenPow) / uint256(answerInv);
             return (p, decInv, updatedAtInv);
         } catch {}
-        revert("feed missing");
+        revert Chainlink__FeedMissing();
     }
 }

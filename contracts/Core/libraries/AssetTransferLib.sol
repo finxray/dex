@@ -4,6 +4,9 @@ pragma solidity ^0.8.30;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 library AssetTransferLib {
+    error AssetTransferLib__IncorrectEthSent();
+    error AssetTransferLib__EthNotExpected();
+    error AssetTransferLib__Erc20TransferFailed();
     /// @notice Handles transfer of ERC20 or ETH from user to contract
     /// @param asset The asset address (address(0) for ETH)
     /// @param from The sender address
@@ -12,11 +15,11 @@ library AssetTransferLib {
     function transferIn(address asset, address from, uint256 amount, uint256 msgValue) internal {
         if (asset == address(0)) {
             // ETH
-            require(msgValue == amount, "Incorrect ETH sent");
+            if (msgValue != amount) revert AssetTransferLib__IncorrectEthSent();
         } else {
             // ERC20
-            require(msgValue == 0, "ETH not expected");
-            require(IERC20(asset).transferFrom(from, address(this), amount), "ERC20 transfer failed");
+            if (msgValue != 0) revert AssetTransferLib__EthNotExpected();
+            if (!IERC20(asset).transferFrom(from, address(this), amount)) revert AssetTransferLib__Erc20TransferFailed();
         }
     }
 
@@ -30,7 +33,7 @@ library AssetTransferLib {
             payable(recipient).transfer(amount);
         } else {
             // ERC20
-            require(IERC20(asset).transfer(recipient, amount), "ERC20 transfer failed");
+            if (!IERC20(asset).transfer(recipient, amount)) revert AssetTransferLib__Erc20TransferFailed();
         }
     }
 } 

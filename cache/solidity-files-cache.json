@@ -311,8 +311,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/PoolManager.sol": {
-      "lastModificationDate": 1755885740640,
-      "contentHash": "daa2982fe14c669447cb5e76fa9655e8",
+      "lastModificationDate": 1757003670073,
+      "contentHash": "8cb9a08680a60e39ef740665a9e7bd51",
       "sourceName": "contracts/Core/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -549,7 +549,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1755888437297,
+      "lastModificationDate": 1755888465074,
       "contentHash": "d535a097428713381e63c76e2020581b",
       "sourceName": "contracts/Core/libraries/PoolManagerLib.sol",
       "solcConfig": {
@@ -893,8 +893,8 @@
       "artifacts": []
     },
     "/Users/alexey/dex/contracts/Core/libraries/AssetTransferLib.sol": {
-      "lastModificationDate": 1753721873234,
-      "contentHash": "4e3007bcf1783af33aa368080e0a673f",
+      "lastModificationDate": 1757003670091,
+      "contentHash": "a1ed0d92f1cd369a5e546217683459ff",
       "sourceName": "contracts/Core/libraries/AssetTransferLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1128,8 +1128,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/ERC6909Extended.sol": {
-      "lastModificationDate": 1755882562136,
-      "contentHash": "2d6c6a233dc86e04915e3b9c9043c0df",
+      "lastModificationDate": 1757003670091,
+      "contentHash": "a3bb24abd4f9d6bb805783800c0aeb05",
       "sourceName": "contracts/Core/ERC6909Extended.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1873,8 +1873,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/UniswapV3DataBridge.sol": {
-      "lastModificationDate": 1755971746984,
-      "contentHash": "7914ded9bb7b128939f689d8257c0ac3",
+      "lastModificationDate": 1757003670073,
+      "contentHash": "243f672726e2338888f84ac2bc38f58f",
       "sourceName": "contracts/Peripheral/DataBridges/real/UniswapV3DataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1954,8 +1954,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/UniswapV2DataBridge.sol": {
-      "lastModificationDate": 1755971734175,
-      "contentHash": "eb8321a7300ad0fb5324034db6b66d50",
+      "lastModificationDate": 1757003670073,
+      "contentHash": "2b697f99937af91c925ad8e4e8fe3ed4",
       "sourceName": "contracts/Peripheral/DataBridges/real/UniswapV2DataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2036,8 +2036,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/SushiV2DataBridge.sol": {
-      "lastModificationDate": 1755971774089,
-      "contentHash": "cd475b6ccfe541b0e72ad6d860ca112a",
+      "lastModificationDate": 1757003670091,
+      "contentHash": "47b431b517c6a391553ba4c5813e8042",
       "sourceName": "contracts/Peripheral/DataBridges/real/SushiV2DataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2193,8 +2193,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/UniswapV3TWAPDataBridge.sol": {
-      "lastModificationDate": 1755972505784,
-      "contentHash": "7323031114d2b0edc05323c6e357e38d",
+      "lastModificationDate": 1757003670088,
+      "contentHash": "b34b3f571182ff188c639415b723fc96",
       "sourceName": "contracts/Peripheral/DataBridges/real/UniswapV3TWAPDataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2237,8 +2237,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/ChainlinkDataBridge.sol": {
-      "lastModificationDate": 1755946843942,
-      "contentHash": "0cfd2d0922707cd472e6d9bf7126a29e",
+      "lastModificationDate": 1757003670091,
+      "contentHash": "ef60c044e89067a4ea6079feb958f9bf",
       "sourceName": "contracts/Peripheral/DataBridges/real/ChainlinkDataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2354,8 +2354,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/ChainlinkAliasBase.sol": {
-      "lastModificationDate": 1755941443123,
-      "contentHash": "7b4da0b8dc5b33dac862b95e729e3751",
+      "lastModificationDate": 1757003670091,
+      "contentHash": "0d86edc288b7360b342edf0d27009480",
       "sourceName": "contracts/Peripheral/DataBridges/real/ChainlinkAliasBase.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2391,8 +2391,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/RedstoneDataBridge.sol": {
-      "lastModificationDate": 1755946843942,
-      "contentHash": "22e4dc773dcbdad015490f772d303765",
+      "lastModificationDate": 1757003691603,
+      "contentHash": "07081b929a8ea276515a8c4cb35ae04b",
       "sourceName": "contracts/Peripheral/DataBridges/real/RedstoneDataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2470,8 +2470,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/MockRedstoneAdapter.sol": {
-      "lastModificationDate": 1755943034251,
-      "contentHash": "9b166ba1ffa715358f28209bdf736d1c",
+      "lastModificationDate": 1757003670092,
+      "contentHash": "0eda29f8d5a98b3147cff0101d1de3dc",
       "sourceName": "contracts/Peripheral/DataBridges/real/MockRedstoneAdapter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2546,8 +2546,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/TokenAliasRegistry.sol": {
-      "lastModificationDate": 1755970530928,
-      "contentHash": "67147fa9c26546275ece79a1b5587815",
+      "lastModificationDate": 1757003670092,
+      "contentHash": "abcc5c2399fbfee0b1364793a4283ca7",
       "sourceName": "contracts/Peripheral/DataBridges/real/TokenAliasRegistry.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2585,8 +2585,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/RedstoneOnDemandBridge.sol": {
-      "lastModificationDate": 1755971469920,
-      "contentHash": "50979fee5bc54700e6f2b8a1b4b786dd",
+      "lastModificationDate": 1757003670073,
+      "contentHash": "8e4ac22b1364a894b1e152a398496f72",
       "sourceName": "contracts/Peripheral/DataBridges/real/RedstoneOnDemandBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -2935,7 +2935,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/RedstoneOnDemandBridgeImpl.sol": {
-      "lastModificationDate": 1755967273191,
+      "lastModificationDate": 1755972605781,
       "contentHash": "5ca117fc0bc294dbb5e68f08f10aa3cc",
       "sourceName": "contracts/Peripheral/DataBridges/real/RedstoneOnDemandBridgeImpl.sol",
       "solcConfig": {
@@ -3092,129 +3092,6 @@
       ],
       "artifacts": [
         "PrimaryDemoDataServiceConsumerBase"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Peripheral/quoters/dummyRealData/V3TWAPChainlinkQuoter.sol": {
-      "lastModificationDate": 1756482381449,
-      "contentHash": "f9a355caeed4c8e70884d483711785bc",
-      "sourceName": "contracts/Peripheral/quoters/dummyRealData/V3TWAPChainlinkQuoter.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../../../Core/structs/QuoteParams.sol",
-        "../../../Core/interfaces/internal/IDataBridge.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "V3TWAPChainlinkQuoter"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Peripheral/quoters/dummyRealData/V3DataRedStoneQuoter.sol": {
-      "lastModificationDate": 1756482400958,
-      "contentHash": "33164d103da65d8522f3a022b86d931e",
-      "sourceName": "contracts/Peripheral/quoters/dummyRealData/V3DataRedStoneQuoter.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../../../Core/structs/QuoteParams.sol",
-        "../../../Core/interfaces/internal/IDataBridge.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "V3DataRedStoneQuoter"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Peripheral/quoters/dummyRealData/V2V3TWAPQuoter.sol": {
-      "lastModificationDate": 1756482402926,
-      "contentHash": "cc5ef501b673bd7f06a17663c06210b6",
-      "sourceName": "contracts/Peripheral/quoters/dummyRealData/V2V3TWAPQuoter.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../../../Core/structs/QuoteParams.sol",
-        "../../../Core/interfaces/internal/IDataBridge.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "V2V3TWAPQuoter"
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/MockV3TWAPBridge.sol": {
@@ -3457,49 +3334,6 @@
         "MockChainlinkBridge"
       ]
     },
-    "/Users/alexey/dex/contracts/Peripheral/quoters/dummyRealData/V3TWAPChainlinkQuoterFixed.sol": {
-      "lastModificationDate": 1756548335475,
-      "contentHash": "2b3dd84957bc57da312482179a6b833c",
-      "sourceName": "contracts/Peripheral/quoters/dummyRealData/V3TWAPChainlinkQuoterFixed.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../../../Core/structs/QuoteParams.sol",
-        "../../../Core/interfaces/internal/IDataBridge.sol",
-        "../adapters/BaseDataAdapter.sol",
-        "../adapters/UniversalDataAdapter.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "V3TWAPChainlinkQuoterFixed"
-      ]
-    },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/BaseDataAdapter.sol": {
       "lastModificationDate": 1756483684423,
       "contentHash": "02f09b536b6778478ec3a524f0321e83",
@@ -3574,92 +3408,6 @@
       ],
       "artifacts": [
         "SimpleDataAdapterLibrary"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Peripheral/quoters/dummyRealData/V3DataRedStoneQuoterFixed.sol": {
-      "lastModificationDate": 1756548352970,
-      "contentHash": "51ac1b87d5a83f58b6027ad607ad6bc8",
-      "sourceName": "contracts/Peripheral/quoters/dummyRealData/V3DataRedStoneQuoterFixed.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../../../Core/structs/QuoteParams.sol",
-        "../../../Core/interfaces/internal/IDataBridge.sol",
-        "../adapters/BaseDataAdapter.sol",
-        "../adapters/UniversalDataAdapter.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "V3DataRedStoneQuoterFixed"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Peripheral/quoters/dummyRealData/V2V3TWAPQuoterFixed.sol": {
-      "lastModificationDate": 1756548367132,
-      "contentHash": "726a5441a320b5eccdea79457a247cf7",
-      "sourceName": "contracts/Peripheral/quoters/dummyRealData/V2V3TWAPQuoterFixed.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../../../Core/structs/QuoteParams.sol",
-        "../../../Core/interfaces/internal/IDataBridge.sol",
-        "../adapters/BaseDataAdapter.sol",
-        "../adapters/UniversalDataAdapter.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "V2V3TWAPQuoterFixed"
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/V3TWAPAdapter.sol": {
@@ -3935,8 +3683,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/UniversalDataAdapter.sol": {
-      "lastModificationDate": 1756487924442,
-      "contentHash": "aee7c349f8507ff2e69938cc45677c40",
+      "lastModificationDate": 1757003670092,
+      "contentHash": "efa9fd349bba46fc99341bf5ed4599b2",
       "sourceName": "contracts/Peripheral/quoters/adapters/UniversalDataAdapter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -3972,285 +3720,6 @@
       ],
       "artifacts": [
         "UniversalDataAdapter"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/libraries/BatchOperations.sol": {
-      "lastModificationDate": 1756552837022,
-      "contentHash": "72a0ebdd0a4cb25ab3ac7a3998aaf31f",
-      "sourceName": "contracts/Core/libraries/BatchOperations.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./PoolIDAssembly.sol",
-        "./FlashAccounting.sol",
-        "../structs/PoolInfo.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "BatchOperations"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/libraries/ArbitrageDetector.sol": {
-      "lastModificationDate": 1756553046011,
-      "contentHash": "4e64f35ca08b8f1ba7fdcd68d4438e3f",
-      "sourceName": "contracts/Core/libraries/ArbitrageDetector.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../interfaces/internal/quoters/IQuoter.sol",
-        "../structs/QuoteParams.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "ArbitrageDetector"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/structs/ExtendedMarkings.sol": {
-      "lastModificationDate": 1756552837022,
-      "contentHash": "1cbd89e5fab8773f83b4a1e1417fb565",
-      "sourceName": "contracts/Core/structs/ExtendedMarkings.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./Markings.sol",
-        "../libraries/MarkingHelper.sol",
-        "./MEVProtectionLevel.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "ExtendedMarkings"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/structs/MEVProtectionLevel.sol": {
-      "lastModificationDate": 1756551863147,
-      "contentHash": "b6775cb8e18b14ab5c425870ab9c757e",
-      "sourceName": "contracts/Core/structs/MEVProtectionLevel.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MEVProtectionLevel"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/security/MEVProtection.sol": {
-      "lastModificationDate": 1756551863147,
-      "contentHash": "1cfb0a6f1295bdd5ee79075743f1682a",
-      "sourceName": "contracts/Core/security/MEVProtection.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../structs/MEVProtectionLevel.sol",
-        "../libraries/TransientStorage.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MEVProtection"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/libraries/MEVIntegration.sol": {
-      "lastModificationDate": 1756551863147,
-      "contentHash": "0cb916f92b28edfdd2d618d3fc98bb5a",
-      "sourceName": "contracts/Core/libraries/MEVIntegration.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../security/MEVProtection.sol",
-        "../structs/MEVProtectionLevel.sol",
-        "../structs/ExtendedMarkings.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MEVIntegration"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/PoolRegistry.sol": {
-      "lastModificationDate": 1756551058471,
-      "contentHash": "7a7bb3b7ed91dcea1c4ffac20ec2292d",
-      "sourceName": "contracts/Core/PoolRegistry.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./structs/PoolInfo.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "PoolRegistry"
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/internal/IPoolEvents.sol": {
@@ -4290,10 +3759,10 @@
         "IPoolEvents"
       ]
     },
-    "/Users/alexey/dex/contracts/Core/security/CircuitBreaker.sol": {
-      "lastModificationDate": 1756551058471,
-      "contentHash": "07f2c8a056c198ebbf71147dd177e49d",
-      "sourceName": "contracts/Core/security/CircuitBreaker.sol",
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V3TWAPChainlinkQuoterFixed.sol": {
+      "lastModificationDate": 1757003670092,
+      "contentHash": "ebb0f9169814d57d157fc883c7c5b900",
+      "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V3TWAPChainlinkQuoterFixed.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -4319,12 +3788,227 @@
           }
         }
       },
-      "imports": [],
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "../../../../Core/interfaces/internal/IDataBridge.sol",
+        "../../adapters/BaseDataAdapter.sol",
+        "../../adapters/UniversalDataAdapter.sol"
+      ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "CircuitBreaker"
+        "V3TWAPChainlinkQuoterFixed"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V3DataRedStoneQuoterFixed.sol": {
+      "lastModificationDate": 1757003670092,
+      "contentHash": "9ded49975df01728395790c463c8ffc5",
+      "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V3DataRedStoneQuoterFixed.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "../../../../Core/interfaces/internal/IDataBridge.sol",
+        "../../adapters/BaseDataAdapter.sol",
+        "../../adapters/UniversalDataAdapter.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "V3DataRedStoneQuoterFixed"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V2V3TWAPQuoterFixed.sol": {
+      "lastModificationDate": 1757003670092,
+      "contentHash": "449b4192bb8142ef980cf4e273b5b1a9",
+      "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V2V3TWAPQuoterFixed.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "../../../../Core/interfaces/internal/IDataBridge.sol",
+        "../../adapters/BaseDataAdapter.sol",
+        "../../adapters/UniversalDataAdapter.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "V2V3TWAPQuoterFixed"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V3TWAPChainlinkQuoter.sol": {
+      "lastModificationDate": 1756635264192,
+      "contentHash": "590f4b5ff812ee7ceed2ceae7b145fb5",
+      "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V3TWAPChainlinkQuoter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "../../../../Core/interfaces/internal/IDataBridge.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "V3TWAPChainlinkQuoter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V3DataRedStoneQuoter.sol": {
+      "lastModificationDate": 1756635272229,
+      "contentHash": "5408389c40915568fe300bc80a6e9097",
+      "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V3DataRedStoneQuoter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "../../../../Core/interfaces/internal/IDataBridge.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "V3DataRedStoneQuoter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V2V3TWAPQuoter.sol": {
+      "lastModificationDate": 1757003670092,
+      "contentHash": "00902b9d6404942c24f7f666fdb1eb2e",
+      "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V2V3TWAPQuoter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "../../../../Core/interfaces/internal/IDataBridge.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "V2V3TWAPQuoter"
       ]
     }
   }

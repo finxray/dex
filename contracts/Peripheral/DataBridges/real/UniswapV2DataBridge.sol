@@ -8,6 +8,9 @@ import {IUniswapV2Factory} from "../../../Core/interfaces/external/uniswap/IUnis
 import {BaseAlias} from "./BaseAlias.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+error Math__DivByZero();
+error Math__Overflow();
+
 interface IUniswapV2PairFull is IUniswapV2Pair {
     function price0CumulativeLast() external view returns (uint256);
     function price1CumulativeLast() external view returns (uint256);
@@ -17,16 +20,19 @@ contract UniswapV2DataBridge is IDataBridge, BaseAlias {
     address public immutable factory;
     uint24 public immutable twapWindow;
     
+    error UniswapV2__PairMissing();
+    error UniswapV2__EmptyReserves();
+    error UniswapV2__PairTokensMismatch();
 
     constructor(address _factory, address _ext0, address _ext1, address _alias0, address _alias1)
         BaseAlias(_ext0, _ext1, _alias0, _alias1)
     { factory = _factory; twapWindow = 10800; }
     function getData(QuoteParams memory params) external view override returns (bytes memory) {
         address pair = IUniswapV2Factory(factory).getPair(canonicalExt0, canonicalExt1);
-        require(pair != address(0), "UniswapV2: pair missing");
+        if (pair == address(0)) revert UniswapV2__PairMissing();
         IUniswapV2PairFull p = IUniswapV2PairFull(pair);
-        (uint112 r0, uint112 r1, uint32 ts) = p.getReserves();
-        require(r0 > 0 && r1 > 0, "UniswapV2: empty reserves");
+        (uint112 r0, uint112 r1, ) = p.getReserves();
+        if (!(r0 > 0 && r1 > 0)) revert UniswapV2__EmptyReserves();
         uint8 d0 = IERC20Metadata(p.token0()).decimals();
         uint8 d1 = IERC20Metadata(p.token1()).decimals();
         uint256 scaleNum = 10 ** (uint256(18) + uint256(d1));
@@ -37,10 +43,7 @@ contract UniswapV2DataBridge is IDataBridge, BaseAlias {
         bool asRequested = _isRequestedOrder(params.asset0, params.asset1);
         uint256 spot = asRequested ? canonical : (1e36) / canonical;
 
-        // TWAP via cumulative prices if enough time elapsed
-        uint256 price0Cum = p.price0CumulativeLast();
-        uint256 price1Cum = p.price1CumulativeLast();
-        uint32 nowTs = ts; // On forks without sync updates, timestamp is ts; treat twap=spot if window not elapsed
+        // TWAP via cumulative prices if enough time elapsed; for now, treat twap = spot
         uint256 twap = spot;
         // If we had oracle updates between ts-window and ts, we could compute, but without calling sync/observe,
         // V2 cumulative oracles require passing time. For safety, return spot as twap here.
@@ -52,7 +55,7 @@ contract UniswapV2DataBridge is IDataBridge, BaseAlias {
     function _normalizeToCanonical(address t0, address t1, uint256 priceT0PerT1) internal view returns (uint256) {
         if (t0 == canonicalExt0 && t1 == canonicalExt1) return priceT0PerT1;
         if (t0 == canonicalExt1 && t1 == canonicalExt0) return (1e36) / priceT0PerT1;
-        revert("pair tokens mismatch");
+        revert UniswapV2__PairTokensMismatch();
     }
 }
 
@@ -67,11 +70,11 @@ function mulDiv(uint256 a, uint256 b, uint256 denominator) pure returns (uint256
             prod1 := sub(sub(mm, prod0), lt(mm, prod0))
         }
         if (prod1 == 0) {
-            require(denominator > 0, "div0");
+            if (!(denominator > 0)) revert Math__DivByZero();
             assembly { result := div(prod0, denominator) }
             return result;
         }
-        require(denominator > prod1, "oflow");
+        if (!(denominator > prod1)) revert Math__Overflow();
         uint256 remainder;
         assembly {
             remainder := mulmod(a, b, denominator)
