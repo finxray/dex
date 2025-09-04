@@ -20,6 +20,7 @@ import {PoolInfo} from "./structs/PoolInfo.sol";
 import {ReentrancyGuard} from "./security/ReentrancyGuard.sol";
 import {FlashAccounting} from "./libraries/FlashAccounting.sol";
 import {IFlashCallback} from "./interfaces/internal/IFlashCallback.sol";
+import {CommitRevealLib} from "./MEV/CommitRevealLib.sol";
 
 // Using library for clean storage access
 using PoolManagerLib for PoolManagerLib.PoolManagerStorage;
@@ -34,7 +35,6 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
 
     // Library storage for total liquidity tracking
     PoolManagerLib.PoolManagerStorage private _storage;
-
 
     
     // PoolID: 42955307580170980946467815337668002166680498660974576864971747189779899351040
@@ -122,26 +122,38 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         // Get current pool balances (canonical order)
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
         
-        // Determine rate: if first liquidity, derive from provided amounts; otherwise, request via router
-        // Define rate as asset0 per 1e18 units of asset1 (1e18 fixed point)
+        // Determine rate: if first liquidity, derive from provided amounts; otherwise, use inventory ratio
         uint256 rate;
         if (_storage.totalLiquidity[poolID] == 0) {
             if (!(amt0 > 0 && amt1 > 0)) revert PoolManager__InvalidInitialAmounts();
             rate = (amt0 * 1e18) / amt1;
         } else {
-            SwapParams memory p = SwapParams({
-                asset0: a0,
-                asset1: a1,
-                quoter: quoter,
-                amount: new uint256[](1),
-                zeroForOne: false, // quote asset1 -> asset0
-                marking: new bytes3[](1)
-            });
-            p.amount[0] = 1e18; // 1 token (18 decimals)
-            p.marking[0] = markings;
-            (uint256 quoteAmount, ) = getQuote(p, poolAsset0, poolAsset1);
-            if (quoteAmount == 0) revert PoolManager__InvalidQuote();
-            rate = quoteAmount;
+            // Use inventory-implied rate to avoid quoter bias on profit calculation
+            rate = PoolManagerLib.getInventoryRateAsset0Per1e18Asset1(poolAsset0, poolAsset1);
+            if (rate == 0) {
+                // Fallback to quoter if inventory is unbalanced
+                SwapParams memory p = SwapParams({
+                    asset0: a0,
+                    asset1: a1,
+                    quoter: quoter,
+                    amount: new uint256[](1),
+                    zeroForOne: false,
+                    marking: new bytes3[](1),
+                    traderProtection: 0x00000000
+                });
+                p.amount[0] = 1e18;
+                p.marking[0] = markings;
+                (uint256 quoteAmount, ) = getQuote(p, poolAsset0, poolAsset1);
+                if (quoteAmount == 0) revert PoolManager__InvalidQuote();
+                rate = quoteAmount;
+            }
+        }
+
+        // Charge protocol fee on profit since last checkpoint (no-op if disabled or first liquidity)
+        if (_storage.totalLiquidity[poolID] > 0) {
+            PoolManagerLib.chargeProtocolProfitFee(_storage, poolID, rate);
+            // Refresh balances after fee (if any)
+            (poolAsset0, poolAsset1) = _getInventory(poolID);
         }
         
         liquidity = PoolManagerLib.calculateLiquidityToMint(
@@ -170,6 +182,11 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             tokens[1] = a1;
             PoolManagerLib.settleUserTokens(beneficiary, tokens, msg.value);
         }
+
+        // Update profit baseline after liquidity event to current pool value
+        (poolAsset0, poolAsset1) = _getInventory(poolID);
+        uint256 newBaseline = PoolManagerLib.getPoolValueInAsset0(poolAsset0, poolAsset1, rate);
+        PoolManagerLib.updateProfitBaseline(_storage, poolID, newBaseline);
     }
 
     /// @notice Remove liquidity from a pool - OPTIMAL IMPLEMENTATION
@@ -188,6 +205,14 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         // Get current pool balances
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
         if (!(_storage.totalLiquidity[poolID] > 0)) revert PoolManager__NoLiquidity();
+
+        // Use inventory-implied rate for consistent profit measurement
+        uint256 rate = PoolManagerLib.getInventoryRateAsset0Per1e18Asset1(poolAsset0, poolAsset1);
+
+        // Charge protocol fee on profit since last checkpoint (no-op if disabled)
+        PoolManagerLib.chargeProtocolProfitFee(_storage, poolID, rate);
+        // Refresh balances after fee (if any)
+        (poolAsset0, poolAsset1) = _getInventory(poolID);
         
         // Calculate proportional amounts - simple math, inline
         amount0 = (liquidity * poolAsset0) / _storage.totalLiquidity[poolID];
@@ -220,6 +245,11 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             tokens[1] = a1;
             PoolManagerLib.settleUserTokens(beneficiary, tokens, 0);
         }
+
+        // Update profit baseline after liquidity event to current pool value
+        (poolAsset0, poolAsset1) = _getInventory(poolID);
+        uint256 newBaseline = PoolManagerLib.getPoolValueInAsset0(poolAsset0, poolAsset1, rate);
+        PoolManagerLib.updateProfitBaseline(_storage, poolID, newBaseline);
     }
 
     // Execution (without market) cost: 67,670 
@@ -235,60 +265,7 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         bool zeroForOne,
         uint256 minAmountOut
     ) external payable nonReentrant returns (uint256 amountOut) {
-        // Determine beneficiary (session-aware originator)
-        address beneficiary = FlashAccounting.getActiveUser();
-        if (beneficiary == address(0)) beneficiary = msg.sender;
-
-        // Calculate poolID on-the-fly
-        uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
-
-        // Get inventory and calculate output using quoter system
-        (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
-        
-        
-        // Create swap params for quoter
-        SwapParams memory swapParams = SwapParams({
-            asset0: asset0,
-            asset1: asset1,
-            quoter: quoter,
-            amount: new uint256[](1),
-            zeroForOne: zeroForOne,
-            marking: new bytes3[](1)
-        });
-        swapParams.amount[0] = amountIn;
-        swapParams.marking[0] = markings;
-        
-        // Restore external quoter now that transient storage replaced with sstore
-        (uint256 quote, ) = getQuote(swapParams, poolAsset0, poolAsset1);
-        if (quote == 0) revert PoolManager__InvalidQuote();
-        amountOut = quote;
-        
-        
-        // Validate and check minimums
-        PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, amountOut, zeroForOne);
-        if (amountOut < minAmountOut) revert PoolManager__InsufficientOutput(minAmountOut, amountOut);
-        
-
-        // Update inventory - inline delta calculation
-        // Update inventory in canonical asset order
-        bool canonicalOrder = asset0 < asset1;
-        bool canonicalZeroForOne = canonicalOrder ? zeroForOne : !zeroForOne;
-        _updateInventory(
-            poolID,
-            canonicalZeroForOne ? int128(uint128(amountIn)) : -int128(uint128(amountOut)),
-            canonicalZeroForOne ? -int128(uint128(amountOut)) : int128(uint128(amountIn))
-        );
-        
-        // Flash accounting: record deltas for input and output; settle if not in session
-        address inAsset = zeroForOne ? asset0 : asset1;
-        address outAsset = zeroForOne ? asset1 : asset0;
-        FlashAccounting.addDelta(beneficiary, inAsset, -int256(amountIn));
-        FlashAccounting.addDelta(beneficiary, outAsset, int256(amountOut));
-
-        if (!FlashAccounting.isSessionActive(beneficiary)) {
-            PoolManagerLib._settleUserDeltas(beneficiary, inAsset, outAsset, 0, 0, msg.value);
-        }
-        
+        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut);
     }
 
     /// @notice Multi-hop batch swap within a single transaction. Outputs of each hop feed into the next.
@@ -375,5 +352,126 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         uint128[] memory asset1Balances
     ) public returns (uint256[] memory quote, uint256[] memory poolID) {
         return QuoteRouter.getQuoteBatch(p, asset0Balances, asset1Balances);
+    }
+
+    /// @notice Configure protocol fee on liquidity events (profit-based). Set treasury to 0 to disable.
+    function configureProtocolFee(address treasury, uint16 feeBps) external {
+        PoolManagerLib.configureProtocolFee(_storage, treasury, feeBps);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            COMMIT-REVEAL MEV PROTECTION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Commit to a future swap (Phase 1 of commit-reveal)
+    /// @param commitment Hash of swap parameters + nonce + salt
+    function commitSwap(bytes32 commitment) external {
+        CommitRevealLib.storeCommitment(_storage.commitData, commitment, msg.sender);
+    }
+
+    /// @notice Execute a previously committed swap (Phase 2 of commit-reveal)
+    /// @param asset0 First asset address
+    /// @param asset1 Second asset address
+    /// @param quoter Quoter contract address
+    /// @param markings Pool markings
+    /// @param amountIn Input amount
+    /// @param zeroForOne Swap direction
+    /// @param minAmountOut Minimum output amount
+    /// @param nonce Trader's nonce (must match expected)
+    /// @param salt Random salt used in commitment
+    /// @return amountOut Actual output amount
+    function executeCommittedSwap(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut,
+        uint64 nonce,
+        bytes32 salt
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        // Validate commitment
+        bytes32 commitment = CommitRevealLib.generateCommitment(
+            asset0, asset1, quoter, markings,
+            amountIn, zeroForOne, minAmountOut,
+            nonce, msg.sender, salt
+        );
+        
+        CommitRevealLib.validateAndConsumeCommitment(
+            _storage.commitData, commitment, msg.sender, nonce
+        );
+        
+        // Execute normal swap logic
+        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut);
+    }
+
+    /// @notice Get current nonce for commit-reveal system
+    /// @param trader Address to check
+    /// @return nonce Current nonce
+    function getCommitNonce(address trader) external view returns (uint64 nonce) {
+        return CommitRevealLib.getCurrentNonce(_storage.commitData, trader);
+    }
+
+    /// @notice Internal swap execution logic (shared between normal and committed swaps)
+    function _executeSwap(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut
+    ) internal returns (uint256 amountOut) {
+        // Determine beneficiary (session-aware originator)
+        address beneficiary = FlashAccounting.getActiveUser();
+        if (beneficiary == address(0)) beneficiary = msg.sender;
+
+        // Calculate poolID on-the-fly
+        uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
+
+        // Get inventory and calculate output using quoter system
+        (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
+        
+        // Create swap params for quoter
+        SwapParams memory swapParams = SwapParams({
+            asset0: asset0,
+            asset1: asset1,
+            quoter: quoter,
+            amount: new uint256[](1),
+            zeroForOne: zeroForOne,
+            marking: new bytes3[](1),
+            traderProtection: 0x00000000  // No additional protection for committed swaps
+        });
+        swapParams.amount[0] = amountIn;
+        swapParams.marking[0] = markings;
+        
+        // Get quote and validate
+        (uint256 quote, ) = getQuote(swapParams, poolAsset0, poolAsset1);
+        if (quote == 0) revert PoolManager__InvalidQuote();
+        amountOut = quote;
+        
+        // Validate minimums
+        PoolManagerLib.validateSwapInventory(poolAsset0, poolAsset1, amountOut, zeroForOne);
+        if (amountOut < minAmountOut) revert PoolManager__InsufficientOutput(minAmountOut, amountOut);
+        
+        // Update inventory in canonical asset order
+        bool canonicalOrder = asset0 < asset1;
+        bool canonicalZeroForOne = canonicalOrder ? zeroForOne : !zeroForOne;
+        _updateInventory(
+            poolID,
+            canonicalZeroForOne ? int128(uint128(amountIn)) : -int128(uint128(amountOut)),
+            canonicalZeroForOne ? -int128(uint128(amountOut)) : int128(uint128(amountIn))
+        );
+        
+        // Flash accounting: record deltas for input and output; settle if not in session
+        address inAsset = zeroForOne ? asset0 : asset1;
+        address outAsset = zeroForOne ? asset1 : asset0;
+        FlashAccounting.addDelta(beneficiary, inAsset, -int256(amountIn));
+        FlashAccounting.addDelta(beneficiary, outAsset, int256(amountOut));
+
+        if (!FlashAccounting.isSessionActive(beneficiary)) {
+            PoolManagerLib._settleUserDeltas(beneficiary, inAsset, outAsset, 0, 0, msg.value);
+        }
     }
 }

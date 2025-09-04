@@ -7,7 +7,8 @@ struct SwapParams {
     address quoter;
     uint256[] amount;
     bool zeroForOne;
-    bytes3[] marking;
+    bytes3[] marking;        // LP-controlled pool config (affects poolID)
+    bytes4 traderProtection; // Trader-controlled MEV protection flags
 }
 
 

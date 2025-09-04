@@ -39,10 +39,60 @@
       ],
       "name": "PoolCreated",
       "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "poolID",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "treasury",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "feeAsset0",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "feeAsset1",
+          "type": "uint256"
+        }
+      ],
+      "name": "ProtocolFeeCharged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "treasury",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint16",
+          "name": "feeBps",
+          "type": "uint16"
+        }
+      ],
+      "name": "ProtocolFeeConfigured",
+      "type": "event"
     }
   ],
-  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea26469706673582212208734a26eb14d21078ce7da5171887f2091e3bd940d5db6b597bfde627f68f30064736f6c634300081e0033",
-  "deployedBytecode": "0x5f80fdfea26469706673582212208734a26eb14d21078ce7da5171887f2091e3bd940d5db6b597bfde627f68f30064736f6c634300081e0033",
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220ff39ca7cd679c5a4bde7481511dd852e26b659b4e3e41be45bb3632fdd24e29764736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220ff39ca7cd679c5a4bde7481511dd852e26b659b4e3e41be45bb3632fdd24e29764736f6c634300081e0033",
   "linkReferences": {},
   "deployedLinkReferences": {}
 }

@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "VolumeControlLib",
+  "sourceName": "contracts/Core/MEV/VolumeControlLib.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220d51bec93ab7e203946c952d64c2e6932a90ad478e1346e2a6199d46f83c3f5b064736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220d51bec93ab7e203946c952d64c2e6932a90ad478e1346e2a6199d46f83c3f5b064736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

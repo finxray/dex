@@ -112,6 +112,11 @@
               "internalType": "bytes3[]",
               "name": "marking",
               "type": "bytes3[]"
+            },
+            {
+              "internalType": "bytes4",
+              "name": "traderProtection",
+              "type": "bytes4"
             }
           ],
           "internalType": "struct SwapParams",
@@ -178,6 +183,11 @@
               "internalType": "bytes3[]",
               "name": "marking",
               "type": "bytes3[]"
+            },
+            {
+              "internalType": "bytes4",
+              "name": "traderProtection",
+              "type": "bytes4"
             }
           ],
           "internalType": "struct SwapParams",

@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "AtomicExecutionLib",
+  "sourceName": "contracts/Core/MEV/AtomicExecutionLib.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220a1f251d75b63ff6cb0c4b132cab189e3492350fb533523fcf681cd70a35490b864736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220a1f251d75b63ff6cb0c4b132cab189e3492350fb533523fcf681cd70a35490b864736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

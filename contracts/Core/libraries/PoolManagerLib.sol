@@ -17,6 +17,7 @@ import {SwapParams} from "../structs/SwapParams.sol";
 import {IQuoteRouter} from "../interfaces/internal/IQuoteRouter.sol";
 import {Hop} from "../structs/Hop.sol";
 import {PoolInfo} from "../structs/PoolInfo.sol";
+import {CommitRevealLib} from "../MEV/CommitRevealLib.sol";
 
 // (interface moved to contracts/interfaces/internal/IQuoteRouter.sol)
 
@@ -42,6 +43,13 @@ library PoolManagerLib {
         mapping(uint256 => uint256) poolInventories;
         // Pool information for external queries (poolID -> PoolInfo)
         mapping(uint256 => PoolInfo) poolInfos;
+        // Protocol fee configuration (applies on liquidity events only)
+        address protocolTreasury;          // address(0) disables fee
+        uint16 protocolFeeBps;             // e.g., 700 for 7% of profit
+        // Profit baseline per pool, denominated in asset0 units with 1e18 precision
+        mapping(uint256 => uint256) profitBaselineAsset0;
+        // Commit-reveal MEV protection data
+        CommitRevealLib.CommitData commitData;
     }
     
     /*//////////////////////////////////////////////////////////////
@@ -49,6 +57,8 @@ library PoolManagerLib {
     //////////////////////////////////////////////////////////////*/
     
     event PoolCreated(uint256 indexed poolID, address asset0, address asset1, address quoter, bytes3 markings);
+    event ProtocolFeeConfigured(address treasury, uint16 feeBps);
+    event ProtocolFeeCharged(uint256 indexed poolID, address treasury, uint256 feeAsset0, uint256 feeAsset1);
 
     /*//////////////////////////////////////////////////////////////
                             POOL CREATION
@@ -127,15 +137,55 @@ library PoolManagerLib {
             // Simple approach: use the sum of both amounts as initial liquidity
             liquidity = amount0 + amount1;
         } else {
-            // Convert amount1 to amount0 equivalent using rate: amount1 * 1e18 / rate
-            uint256 valueAdded = amount0 + (amount1 * 1e18) / rate;
-            uint256 poolValue = poolAsset0 + (poolAsset1 * 1e18) / rate;
+            // Convert amount1 to amount0 equivalent using rate: amount1_in_a0 = amount1 * rate / 1e18
+            uint256 valueAdded = amount0 + (amount1 * rate) / 1e18;
+            uint256 poolValue = uint256(poolAsset0) + (uint256(poolAsset1) * rate) / 1e18;
             
             // Proportional to pool
-            liquidity = (valueAdded * self.totalLiquidity[poolID]) / poolValue;
+            liquidity = mulDiv(valueAdded, self.totalLiquidity[poolID], poolValue);
         }
         
         if (liquidity == 0) revert PoolManager__InsufficientLiquidityMinted();
+    }
+
+    /// @notice 512-bit mulDiv from Uniswap FullMath (simplified)
+    function mulDiv(uint256 a, uint256 b, uint256 denominator) internal pure returns (uint256 result) {
+        unchecked {
+            uint256 prod0;
+            uint256 prod1;
+            assembly {
+                let mm := mulmod(a, b, not(0))
+                prod0 := mul(a, b)
+                prod1 := sub(sub(mm, prod0), lt(mm, prod0))
+            }
+            if (prod1 == 0) {
+                require(denominator > 0);
+                assembly { result := div(prod0, denominator) }
+                return result;
+            }
+            require(denominator > prod1);
+            uint256 remainder;
+            assembly {
+                remainder := mulmod(a, b, denominator)
+                prod1 := sub(prod1, gt(remainder, prod0))
+                prod0 := sub(prod0, remainder)
+            }
+            uint256 twos = denominator & (~denominator + 1);
+            assembly {
+                denominator := div(denominator, twos)
+                prod0 := div(prod0, twos)
+                twos := add(div(sub(0, twos), twos), 1)
+            }
+            prod0 |= prod1 * twos;
+            uint256 inv = 3 * denominator ^ 2;
+            inv *= 2 - denominator * inv;
+            inv *= 2 - denominator * inv;
+            inv *= 2 - denominator * inv;
+            inv *= 2 - denominator * inv;
+            inv *= 2 - denominator * inv;
+            inv *= 2 - denominator * inv;
+            result = prod0 * inv;
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -154,6 +204,26 @@ library PoolManagerLib {
         uint256 packed = self.poolInventories[poolId]; // Single SLOAD!
         asset0 = uint128(packed);              // Lower 128 bits
         asset1 = uint128(packed >> 128);       // Upper 128 bits
+    }
+
+    /// @notice Return the pool value in asset0 terms using provided rate (asset0 per 1e18 of asset1)
+    function getPoolValueInAsset0(
+        uint128 poolAsset0,
+        uint128 poolAsset1,
+        uint256 rateAsset0Per1e18Asset1
+    ) internal pure returns (uint256 valueAsset0) {
+        // value = asset0 + asset1_in_asset0
+        uint256 asset1AsAsset0 = (uint256(poolAsset1) * rateAsset0Per1e18Asset1) / 1e18;
+        valueAsset0 = uint256(poolAsset0) + asset1AsAsset0;
+    }
+
+    /// @notice Derive inventory-implied rate (asset0 per 1e18 of asset1)
+    function getInventoryRateAsset0Per1e18Asset1(
+        uint128 poolAsset0,
+        uint128 poolAsset1
+    ) internal pure returns (uint256 rate) {
+        if (poolAsset1 == 0) return 0;
+        rate = (uint256(poolAsset0) * 1e18) / uint256(poolAsset1);
     }
 
     /// @notice Update pool inventory - SINGLE STORAGE OPERATION!
@@ -180,6 +250,89 @@ library PoolManagerLib {
         if (newPacked != packed) {
             self.poolInventories[poolId] = newPacked; // Single SSTORE when needed
         }
+    }
+
+    /// @notice Configure protocol fee. Setting treasury to 0 disables fees.
+    function configureProtocolFee(
+        PoolManagerStorage storage self,
+        address treasury,
+        uint16 feeBps
+    ) internal {
+        self.protocolTreasury = treasury;
+        self.protocolFeeBps = feeBps;
+        emit ProtocolFeeConfigured(treasury, feeBps);
+    }
+
+    /// @notice Charge protocol fee on profit since last checkpoint, based on current rate.
+    /// @dev Does nothing if treasury is unset or feeBps==0. Reduces inventory and transfers out to treasury.
+    function chargeProtocolProfitFee(
+        PoolManagerStorage storage self,
+        uint256 poolID,
+        uint256 rateAsset0Per1e18Asset1
+    ) internal {
+        address treasury = self.protocolTreasury;
+        uint16 feeBps = self.protocolFeeBps;
+        if (treasury == address(0) || feeBps == 0) {
+            return;
+        }
+
+        (uint128 a0, uint128 a1) = getInventory(self, poolID);
+        if (a0 == 0 && a1 == 0) {
+            // Nothing to charge; update baseline to zero
+            self.profitBaselineAsset0[poolID] = 0;
+            return;
+        }
+
+        uint256 currentValueA0 = getPoolValueInAsset0(a0, a1, rateAsset0Per1e18Asset1);
+        uint256 baseline = self.profitBaselineAsset0[poolID];
+        if (currentValueA0 <= baseline) {
+            // No profit; nothing to take
+            return;
+        }
+
+        uint256 profitA0 = currentValueA0 - baseline;
+        uint256 feeValueA0 = (profitA0 * uint256(feeBps)) / 10000;
+        if (feeValueA0 == 0) {
+            return;
+        }
+
+        // Split fee proportionally to current composition to preserve pool ratio
+        uint256 asset1AsA0 = (uint256(a1) * rateAsset0Per1e18Asset1) / 1e18;
+        uint256 totalA0Value = uint256(a0) + asset1AsA0;
+        if (totalA0Value == 0) {
+            return;
+        }
+        uint256 feeA0Part = (feeValueA0 * uint256(a0)) / totalA0Value;
+        uint256 feeA1PartInA0 = feeValueA0 - feeA0Part;
+        // Convert asset0-value to asset1 amount: a1 = value_in_a0 * 1e18 / rate
+        uint256 feeA1Part = (feeA1PartInA0 * 1e18) / (rateAsset0Per1e18Asset1 == 0 ? 1 : rateAsset0Per1e18Asset1);
+
+        // Bound by current balances
+        if (feeA0Part > a0) feeA0Part = a0;
+        if (feeA1Part > a1) feeA1Part = a1;
+
+        // Update inventory
+        updateInventory(self, poolID, -int128(uint128(feeA0Part)), -int128(uint128(feeA1Part)));
+
+        // Transfer out to treasury
+        PoolInfo memory info = self.poolInfos[poolID];
+        if (feeA0Part > 0) {
+            AssetTransferLib.transferOut(info.asset0, treasury, feeA0Part);
+        }
+        if (feeA1Part > 0) {
+            AssetTransferLib.transferOut(info.asset1, treasury, feeA1Part);
+        }
+
+        emit ProtocolFeeCharged(poolID, treasury, feeA0Part, feeA1Part);
+    }
+
+    /// @notice Update profit baseline to the provided value.
+    function updateProfitBaseline(
+        PoolManagerStorage storage self,
+        uint256 poolID,
+        uint256 newBaselineAsset0
+    ) internal {
+        self.profitBaselineAsset0[poolID] = newBaselineAsset0;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -305,7 +458,6 @@ library PoolManagerLib {
     /// @param self Storage reference
     /// @param hop Hop to execute
     /// @param inputAmount Input amount for this hop
-    /// @param msgValue ETH value for first hop
     /// @param isFirstHop Whether this is the first hop
     /// @param isLastHop Whether this is the last hop
     /// @param recipient Recipient address
@@ -315,7 +467,7 @@ library PoolManagerLib {
         PoolManagerStorage storage self,
         Hop calldata hop,
         uint256 inputAmount,
-        uint256 msgValue,
+        uint256 /*msgValue*/,
         bool isFirstHop,
         bool isLastHop,
         address recipient,
@@ -334,7 +486,7 @@ library PoolManagerLib {
                 hop.markings[0],
                 hop.zeroForOne,
                 inputAmount,
-                msgValue,
+                0,
                 isFirstHop,
                 isLastHop,
                 recipient,
@@ -398,7 +550,8 @@ library PoolManagerLib {
             quoter: hop.quoter,
             amount: hop.amounts,
             zeroForOne: hop.zeroForOne,
-            marking: hop.markings
+            marking: hop.markings,
+            traderProtection: 0x00000000
         });
         
         // Get batch quotes using QuoteRouter
@@ -444,7 +597,6 @@ library PoolManagerLib {
     /// @param marking Pool marking
     /// @param zeroForOne Swap direction
     /// @param inputAmount Input amount
-    /// @param msgValue ETH value
     /// @param isFirstHop Whether this is the first hop
     /// @param isLastHop Whether this is the last hop
     /// @param recipient Recipient address
@@ -458,7 +610,7 @@ library PoolManagerLib {
         bytes3 marking,
         bool zeroForOne,
         uint256 inputAmount,
-        uint256 msgValue,
+        uint256 /*msgValue*/,
         bool isFirstHop,
         bool isLastHop,
         address recipient,
@@ -505,7 +657,6 @@ library PoolManagerLib {
     }
 
     /// @notice Get quote for a single hop
-    /// @param self_ Storage reference (unused)
     /// @param asset0 First asset address
     /// @param asset1 Second asset address
     /// @param quoter Quoter contract address
@@ -517,7 +668,7 @@ library PoolManagerLib {
     /// @param quoterRouter QuoterRouter contract for quote calls
     /// @return amountOut Output amount
     function getHopQuote(
-        PoolManagerStorage storage self_,
+        PoolManagerStorage storage /*self*/,
         address asset0,
         address asset1,
         address quoter,
@@ -538,7 +689,8 @@ library PoolManagerLib {
             quoter: quoter,
             amount: amounts,
             zeroForOne: zeroForOne,
-            marking: marks
+            marking: marks,
+            traderProtection: 0x00000000
         });
         (uint256 quote, ) = IQuoteRouter(quoterRouter).getQuote(p, poolAsset0, poolAsset1);
         amountOut = quote > 0

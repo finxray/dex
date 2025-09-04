@@ -1,0 +1,75 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "CommitRevealLib",
+  "sourceName": "contracts/Core/MEV/CommitRevealLib.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "CommitReveal__CommitmentExpired",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CommitReveal__CommitmentTooNew",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CommitReveal__InvalidCommitment",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CommitReveal__InvalidNonce",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "commitment",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "trader",
+          "type": "address"
+        }
+      ],
+      "name": "CommittedSwapExecuted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "commitment",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "trader",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint32",
+          "name": "blockNumber",
+          "type": "uint32"
+        }
+      ],
+      "name": "SwapCommitted",
+      "type": "event"
+    }
+  ],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea26469706673582212209939dc410d0ea0631918850664c7ebde2cdd0abda4068bad4eef6a33dd0d0be464736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea26469706673582212209939dc410d0ea0631918850664c7ebde2cdd0abda4068bad4eef6a33dd0d0be464736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

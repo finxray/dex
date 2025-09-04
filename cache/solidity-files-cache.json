@@ -311,8 +311,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/PoolManager.sol": {
-      "lastModificationDate": 1757003670073,
-      "contentHash": "8cb9a08680a60e39ef740665a9e7bd51",
+      "lastModificationDate": 1757020030228,
+      "contentHash": "6b3659116884ce0c9edb2c42bd2f088b",
       "sourceName": "contracts/Core/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -349,7 +349,8 @@
         "./structs/PoolInfo.sol",
         "./security/ReentrancyGuard.sol",
         "./libraries/FlashAccounting.sol",
-        "./interfaces/internal/IFlashCallback.sol"
+        "./interfaces/internal/IFlashCallback.sol",
+        "./MEV/CommitRevealLib.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -359,7 +360,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/QuoteRouter.sol": {
-      "lastModificationDate": 1755888338504,
+      "lastModificationDate": 1755889923244,
       "contentHash": "f101e60aa5c2059e6d9f81be7b232cb2",
       "sourceName": "contracts/Core/QuoteRouter.sol",
       "solcConfig": {
@@ -442,8 +443,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/structs/SwapParams.sol": {
-      "lastModificationDate": 1755885617333,
-      "contentHash": "06271b14ee2c7b2cdf5c3d01ef201bfe",
+      "lastModificationDate": 1757019245424,
+      "contentHash": "de034a1c8200c66ba86a14a841799e8c",
       "sourceName": "contracts/Core/structs/SwapParams.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -549,8 +550,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1755888465074,
-      "contentHash": "d535a097428713381e63c76e2020581b",
+      "lastModificationDate": 1757019682228,
+      "contentHash": "7c197f0f10c465a694fb24bee0ae4261",
       "sourceName": "contracts/Core/libraries/PoolManagerLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -584,7 +585,8 @@
         "../structs/SwapParams.sol",
         "../interfaces/internal/IQuoteRouter.sol",
         "../structs/Hop.sol",
-        "../structs/PoolInfo.sol"
+        "../structs/PoolInfo.sol",
+        "../MEV/CommitRevealLib.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -4009,6 +4011,231 @@
       ],
       "artifacts": [
         "V2V3TWAPQuoter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/QuoterLoss1050.sol": {
+      "lastModificationDate": 1757007228299,
+      "contentHash": "2373ce6f815174270876913fb9808735",
+      "sourceName": "contracts/Peripheral/quoters/dummy/QuoterLoss1050.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../Core/structs/QuoteParams.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "QuoterLoss1050"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/MEV/CommitRevealLib.sol": {
+      "lastModificationDate": 1757019570492,
+      "contentHash": "afbaddd6ca8098516863f56725e004e8",
+      "sourceName": "contracts/Core/MEV/CommitRevealLib.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "CommitRevealLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/MEV/AccessControlLib.sol": {
+      "lastModificationDate": 1757011786313,
+      "contentHash": "8f82c0c86d19ca034de3205597b9f3c3",
+      "sourceName": "contracts/Core/MEV/AccessControlLib.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "AccessControlLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/MEV/AtomicExecutionLib.sol": {
+      "lastModificationDate": 1757011786313,
+      "contentHash": "077fecf0f330c57024695eacc2aaaf79",
+      "sourceName": "contracts/Core/MEV/AtomicExecutionLib.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "AtomicExecutionLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/MEV/CircuitBreakerLib.sol": {
+      "lastModificationDate": 1757011786313,
+      "contentHash": "19d5bb8dddcdf1f534d8b610ab114210",
+      "sourceName": "contracts/Core/MEV/CircuitBreakerLib.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "CircuitBreakerLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/MEV/VolumeControlLib.sol": {
+      "lastModificationDate": 1757011786313,
+      "contentHash": "4bc5692c91748a500f7f5e472feb840a",
+      "sourceName": "contracts/Core/MEV/VolumeControlLib.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "VolumeControlLib"
       ]
     }
   }
