@@ -11,8 +11,8 @@ describe("Dummy Quoters basic quotes", function () {
     const q = await Q.deploy();
     await q.waitForDeployment();
     const routed = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["bytes","bytes","bytes","bytes"],
-      [ethers.hexlify(ethers.randomBytes(2)), ethers.hexlify(ethers.randomBytes(2)), "0x", "0x"]
+      ["bytes","bytes","bytes","bytes","bytes"],
+      [ethers.hexlify(ethers.randomBytes(2)), ethers.hexlify(ethers.randomBytes(2)), "0x", "0x", "0x"]
     );
     const params = {
       asset0: ethers.ZeroAddress,
@@ -43,8 +43,8 @@ describe("Dummy Quoters basic quotes", function () {
     const q = await Q.deploy();
     await q.waitForDeployment();
     const routed = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["bytes","bytes","bytes","bytes"],
-      [ethers.hexlify(ethers.randomBytes(2)), ethers.hexlify(ethers.randomBytes(2)), "0x", "0x"]
+      ["bytes","bytes","bytes","bytes","bytes"],
+      [ethers.hexlify(ethers.randomBytes(2)), ethers.hexlify(ethers.randomBytes(2)), "0x", "0x", "0x"]
     );
     const params = {
       asset0: ethers.ZeroAddress,

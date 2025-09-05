@@ -509,6 +509,16 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         SimpleGovernanceLib.pauseSpecificPool(_storage.simpleGovernance, poolId, newState);
     }
 
+    /// @notice Set configurable data bridge address (slots 4..15)
+    /// @param overallSlot Overall slot index [4..15]
+    /// @param bridge Bridge contract address
+    function setDataBridge(uint8 overallSlot, address bridge) external {
+        require(msg.sender == _storage.simpleGovernance.protocolMultisig, "Only protocol");
+        require(overallSlot >= 4 && overallSlot <= 15, "Invalid slot");
+        uint8 slotIndex = overallSlot - 4; // map 4..15 -> 0..11
+        _setConfigurableDataBridge(slotIndex, bridge);
+    }
+
     /// @notice Internal swap execution logic (shared between normal and committed swaps)
     function _executeSwap(
         address asset0,
@@ -584,6 +594,7 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         swapParams.marking[0] = markings;
         
         // Get quote and validate
+        // Use standard quote path (auto-routing can be enabled later if desired)
         (uint256 quote, ) = getQuote(swapParams, poolAsset0, poolAsset1);
         if (quote == 0) revert PoolManager__InvalidQuote();
         amountOut = quote;

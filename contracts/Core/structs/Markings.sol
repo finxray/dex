@@ -5,9 +5,16 @@ pragma solidity ^0.8.30;
 // default data0Bridge for data. 
 
 struct Markings {
-    bool data0; // first 1 bit, if true use default data0Bridge - reads from immutable data0Bridge (saving gas)
-    bool data1; // second 1 bit, if true use default data1Bridge - reads from immutable data1Bridge (saving gas)
-    bool data2; // third 1 bit, if true use default data2Bridge - reads from immutable data2Bridge (saving gas)
-    bool data3; // fourth 1 bit, if true use default data3Bridge - reads from immutable data3Bridge (saving gas)
-    uint16 bucketID;       // tenth 1 bit
+    // Layout in bytes3 (24 bits total):
+    // bits [0..3]   -> data0..data3 (booleans)
+    // bits [4..15]  -> bucketID (12 bits)
+    // bits [16]     -> reserved (protocol flag used elsewhere)
+    // bits [17..19] -> reserved
+    // bits [20..23] -> extraBridgeSlot (0 = none, 4..15 = configurable slots)
+    bool data0;
+    bool data1;
+    bool data2;
+    bool data3;
+    uint16 bucketID;
+    uint8 extraBridgeSlot; // 0 = none, 4..15 = overall slot index
 }

@@ -1,0 +1,24 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "NoopFlashCallback",
+  "sourceName": "contracts/Peripheral/flash_test/NoopFlashCallback.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "name": "flashCallback",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080806040523460135760a0908160188239f35b5f80fdfe6004361015600b575f80fd5b5f3560e01c63e373923814601d575f80fd5b34606657602036600319011260665760043567ffffffffffffffff811160665736602382011215606657806004013567ffffffffffffffff811160665736910160240111606657005b5f80fdfea264697066735822122050c0c12f4dec7e251b8275067bbda07ac1efd42525a60dcf57d1bdce1b725a7464736f6c634300081e0033",
+  "deployedBytecode": "0x6004361015600b575f80fd5b5f3560e01c63e373923814601d575f80fd5b34606657602036600319011260665760043567ffffffffffffffff811160665736602382011215606657806004013567ffffffffffffffff811160665736910160240111606657005b5f80fdfea264697066735822122050c0c12f4dec7e251b8275067bbda07ac1efd42525a60dcf57d1bdce1b725a7464736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

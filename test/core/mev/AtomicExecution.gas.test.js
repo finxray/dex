@@ -9,7 +9,7 @@ describe("AtomicExecution MEV Protection - Gas Analysis", function () {
   const WETH_AMOUNT = ethers.parseEther("1000");
   const USDC_AMOUNT = ethers.parseEther("130000");
   const SWAP_AMOUNT = ethers.parseEther("10");
-  const marking = "0x000001";
+  const marking = "0x000000";
 
   // AtomicExecution flag constants
   const ATOMIC_EXECUTION_ENABLED = 0x00000100;     // Bit 8
@@ -157,10 +157,14 @@ describe("AtomicExecution MEV Protection - Gas Analysis", function () {
     it("Session-only mode (flags=0x00000100) inside session - should work", async function () {
       const traderProtection = createAtomicFlags(true, 0); // Enabled, session-only mode
       
-      // Start flash session
+      // Deploy a no-op callback that implements IFlashCallback
+      const Noop = await ethers.getContractFactory("NoopFlashCallback");
+      const noop = await Noop.deploy();
+      await noop.waitForDeployment();
+      // Start flash session with a proper callback
       const flashTx = await pm.connect(trader).flashSession(
-        trader.address, // callback contract (we'll use trader as callback)
-        "0x", // empty data
+        await noop.getAddress(),
+        "0x",
         [await weth.getAddress(), await usdc.getAddress()]
       );
       

@@ -6,7 +6,7 @@ import {QuoteParams, QuoteParamsBatch} from "../../../Core/structs/QuoteParams.s
 
 contract Quoter1100 is IQuoter {
     function quote(QuoteParams memory params, bytes memory routed) external pure override returns (uint256) {
-        (bytes memory d0, bytes memory d1,,) = abi.decode(routed, (bytes, bytes, bytes, bytes));
+        (bytes memory d0, bytes memory d1,,,) = abi.decode(routed, (bytes, bytes, bytes, bytes, bytes));
         uint256 bonus = (d0.length > 0 && d1.length > 0) ? 1005 : 1000; // small improvement if both present
         uint256 q;
         if (params.zeroForOne) {
@@ -17,7 +17,7 @@ contract Quoter1100 is IQuoter {
         return (q * bonus) / 1000;
     }
     function quoteBatch(QuoteParamsBatch memory params, bytes memory routed) external pure override returns (uint256[] memory quotes) {
-        (bytes memory d0, bytes memory d1,,) = abi.decode(routed, (bytes, bytes, bytes, bytes));
+        (bytes memory d0, bytes memory d1,,,) = abi.decode(routed, (bytes, bytes, bytes, bytes, bytes));
         uint256 bonus = (d0.length > 0 && d1.length > 0) ? 1005 : 1000;
         quotes = new uint256[](params.amount.length);
         for (uint256 i = 0; i < params.amount.length; i++) {
