@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "SimpleGovernanceLib",
+  "sourceName": "contracts/Core/libraries/SimpleGovernanceLib.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220fc90d3a1604e5ebbc393cbcde2718a61e0d065ca5a684bec37f11f950203995f64736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea2646970667358221220fc90d3a1604e5ebbc393cbcde2718a61e0d065ca5a684bec37f11f950203995f64736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

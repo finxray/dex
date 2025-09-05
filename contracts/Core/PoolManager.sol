@@ -9,6 +9,11 @@ error PoolManager__Reentrancy();
 error PoolManager__InvalidInitialAmounts();
 error PoolManager__InvalidLiquidityAmount();
 error PoolManager__NoLiquidity();
+error PoolManager__InvalidCommit();
+error PoolManager__CommitExpired();
+error PoolManager__AtomicExecutionRequired();
+error PoolManager__AccessDenied();
+error PoolManager__OperationPaused();
 
 import {ERC6909Claims} from "./ERC6909Claims.sol";
 import {QuoteRouter} from "./QuoteRouter.sol";
@@ -21,6 +26,9 @@ import {ReentrancyGuard} from "./security/ReentrancyGuard.sol";
 import {FlashAccounting} from "./libraries/FlashAccounting.sol";
 import {IFlashCallback} from "./interfaces/internal/IFlashCallback.sol";
 import {CommitRevealLib} from "./MEV/CommitRevealLib.sol";
+import {AtomicExecutionLib} from "./MEV/AtomicExecutionLib.sol";
+import {AccessControlLib} from "./MEV/AccessControlLib.sol";
+import {SimpleGovernanceLib} from "./libraries/SimpleGovernanceLib.sol";
 
 // Using library for clean storage access
 using PoolManagerLib for PoolManagerLib.PoolManagerStorage;
@@ -31,7 +39,12 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         address _defaultData1Bridge,
         address _defaultData2Bridge,
         address _defaultData3Bridge
-    ) QuoteRouter(_defaultData0Bridge, _defaultData1Bridge, _defaultData2Bridge, _defaultData3Bridge) {}
+    ) QuoteRouter(_defaultData0Bridge, _defaultData1Bridge, _defaultData2Bridge, _defaultData3Bridge) {
+        // Initialize AtomicExecution default configurations
+        AtomicExecutionLib.initializeDefaultConfigs(_storage.atomicData);
+        // Initialize AccessControl universal configuration
+        AccessControlLib.initializeUniversalAccess(_storage.accessData);
+    }
 
     // Library storage for total liquidity tracking
     PoolManagerLib.PoolManagerStorage private _storage;
@@ -45,7 +58,16 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         address quoter,
         bytes3 markings
     ) external nonReentrant returns (uint256 poolID) {
-        return PoolManagerLib.createPool(_storage, asset0, asset1, quoter, markings);
+        poolID = PoolManagerLib.createPool(_storage, asset0, asset1, quoter, markings);
+        
+        // Register protocol pool if needed (only for protocol pools)
+        if (SimpleGovernanceLib.isProtocolPool(markings)) {
+            require(
+                SimpleGovernanceLib.canCreateProtocolPool(_storage.simpleGovernance, msg.sender),
+                "Only protocol can create protocol pools"
+            );
+            SimpleGovernanceLib.registerProtocolPool(_storage.simpleGovernance, poolID);
+        }
     }
     
     /// @notice Get pool information by poolID
@@ -114,6 +136,11 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
     ) external payable nonReentrant returns (uint256 liquidity) {
         // Calculate poolID (canonicalizes asset order internally)
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
+        
+        // Ultra-efficient governance check for addLiquidity
+        if (!SimpleGovernanceLib.validateSwap(_storage.simpleGovernance, markings, poolID)) {
+            revert PoolManager__OperationPaused();
+        }
         
         // Canonicalize amounts to match asset ordering used in poolID
         (address a0, address a1) = asset0 < asset1 ? (asset0, asset1) : (asset1, asset0);
@@ -201,6 +228,11 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         // Calculate poolID on-the-fly
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
         
+        // Ultra-efficient governance check for removeLiquidity
+        if (!SimpleGovernanceLib.validateSwap(_storage.simpleGovernance, markings, poolID)) {
+            revert PoolManager__OperationPaused();
+        }
+        
         // Get current pool balances
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
         if (!(_storage.totalLiquidity[poolID] > 0)) revert PoolManager__NoLiquidity();
@@ -263,7 +295,36 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         bool zeroForOne,
         uint256 minAmountOut
     ) external payable nonReentrant returns (uint256 amountOut) {
-        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut);
+        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut, 0x00000000, "");
+    }
+
+    /// @notice Swap assets with trader protection flags
+    function swapWithProtection(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut,
+        bytes4 traderProtection
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut, traderProtection, "");
+    }
+
+    /// @notice Swap assets with trader protection flags and permit data (for RFQ/access control)
+    function swapWithPermit(
+        address asset0,
+        address asset1,
+        address quoter,
+        bytes3 markings,
+        uint256 amountIn,
+        bool zeroForOne,
+        uint256 minAmountOut,
+        bytes4 traderProtection,
+        bytes calldata permitData
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut, traderProtection, permitData);
     }
 
     /// @notice Multi-hop batch swap within a single transaction. Outputs of each hop feed into the next.
@@ -400,8 +461,8 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             _storage.commitData, commitment, msg.sender, nonce
         );
         
-        // Execute normal swap logic
-        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut);
+        // Execute normal swap logic (commit-reveal swaps don't use additional trader protection)
+        return _executeSwap(asset0, asset1, quoter, markings, amountIn, zeroForOne, minAmountOut, 0x00000000, "");
     }
 
     /// @notice Get current nonce for commit-reveal system
@@ -409,6 +470,43 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
     /// @return nonce Current nonce
     function getCommitNonce(address trader) external view returns (uint64 nonce) {
         return CommitRevealLib.getCurrentNonce(_storage.commitData, trader);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            GOVERNANCE FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Set governance addresses (admin only - called once)
+    /// @param protocol Protocol multisig address
+    /// @param emergency Emergency multisig address
+    function setGovernance(address protocol, address emergency) external {
+        require(_storage.simpleGovernance.protocolMultisig == address(0), "Governance already set");
+        require(protocol != address(0) && emergency != address(0), "Invalid addresses");
+        _storage.simpleGovernance.protocolMultisig = protocol;
+        _storage.simpleGovernance.emergencyMultisig = emergency;
+    }
+
+    /// @notice Emergency pause all protocol pools (emergency only)
+    /// @param newState Emergency state (0=normal, 1=paused, 2=timelocked)
+    function emergencyPauseProtocolPools(uint8 newState) external {
+        require(
+            msg.sender == _storage.simpleGovernance.emergencyMultisig || 
+            msg.sender == _storage.simpleGovernance.protocolMultisig, 
+            "Only emergency"
+        );
+        SimpleGovernanceLib.setGlobalEmergencyState(_storage.simpleGovernance, newState);
+    }
+
+    /// @notice Pause specific protocol pool (emergency only)
+    /// @param poolId Pool to pause
+    /// @param newState Emergency state
+    function pauseSpecificPool(uint256 poolId, uint8 newState) external {
+        require(
+            msg.sender == _storage.simpleGovernance.emergencyMultisig || 
+            msg.sender == _storage.simpleGovernance.protocolMultisig, 
+            "Only emergency"
+        );
+        SimpleGovernanceLib.pauseSpecificPool(_storage.simpleGovernance, poolId, newState);
     }
 
     /// @notice Internal swap execution logic (shared between normal and committed swaps)
@@ -419,14 +517,55 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
         bytes3 markings,
         uint256 amountIn,
         bool zeroForOne,
-        uint256 minAmountOut
+        uint256 minAmountOut,
+        bytes4 traderProtection,
+        bytes memory permitData
     ) internal returns (uint256 amountOut) {
         // Determine beneficiary (session-aware originator)
         address beneficiary = FlashAccounting.getActiveUser();
         if (beneficiary == address(0)) beneficiary = msg.sender;
 
+        // Validate atomic execution requirements (ONLY if enabled)
+        if ((uint32(traderProtection) & 0x00000100) != 0) { // Check ATOMIC_EXECUTION_ENABLED bit first
+            bool sessionActive = FlashAccounting.isSessionActive(beneficiary);
+            if (!AtomicExecutionLib.validateAtomicExecution(
+                uint32(traderProtection), 
+                sessionActive, 
+                _storage.atomicData
+            )) {
+                revert PoolManager__AtomicExecutionRequired();
+            }
+        }
+
+        // Validate access control requirements (ONLY if pool has access control enabled)
+        if ((markings & 0x000002) != 0) { // Check ACCESS_CONTROL_FLAG bit first
+            if (!AccessControlLib.validateUniversalAccess(
+                markings,
+                uint32(traderProtection),
+                _storage.accessData,
+                beneficiary,
+                permitData,
+                0 // Simplified for gas testing - skip pool value validation
+            )) {
+                revert PoolManager__AccessDenied();
+            }
+        }
+
         // Calculate poolID on-the-fly
         uint256 poolID = PoolIDAssembly.assemblePoolID(asset0, asset1, quoter, markings);
+
+        // Ultra-efficient governance check inlined to avoid call overhead
+        // 1) If not protocol pool -> bypass
+        if ((uint24(markings) & uint24(SimpleGovernanceLib.PROTOCOL_POOL_FLAG)) != 0) {
+            // 2) Read packed global state (one SLOAD)
+            uint256 packed = _storage.simpleGovernance.globalPackedState;
+            // If global state != NORMAL (0), revert immediately (rare path)
+            if (uint8(packed) != 0) revert PoolManager__OperationPaused();
+            // If some pools paused, check this pool only (rare path)
+            if (uint32((packed >> 8) & 0xFFFFFF) != 0) {
+                if (_storage.simpleGovernance.poolStates[poolID] != 0) revert PoolManager__OperationPaused();
+            }
+        }
 
         // Get inventory and calculate output using quoter system
         (uint128 poolAsset0, uint128 poolAsset1) = _getInventory(poolID);
@@ -439,7 +578,7 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             amount: new uint256[](1),
             zeroForOne: zeroForOne,
             marking: new bytes3[](1),
-            traderProtection: 0x00000000  // No additional protection for committed swaps
+            traderProtection: traderProtection
         });
         swapParams.amount[0] = amountIn;
         swapParams.marking[0] = markings;

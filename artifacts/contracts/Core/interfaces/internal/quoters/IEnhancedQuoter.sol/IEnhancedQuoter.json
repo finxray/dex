@@ -1,0 +1,227 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "IEnhancedQuoter",
+  "sourceName": "contracts/Core/interfaces/internal/quoters/IEnhancedQuoter.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "amount",
+              "type": "uint256[]"
+            },
+            {
+              "internalType": "uint128[]",
+              "name": "asset0Balances",
+              "type": "uint128[]"
+            },
+            {
+              "internalType": "uint128[]",
+              "name": "asset1Balances",
+              "type": "uint128[]"
+            },
+            {
+              "internalType": "uint16[]",
+              "name": "bucketID",
+              "type": "uint16[]"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "components": [
+                {
+                  "internalType": "address",
+                  "name": "trader",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "txOrigin",
+                  "type": "address"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "blockNumber",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "timestamp",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "gasPrice",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "gasLeft",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "bool",
+                  "name": "sessionActive",
+                  "type": "bool"
+                }
+              ],
+              "internalType": "struct TraderContext",
+              "name": "context",
+              "type": "tuple"
+            }
+          ],
+          "internalType": "struct QuoteParamsBatchWithContext",
+          "name": "params",
+          "type": "tuple"
+        },
+        {
+          "internalType": "bytes",
+          "name": "marketData",
+          "type": "bytes"
+        }
+      ],
+      "name": "quoteBatchWithContext",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "quotes",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "asset0",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "asset1",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "quoter",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset0Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "asset1Balance",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint16",
+              "name": "bucketID",
+              "type": "uint16"
+            },
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "components": [
+                {
+                  "internalType": "address",
+                  "name": "trader",
+                  "type": "address"
+                },
+                {
+                  "internalType": "address",
+                  "name": "txOrigin",
+                  "type": "address"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "blockNumber",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "timestamp",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "gasPrice",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "gasLeft",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "bool",
+                  "name": "sessionActive",
+                  "type": "bool"
+                }
+              ],
+              "internalType": "struct TraderContext",
+              "name": "context",
+              "type": "tuple"
+            }
+          ],
+          "internalType": "struct QuoteParamsWithContext",
+          "name": "params",
+          "type": "tuple"
+        },
+        {
+          "internalType": "bytes",
+          "name": "marketData",
+          "type": "bytes"
+        }
+      ],
+      "name": "quoteWithContext",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "quote",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

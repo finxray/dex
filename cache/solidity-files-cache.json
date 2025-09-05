@@ -311,8 +311,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/PoolManager.sol": {
-      "lastModificationDate": 1757046869305,
-      "contentHash": "f0acc8a67f2702c7d76e4db52162e9e0",
+      "lastModificationDate": 1757068315528,
+      "contentHash": "c9387480f3c306af7b7f80c163a18d72",
       "sourceName": "contracts/Core/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -350,7 +350,10 @@
         "./security/ReentrancyGuard.sol",
         "./libraries/FlashAccounting.sol",
         "./interfaces/internal/IFlashCallback.sol",
-        "./MEV/CommitRevealLib.sol"
+        "./MEV/CommitRevealLib.sol",
+        "./MEV/AtomicExecutionLib.sol",
+        "./MEV/AccessControlLib.sol",
+        "./libraries/SimpleGovernanceLib.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -360,8 +363,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/QuoteRouter.sol": {
-      "lastModificationDate": 1755889923244,
-      "contentHash": "f101e60aa5c2059e6d9f81be7b232cb2",
+      "lastModificationDate": 1757067082011,
+      "contentHash": "0c430a383af262eee212d9c5a2dcef44",
       "sourceName": "contracts/Core/QuoteRouter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -393,10 +396,13 @@
         "./libraries/PoolIDAssembly.sol",
         "./libraries/TransientStorage.sol",
         "./interfaces/internal/quoters/IQuoter.sol",
+        "./interfaces/internal/quoters/IEnhancedQuoter.sol",
         "./interfaces/internal/IDataBridge.sol",
         "./structs/SwapParams.sol",
         "./structs/Markings.sol",
-        "./structs/QuoteParams.sol"
+        "./structs/QuoteParams.sol",
+        "./structs/TraderContext.sol",
+        "./libraries/FlashAccounting.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -550,8 +556,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1757046869305,
-      "contentHash": "931bcb04f58cdc939d361a3944cd3333",
+      "lastModificationDate": 1757067346181,
+      "contentHash": "1fe8d2716fe934392eeef1cb90d8cd54",
       "sourceName": "contracts/Core/libraries/PoolManagerLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -586,7 +592,10 @@
         "../interfaces/internal/IQuoteRouter.sol",
         "../structs/Hop.sol",
         "../structs/PoolInfo.sol",
-        "../MEV/CommitRevealLib.sol"
+        "../MEV/CommitRevealLib.sol",
+        "../MEV/AtomicExecutionLib.sol",
+        "../MEV/AccessControlLib.sol",
+        "./SimpleGovernanceLib.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -4091,8 +4100,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/MEV/AccessControlLib.sol": {
-      "lastModificationDate": 1757011786313,
-      "contentHash": "8f82c0c86d19ca034de3205597b9f3c3",
+      "lastModificationDate": 1757067082010,
+      "contentHash": "400eb7572b33dd08acccc405fa3f9acf",
       "sourceName": "contracts/Core/MEV/AccessControlLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -4128,8 +4137,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/MEV/AtomicExecutionLib.sol": {
-      "lastModificationDate": 1757011786313,
-      "contentHash": "077fecf0f330c57024695eacc2aaaf79",
+      "lastModificationDate": 1757067082010,
+      "contentHash": "139e47d1eddf91acfa632218ce845a47",
       "sourceName": "contracts/Core/MEV/AtomicExecutionLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -4162,43 +4171,6 @@
       ],
       "artifacts": [
         "AtomicExecutionLib"
-      ]
-    },
-    "/Users/alexey/dex/contracts/Core/MEV/CircuitBreakerLib.sol": {
-      "lastModificationDate": 1757011786313,
-      "contentHash": "19d5bb8dddcdf1f534d8b610ab114210",
-      "sourceName": "contracts/Core/MEV/CircuitBreakerLib.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "viaIR": true,
-          "evmVersion": "cancun",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "CircuitBreakerLib"
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/real/VolumeControlLib.sol": {
@@ -4236,6 +4208,228 @@
       ],
       "artifacts": [
         "VolumeControlLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/interfaces/internal/quoters/IEnhancedQuoter.sol": {
+      "lastModificationDate": 1757067082010,
+      "contentHash": "de064044bc87a32edc99cf0677356528",
+      "sourceName": "contracts/Core/interfaces/internal/quoters/IEnhancedQuoter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../structs/TraderContext.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IEnhancedQuoter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/structs/TraderContext.sol": {
+      "lastModificationDate": 1757067082008,
+      "contentHash": "2d86628494c57a10b480e8d58b22b965",
+      "sourceName": "contracts/Core/structs/TraderContext.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": []
+    },
+    "/Users/alexey/dex/contracts/Core/interfaces/internal/IProtocolRegistry.sol": {
+      "lastModificationDate": 1757063838535,
+      "contentHash": "3cb11b64499125909803233647f36e85",
+      "sourceName": "contracts/Core/interfaces/internal/IProtocolRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IProtocolRegistry"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Governance/ProtocolRegistry.sol": {
+      "lastModificationDate": 1757063831173,
+      "contentHash": "66b5814be2c4d56299e5861462f99d9e",
+      "sourceName": "contracts/Governance/ProtocolRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "ProtocolRegistry"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/interfaces/internal/IStoixProtocolRegistry.sol": {
+      "lastModificationDate": 1757067082012,
+      "contentHash": "3cb11b64499125909803233647f36e85",
+      "sourceName": "contracts/Core/interfaces/internal/IStoixProtocolRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "IProtocolRegistry"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Core/libraries/SimpleGovernanceLib.sol": {
+      "lastModificationDate": 1757067997056,
+      "contentHash": "2baffeba2694c34a95df8cc5fdc494c2",
+      "sourceName": "contracts/Core/libraries/SimpleGovernanceLib.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "SimpleGovernanceLib"
       ]
     }
   }

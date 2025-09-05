@@ -18,6 +18,9 @@ import {IQuoteRouter} from "../interfaces/internal/IQuoteRouter.sol";
 import {Hop} from "../structs/Hop.sol";
 import {PoolInfo} from "../structs/PoolInfo.sol";
 import {CommitRevealLib} from "../MEV/CommitRevealLib.sol";
+import {AtomicExecutionLib} from "../MEV/AtomicExecutionLib.sol";
+import {AccessControlLib} from "../MEV/AccessControlLib.sol";
+import {SimpleGovernanceLib} from "./SimpleGovernanceLib.sol";
 
 // (interface moved to contracts/interfaces/internal/IQuoteRouter.sol)
 
@@ -51,6 +54,12 @@ library PoolManagerLib {
         mapping(uint256 => uint256) profitBaselineAsset1;
         // Commit-reveal MEV protection data
         CommitRevealLib.CommitData commitData;
+        // Atomic execution MEV protection data
+        AtomicExecutionLib.AtomicExecutionData atomicData;
+        // Access control MEV protection data
+        AccessControlLib.UniversalAccessConfig accessData;
+        // Simple governance data (ultra-efficient single SLOAD)
+        SimpleGovernanceLib.SimpleGovernanceData simpleGovernance;
     }
     
     /*//////////////////////////////////////////////////////////////
