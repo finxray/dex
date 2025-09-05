@@ -183,10 +183,9 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             PoolManagerLib.settleUserTokens(beneficiary, tokens, msg.value);
         }
 
-        // Update profit baseline after liquidity event to current pool value
+        // Update profit baselines after liquidity event to current inventory levels
         (poolAsset0, poolAsset1) = _getInventory(poolID);
-        uint256 newBaseline = PoolManagerLib.getPoolValueInAsset0(poolAsset0, poolAsset1, rate);
-        PoolManagerLib.updateProfitBaseline(_storage, poolID, newBaseline);
+        PoolManagerLib.updateProfitBaseline(_storage, poolID, poolAsset0, poolAsset1);
     }
 
     /// @notice Remove liquidity from a pool - OPTIMAL IMPLEMENTATION
@@ -246,10 +245,9 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard {
             PoolManagerLib.settleUserTokens(beneficiary, tokens, 0);
         }
 
-        // Update profit baseline after liquidity event to current pool value
+        // Update profit baselines after liquidity event to current inventory levels
         (poolAsset0, poolAsset1) = _getInventory(poolID);
-        uint256 newBaseline = PoolManagerLib.getPoolValueInAsset0(poolAsset0, poolAsset1, rate);
-        PoolManagerLib.updateProfitBaseline(_storage, poolID, newBaseline);
+        PoolManagerLib.updateProfitBaseline(_storage, poolID, poolAsset0, poolAsset1);
     }
 
     // Execution (without market) cost: 67,670 

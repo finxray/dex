@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "VolumeControlLib",
+  "sourceName": "contracts/Peripheral/quoters/real/VolumeControlLib.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea264697066735822122053767d451fa474e983b7d9f59632ab747bba75eaa70eaa6a8d5b5614acfbd36564736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea264697066735822122053767d451fa474e983b7d9f59632ab747bba75eaa70eaa6a8d5b5614acfbd36564736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

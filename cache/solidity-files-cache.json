@@ -2,7 +2,7 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/alexey/dex/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol": {
-      "lastModificationDate": 1751801307572,
+      "lastModificationDate": 1755946827189,
       "contentHash": "8f19f64d2adadf448840908bbaf431c8",
       "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
       "solcConfig": {
@@ -39,7 +39,7 @@
       ]
     },
     "/Users/alexey/dex/node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
-      "lastModificationDate": 1751801307572,
+      "lastModificationDate": 1755946827189,
       "contentHash": "794db3115001aa372c79326fcfd44b1f",
       "sourceName": "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol",
       "solcConfig": {
@@ -78,7 +78,7 @@
       ]
     },
     "/Users/alexey/dex/node_modules/@openzeppelin/contracts/token/ERC20/ERC20.sol": {
-      "lastModificationDate": 1751801307565,
+      "lastModificationDate": 1755946827189,
       "contentHash": "57d79df281f57bbb1b09214c7914f877",
       "sourceName": "@openzeppelin/contracts/token/ERC20/ERC20.sol",
       "solcConfig": {
@@ -120,7 +120,7 @@
       ]
     },
     "/Users/alexey/dex/node_modules/@openzeppelin/contracts/utils/Context.sol": {
-      "lastModificationDate": 1751801307559,
+      "lastModificationDate": 1755946827193,
       "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
       "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
@@ -157,7 +157,7 @@
       ]
     },
     "/Users/alexey/dex/node_modules/@openzeppelin/contracts/interfaces/draft-IERC6093.sol": {
-      "lastModificationDate": 1751801307561,
+      "lastModificationDate": 1755946827199,
       "contentHash": "267d92fe4de67b1bdb3302c08f387dbf",
       "sourceName": "@openzeppelin/contracts/interfaces/draft-IERC6093.sol",
       "solcConfig": {
@@ -311,8 +311,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/PoolManager.sol": {
-      "lastModificationDate": 1757020030228,
-      "contentHash": "6b3659116884ce0c9edb2c42bd2f088b",
+      "lastModificationDate": 1757046869305,
+      "contentHash": "f0acc8a67f2702c7d76e4db52162e9e0",
       "sourceName": "contracts/Core/PoolManager.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -550,8 +550,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/libraries/PoolManagerLib.sol": {
-      "lastModificationDate": 1757019682228,
-      "contentHash": "7c197f0f10c465a694fb24bee0ae4261",
+      "lastModificationDate": 1757046869305,
+      "contentHash": "931bcb04f58cdc939d361a3944cd3333",
       "sourceName": "contracts/Core/libraries/PoolManagerLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1206,7 +1206,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/uniswap/IUniswapV3Pool.sol": {
-      "lastModificationDate": 1755889256675,
+      "lastModificationDate": 1755889318657,
       "contentHash": "c8eecca3d949bda9740e0ae133663801",
       "sourceName": "contracts/Core/interfaces/external/uniswap/IUniswapV3Pool.sol",
       "solcConfig": {
@@ -1278,7 +1278,7 @@
       "artifacts": []
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/DummyData3.sol": {
-      "lastModificationDate": 1755886868432,
+      "lastModificationDate": 1755886977793,
       "contentHash": "ad3bfe51c02a36ddf8aa2fd1f0084273",
       "sourceName": "contracts/Peripheral/DataBridges/dummy/DummyData3.sol",
       "solcConfig": {
@@ -1318,7 +1318,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/Quoter1111.sol": {
-      "lastModificationDate": 1755886942226,
+      "lastModificationDate": 1755886977807,
       "contentHash": "bfe9595be15a31e161252be874cca610",
       "sourceName": "contracts/Peripheral/quoters/dummy/Quoter1111.sol",
       "solcConfig": {
@@ -1358,7 +1358,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/Quoter1110.sol": {
-      "lastModificationDate": 1755886923401,
+      "lastModificationDate": 1755886977802,
       "contentHash": "08999827975e4bfb13f3cb0d392c8b0e",
       "sourceName": "contracts/Peripheral/quoters/dummy/Quoter1110.sol",
       "solcConfig": {
@@ -1398,7 +1398,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/Quoter1100.sol": {
-      "lastModificationDate": 1755886908693,
+      "lastModificationDate": 1755886977802,
       "contentHash": "6223c47a2bfaef7e6b8d886de5f9221f",
       "sourceName": "contracts/Peripheral/quoters/dummy/Quoter1100.sol",
       "solcConfig": {
@@ -1438,7 +1438,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/Quoter1000.sol": {
-      "lastModificationDate": 1755886896769,
+      "lastModificationDate": 1755886977793,
       "contentHash": "6322fcc98663937d45de0681da3d8252",
       "sourceName": "contracts/Peripheral/quoters/dummy/Quoter1000.sol",
       "solcConfig": {
@@ -1478,7 +1478,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/Quoter0000.sol": {
-      "lastModificationDate": 1755886883487,
+      "lastModificationDate": 1755886977794,
       "contentHash": "f008013e3bffc3d28e8a6bd3a46944af",
       "sourceName": "contracts/Peripheral/quoters/dummy/Quoter0000.sol",
       "solcConfig": {
@@ -1518,7 +1518,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/DummyData2.sol": {
-      "lastModificationDate": 1755886861125,
+      "lastModificationDate": 1755886977793,
       "contentHash": "0938a210dfcc5168b149d0f5c2329c31",
       "sourceName": "contracts/Peripheral/DataBridges/dummy/DummyData2.sol",
       "solcConfig": {
@@ -1558,7 +1558,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/DummyData1.sol": {
-      "lastModificationDate": 1755886853584,
+      "lastModificationDate": 1755886977793,
       "contentHash": "b68a7c5c5fb9570053c78b839fe79b38",
       "sourceName": "contracts/Peripheral/DataBridges/dummy/DummyData1.sol",
       "solcConfig": {
@@ -1598,7 +1598,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/DummyData0.sol": {
-      "lastModificationDate": 1755886845140,
+      "lastModificationDate": 1755886977793,
       "contentHash": "7a1ebe52067feb1b3859548905278af4",
       "sourceName": "contracts/Peripheral/DataBridges/dummy/DummyData0.sol",
       "solcConfig": {
@@ -1638,7 +1638,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/dummy_tokens/TestTokenB.sol": {
-      "lastModificationDate": 1755887195100,
+      "lastModificationDate": 1755887268655,
       "contentHash": "10d37899844d28012e0ffed50ea9b213",
       "sourceName": "contracts/Peripheral/dummy_tokens/TestTokenB.sol",
       "solcConfig": {
@@ -1677,7 +1677,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/dummy_tokens/TestTokenA.sol": {
-      "lastModificationDate": 1755887189402,
+      "lastModificationDate": 1755887268655,
       "contentHash": "54f99a14da2d4866fa82384033c8841c",
       "sourceName": "contracts/Peripheral/dummy_tokens/TestTokenA.sol",
       "solcConfig": {
@@ -1716,7 +1716,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/Quoter1110Batch.sol": {
-      "lastModificationDate": 1755887567089,
+      "lastModificationDate": 1755887657793,
       "contentHash": "066c33bc10741c18ea5a9cc816ce8d55",
       "sourceName": "contracts/Peripheral/quoters/dummy/Quoter1110Batch.sol",
       "solcConfig": {
@@ -1756,7 +1756,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/flash_test/DummyFlashCallback.sol": {
-      "lastModificationDate": 1755887573818,
+      "lastModificationDate": 1755887657793,
       "contentHash": "b9a3d9a984213149f6379a931dd5a905",
       "sourceName": "contracts/Peripheral/flash_test/DummyFlashCallback.sol",
       "solcConfig": {
@@ -1795,7 +1795,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/flash_test/FlashSwapTwiceCallback.sol": {
-      "lastModificationDate": 1755887807271,
+      "lastModificationDate": 1755888020754,
       "contentHash": "34054e38c2c253c575cfed4a1e14b2bc",
       "sourceName": "contracts/Peripheral/flash_test/FlashSwapTwiceCallback.sol",
       "solcConfig": {
@@ -1835,7 +1835,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/flash_test/ReenterFlashSessionCallback.sol": {
-      "lastModificationDate": 1755887921473,
+      "lastModificationDate": 1755888020754,
       "contentHash": "1e7b5c1b19849e79165bc2eb97b9f1dc",
       "sourceName": "contracts/Peripheral/flash_test/ReenterFlashSessionCallback.sol",
       "solcConfig": {
@@ -1919,7 +1919,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/BaseAlias.sol": {
-      "lastModificationDate": 1755889118280,
+      "lastModificationDate": 1755889318658,
       "contentHash": "297e63d86b24a4206275894e52292ed1",
       "sourceName": "contracts/Peripheral/DataBridges/real/BaseAlias.sol",
       "solcConfig": {
@@ -2001,7 +2001,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/uniswap/IUniswapV2Pair.sol": {
-      "lastModificationDate": 1755889028804,
+      "lastModificationDate": 1755889318657,
       "contentHash": "1e3c54344a55784926013b2d522f4334",
       "sourceName": "contracts/Core/interfaces/external/uniswap/IUniswapV2Pair.sol",
       "solcConfig": {
@@ -2081,7 +2081,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/flash_test/GasMeasurer.sol": {
-      "lastModificationDate": 1755889834551,
+      "lastModificationDate": 1755889909595,
       "contentHash": "6302bdcd5e1bb05b32c3abe8cc45b60a",
       "sourceName": "contracts/Peripheral/flash_test/GasMeasurer.sol",
       "solcConfig": {
@@ -2121,7 +2121,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/uniswap/IUniswapV3Factory.sol": {
-      "lastModificationDate": 1755890388325,
+      "lastModificationDate": 1755890492573,
       "contentHash": "6e5af6103b7b1c932951580c4a99a00b",
       "sourceName": "contracts/Core/interfaces/external/uniswap/IUniswapV3Factory.sol",
       "solcConfig": {
@@ -2158,7 +2158,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/uniswap/IUniswapV2Factory.sol": {
-      "lastModificationDate": 1755890383026,
+      "lastModificationDate": 1755890492573,
       "contentHash": "c1b0e7cf3c03215a6a67e6e728920214",
       "sourceName": "contracts/Core/interfaces/external/uniswap/IUniswapV2Factory.sol",
       "solcConfig": {
@@ -2282,7 +2282,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/IChainlinkAggregator.sol": {
-      "lastModificationDate": 1755938705689,
+      "lastModificationDate": 1755938794236,
       "contentHash": "225a29bc38b07fc3a57f2c46a63d1db7",
       "sourceName": "contracts/Core/interfaces/external/IChainlinkAggregator.sol",
       "solcConfig": {
@@ -2319,7 +2319,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/IChainlinkFeedRegistry.sol": {
-      "lastModificationDate": 1755940360827,
+      "lastModificationDate": 1755940419542,
       "contentHash": "225ec900286f88f03a17b959f9a91ac1",
       "sourceName": "contracts/Core/interfaces/external/IChainlinkFeedRegistry.sol",
       "solcConfig": {
@@ -2511,7 +2511,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/interfaces/external/ITokenAliasRegistry.sol": {
-      "lastModificationDate": 1755968751552,
+      "lastModificationDate": 1755968831116,
       "contentHash": "cfa0e2016ab6a7f0784ebe15a5bc2d0f",
       "sourceName": "contracts/Core/interfaces/external/ITokenAliasRegistry.sol",
       "solcConfig": {
@@ -3337,7 +3337,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/BaseDataAdapter.sol": {
-      "lastModificationDate": 1756483684423,
+      "lastModificationDate": 1756483766423,
       "contentHash": "02f09b536b6778478ec3a524f0321e83",
       "sourceName": "contracts/Peripheral/quoters/adapters/BaseDataAdapter.sol",
       "solcConfig": {
@@ -3374,7 +3374,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/SimpleDataAdapterLibrary.sol": {
-      "lastModificationDate": 1756483711292,
+      "lastModificationDate": 1756483766447,
       "contentHash": "f47ffcddfc1addbf3a87ba3903d7ce6b",
       "sourceName": "contracts/Peripheral/quoters/adapters/SimpleDataAdapterLibrary.sol",
       "solcConfig": {
@@ -3413,7 +3413,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/V3TWAPAdapter.sol": {
-      "lastModificationDate": 1756483364848,
+      "lastModificationDate": 1756483766423,
       "contentHash": "5e88a460863ea0c059aa76d334f9af99",
       "sourceName": "contracts/Peripheral/quoters/adapters/V3TWAPAdapter.sol",
       "solcConfig": {
@@ -3452,7 +3452,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/V3DataAdapter.sol": {
-      "lastModificationDate": 1756483367046,
+      "lastModificationDate": 1756483766423,
       "contentHash": "f8c194e2f2d735673d7fffa716677f21",
       "sourceName": "contracts/Peripheral/quoters/adapters/V3DataAdapter.sol",
       "solcConfig": {
@@ -3491,7 +3491,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/V2DataAdapter.sol": {
-      "lastModificationDate": 1756483369256,
+      "lastModificationDate": 1756483766423,
       "contentHash": "12189347ba3593a4607c8e95f838a07e",
       "sourceName": "contracts/Peripheral/quoters/adapters/V2DataAdapter.sol",
       "solcConfig": {
@@ -3569,7 +3569,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/DataAdapterLibrary.sol": {
-      "lastModificationDate": 1756483697327,
+      "lastModificationDate": 1756483766435,
       "contentHash": "1f5f6e47167bed1fbdc1b9c6d02e1028",
       "sourceName": "contracts/Peripheral/quoters/adapters/DataAdapterLibrary.sol",
       "solcConfig": {
@@ -3609,7 +3609,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/DataAdapterHelper.sol": {
-      "lastModificationDate": 1756483688193,
+      "lastModificationDate": 1756483766443,
       "contentHash": "322922e262e1b6ed0c8472f1918b37d8",
       "sourceName": "contracts/Peripheral/quoters/adapters/DataAdapterHelper.sol",
       "solcConfig": {
@@ -3646,7 +3646,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/adapters/ChainlinkAdapter.sol": {
-      "lastModificationDate": 1756483365978,
+      "lastModificationDate": 1756483766423,
       "contentHash": "cc9f5b6c3b5408ea4dfdf92f0a813514",
       "sourceName": "contracts/Peripheral/quoters/adapters/ChainlinkAdapter.sol",
       "solcConfig": {
@@ -3891,7 +3891,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V3TWAPChainlinkQuoter.sol": {
-      "lastModificationDate": 1756635264192,
+      "lastModificationDate": 1756635366297,
       "contentHash": "590f4b5ff812ee7ceed2ceae7b145fb5",
       "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V3TWAPChainlinkQuoter.sol",
       "solcConfig": {
@@ -3932,7 +3932,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/RealDataBridge/V3DataRedStoneQuoter.sol": {
-      "lastModificationDate": 1756635272229,
+      "lastModificationDate": 1756635366309,
       "contentHash": "5408389c40915568fe300bc80a6e9097",
       "sourceName": "contracts/Peripheral/quoters/dummy/RealDataBridge/V3DataRedStoneQuoter.sol",
       "solcConfig": {
@@ -4014,7 +4014,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/dummy/QuoterLoss1050.sol": {
-      "lastModificationDate": 1757007228299,
+      "lastModificationDate": 1757007326968,
       "contentHash": "2373ce6f815174270876913fb9808735",
       "sourceName": "contracts/Peripheral/quoters/dummy/QuoterLoss1050.sol",
       "solcConfig": {
@@ -4054,7 +4054,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/MEV/CommitRevealLib.sol": {
-      "lastModificationDate": 1757019570492,
+      "lastModificationDate": 1757019767777,
       "contentHash": "afbaddd6ca8098516863f56725e004e8",
       "sourceName": "contracts/Core/MEV/CommitRevealLib.sol",
       "solcConfig": {
@@ -4201,10 +4201,10 @@
         "CircuitBreakerLib"
       ]
     },
-    "/Users/alexey/dex/contracts/Core/MEV/VolumeControlLib.sol": {
-      "lastModificationDate": 1757011786313,
+    "/Users/alexey/dex/contracts/Peripheral/quoters/real/VolumeControlLib.sol": {
+      "lastModificationDate": 1757020571020,
       "contentHash": "4bc5692c91748a500f7f5e472feb840a",
-      "sourceName": "contracts/Core/MEV/VolumeControlLib.sol",
+      "sourceName": "contracts/Peripheral/quoters/real/VolumeControlLib.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {

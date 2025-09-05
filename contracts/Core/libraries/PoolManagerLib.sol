@@ -46,8 +46,9 @@ library PoolManagerLib {
         // Protocol fee configuration (applies on liquidity events only)
         address protocolTreasury;          // address(0) disables fee
         uint16 protocolFeeBps;             // e.g., 700 for 7% of profit
-        // Profit baseline per pool, denominated in asset0 units with 1e18 precision
+        // Profit baselines per pool - dual asset tracking to prevent rate change artifacts
         mapping(uint256 => uint256) profitBaselineAsset0;
+        mapping(uint256 => uint256) profitBaselineAsset1;
         // Commit-reveal MEV protection data
         CommitRevealLib.CommitData commitData;
     }
@@ -263,8 +264,9 @@ library PoolManagerLib {
         emit ProtocolFeeConfigured(treasury, feeBps);
     }
 
-    /// @notice Charge protocol fee on profit since last checkpoint, based on current rate.
-    /// @dev Does nothing if treasury is unset or feeBps==0. Reduces inventory and transfers out to treasury.
+    /// @notice Charge protocol fee on profit since last checkpoint using dual-token method.
+    /// @dev Only charges fee when BOTH assets increased (prevents rate change artifacts).
+    ///      Uses minimum profit approach for maximum conservatism.
     function chargeProtocolProfitFee(
         PoolManagerStorage storage self,
         uint256 poolID,
@@ -276,40 +278,54 @@ library PoolManagerLib {
             return;
         }
 
-        (uint128 a0, uint128 a1) = getInventory(self, poolID);
-        if (a0 == 0 && a1 == 0) {
-            // Nothing to charge; update baseline to zero
+        // Get current balances and baselines
+        (uint128 currentA0, uint128 currentA1) = getInventory(self, poolID);
+        uint128 baselineA0 = uint128(self.profitBaselineAsset0[poolID]);
+        uint128 baselineA1 = uint128(self.profitBaselineAsset1[poolID]);
+        
+        if (currentA0 == 0 && currentA1 == 0) {
+            // Nothing to charge; update baselines to zero
             self.profitBaselineAsset0[poolID] = 0;
+            self.profitBaselineAsset1[poolID] = 0;
             return;
         }
 
-        uint256 currentValueA0 = getPoolValueInAsset0(a0, a1, rateAsset0Per1e18Asset1);
-        uint256 baseline = self.profitBaselineAsset0[poolID];
-        if (currentValueA0 <= baseline) {
-            // No profit; nothing to take
+        // Calculate raw changes in both assets
+        int256 deltaA0 = int256(uint256(currentA0)) - int256(uint256(baselineA0));
+        int256 deltaA1 = int256(uint256(currentA1)) - int256(uint256(baselineA1));
+        
+        // Only charge fee if BOTH assets increased (genuine trading profit)
+        if (deltaA0 <= 0 || deltaA1 <= 0) {
+            // No profit or loss in at least one asset - no fee
             return;
         }
-
-        uint256 profitA0 = currentValueA0 - baseline;
+        
+        // Convert deltaA1 to asset0 terms for comparison
+        uint256 delta1InA0 = (uint256(deltaA1) * rateAsset0Per1e18Asset1) / 1e18;
+        
+        // Take minimum profit (most conservative approach)
+        uint256 profitA0 = uint256(deltaA0) < delta1InA0 ? uint256(deltaA0) : delta1InA0;
+        
         uint256 feeValueA0 = (profitA0 * uint256(feeBps)) / 10000;
         if (feeValueA0 == 0) {
             return;
         }
 
         // Split fee proportionally to current composition to preserve pool ratio
-        uint256 asset1AsA0 = (uint256(a1) * rateAsset0Per1e18Asset1) / 1e18;
-        uint256 totalA0Value = uint256(a0) + asset1AsA0;
+        uint256 asset1AsA0 = (uint256(currentA1) * rateAsset0Per1e18Asset1) / 1e18;
+        uint256 totalA0Value = uint256(currentA0) + asset1AsA0;
         if (totalA0Value == 0) {
             return;
         }
-        uint256 feeA0Part = (feeValueA0 * uint256(a0)) / totalA0Value;
+        
+        uint256 feeA0Part = (feeValueA0 * uint256(currentA0)) / totalA0Value;
         uint256 feeA1PartInA0 = feeValueA0 - feeA0Part;
         // Convert asset0-value to asset1 amount: a1 = value_in_a0 * 1e18 / rate
         uint256 feeA1Part = (feeA1PartInA0 * 1e18) / (rateAsset0Per1e18Asset1 == 0 ? 1 : rateAsset0Per1e18Asset1);
 
         // Bound by current balances
-        if (feeA0Part > a0) feeA0Part = a0;
-        if (feeA1Part > a1) feeA1Part = a1;
+        if (feeA0Part > currentA0) feeA0Part = currentA0;
+        if (feeA1Part > currentA1) feeA1Part = currentA1;
 
         // Update inventory
         updateInventory(self, poolID, -int128(uint128(feeA0Part)), -int128(uint128(feeA1Part)));
@@ -326,13 +342,25 @@ library PoolManagerLib {
         emit ProtocolFeeCharged(poolID, treasury, feeA0Part, feeA1Part);
     }
 
-    /// @notice Update profit baseline to the provided value.
+    /// @notice Update profit baselines for both assets to current inventory levels.
+    /// @dev Called after liquidity events to reset profit measurement baseline.
     function updateProfitBaseline(
         PoolManagerStorage storage self,
         uint256 poolID,
-        uint256 newBaselineAsset0
+        uint128 newBaselineAsset0,
+        uint128 newBaselineAsset1
     ) internal {
-        self.profitBaselineAsset0[poolID] = newBaselineAsset0;
+        self.profitBaselineAsset0[poolID] = uint256(newBaselineAsset0);
+        self.profitBaselineAsset1[poolID] = uint256(newBaselineAsset1);
+    }
+
+    /// @notice Get current profit baselines for both assets.
+    function getProfitBaselines(
+        PoolManagerStorage storage self,
+        uint256 poolID
+    ) internal view returns (uint128 baselineAsset0, uint128 baselineAsset1) {
+        baselineAsset0 = uint128(self.profitBaselineAsset0[poolID]);
+        baselineAsset1 = uint128(self.profitBaselineAsset1[poolID]);
     }
 
     /*//////////////////////////////////////////////////////////////

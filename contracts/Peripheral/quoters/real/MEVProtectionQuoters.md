@@ -52,25 +52,24 @@
 - Marking bits: gas price ceiling
 
 ## TRADER-CONTROLLED PROTECTIONS
-*These should be implemented at PoolManager level with traderProtection flags*
+*These can be implemented at quoter level if QuoteParams extended with trader context*
 
-### 5. Per-Block Volume Throttle → **CORE-LEVEL** 
-**Implementation**: PoolManager checks before calling quoter
-- Trader sets volume limit flag in SwapParams.traderProtection
-- PoolManager validates against per-address volume tracking
-- **Why core**: Needs msg.sender context and persistent storage
+### 5. Per-Block Volume Throttle → **QUOTER-LEVEL** 
+**File**: `VolumeControlQuoter.sol` (see VolumeControlLib.sol)
+**Implementation**: Quoter tracks volume and returns 0 if exceeded
+- **Requirement**: Extend QuoteParams with msg.sender field
+- **Storage**: Per-pool volume tracking in quoter contract
+- **Benefit**: Failed quotes cheaper than failed transactions
 
-### 6. Cooldown Between Trades → **CORE-LEVEL**
-**Implementation**: PoolManager checks before calling quoter  
-- Trader sets cooldown flag in SwapParams.traderProtection
-- PoolManager validates against per-address timestamp tracking
-- **Why core**: Needs msg.sender context and persistent storage
+### 6. Cooldown Between Trades → **QUOTER-LEVEL**
+**File**: Same as #5 - `VolumeControlQuoter.sol`
+- Pool-level and address-level cooldown tracking
+- Returns 0 if cooldown not elapsed
 
-### 13. Per-Address Rate Limiting → **CORE-LEVEL**
-**Implementation**: PoolManager checks before calling quoter
-- Trader sets rate limit flag in SwapParams.traderProtection  
-- PoolManager validates against per-address frequency tracking
-- **Why core**: Needs msg.sender context and persistent storage
+### 13. Per-Address Rate Limiting → **QUOTER-LEVEL**
+**File**: Same as #5 - `VolumeControlQuoter.sol`
+- Address-specific trade frequency limits
+- Shared storage with volume and cooldown tracking
 
 ## Primary Sandwich Defense
 **Recommended quoter combo**: #1 + #3 + #11

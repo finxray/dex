@@ -32,6 +32,7 @@
 ## PENDING GROUPS:
 
 ## Group A: Volume & Rate Limiting → **MOVED TO QUOTER LEVEL**
+**Status**: Moved to `/contracts/Peripheral/quoters/real/VolumeControlLib.sol`
 **Rationale**: Can be implemented in quoters if QuoteParams extended with msg.sender
 **Features**: #5 (volume throttle), #6 (cooldowns), #13 (address rate limiting)
 **See**: `/contracts/Peripheral/quoters/real/MEVProtectionQuoters.md`
