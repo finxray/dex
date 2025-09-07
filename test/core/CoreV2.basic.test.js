@@ -5,6 +5,7 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
   let deployer, lp, trader;
   let weth, usdc;
   let pm;
+  let liquidityManager;
 
   const WETH_AMOUNT = ethers.parseEther("1000");
   const USDC_AMOUNT = ethers.parseEther("130000");
@@ -14,7 +15,7 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
     [deployer, lp, trader] = await ethers.getSigners();
 
     const MockWETH = await ethers.getContractFactory("TestTokenA");
-    const MockUSDC = await ethers.getContractFactory("TestTokenB");
+    const MockUSDC = await ethers.getContractFactory("TestTokenA");
     weth = await MockWETH.deploy();
     usdc = await MockUSDC.deploy();
     await weth.waitForDeployment();
@@ -24,10 +25,11 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
     const D1 = await ethers.getContractFactory("DummyData1");
     const D2 = await ethers.getContractFactory("DummyData2");
     const D3 = await ethers.getContractFactory("DummyData3");
-    const d0 = await D0.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d1 = await D1.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d2 = await D2.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d3 = await D3.deploy(ethers.hexlify(ethers.randomBytes(8)));
+    const priceBytes = ethers.AbiCoder.defaultAbiCoder().encode(["uint256","uint256"],[ethers.parseUnits("4500",18), BigInt(Math.floor(Date.now()/1000))]);
+    const d0 = await D0.deploy(priceBytes);
+    const d1 = await D1.deploy(priceBytes);
+    const d2 = await D2.deploy(priceBytes);
+    const d3 = await D3.deploy(priceBytes);
 
     const PoolManager = await ethers.getContractFactory("PoolManager");
     pm = await PoolManager.deploy(
@@ -38,6 +40,12 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
     );
     await pm.waitForDeployment();
 
+    // Deploy LiquidityManager and wire it
+    const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
+    liquidityManager = await LiquidityManager.deploy(await pm.getAddress());
+    await pm.setLiquidityManager(await liquidityManager.getAddress());
+
+    // Mint and approve tokens (approve PM for settlement)
     for (const u of [lp, trader]) {
       await weth.mint(u.address, ethers.parseEther("10000"));
       await usdc.mint(u.address, ethers.parseEther("13000000"));
@@ -51,7 +59,7 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
     const quoter = await Q1100.deploy();
     await quoter.waitForDeployment();
 
-    const marking = "0x000001";
+    const marking = "0x000001"; // d0 only
 
     await pm.connect(lp).createPool(
       await weth.getAddress(),
@@ -60,13 +68,24 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
       marking
     );
 
-    await pm.connect(lp).addLiquidity(
+    await liquidityManager.connect(lp).addLiquidity(
       await weth.getAddress(),
       await usdc.getAddress(),
       await quoter.getAddress(),
       marking,
       WETH_AMOUNT,
       USDC_AMOUNT
+    );
+
+    // Warm-up swap for consistent gas
+    await pm.connect(trader).swap(
+      await weth.getAddress(),
+      await usdc.getAddress(),
+      await quoter.getAddress(),
+      marking,
+      ethers.parseEther("0.001"),
+      true,
+      0
     );
 
     const tx = await pm.connect(trader).swap(
@@ -87,8 +106,8 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
     const quoter = await Q1110Batch.deploy();
     await quoter.waitForDeployment();
 
-    const markingA = "0x000001";
-    const markingB = "0x000002";
+    const markingA = "0x000001"; // d0
+    const markingB = "0x000004"; // d2 (avoid ACCESS_CONTROL bit)
 
     // Ensure pools exist and have liquidity
     for (const marking of [markingA, markingB]) {
@@ -98,7 +117,7 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
         await quoter.getAddress(),
         marking
       );
-      await pm.connect(lp).addLiquidity(
+      await liquidityManager.connect(lp).addLiquidity(
         await weth.getAddress(),
         await usdc.getAddress(),
         await quoter.getAddress(),
@@ -139,7 +158,7 @@ describe("Core V2: basic flows (create/add/swap/batch/flash/MEV/CB)", function (
       await quoter.getAddress(),
       marking
     );
-    await pm.connect(lp).addLiquidity(
+    await liquidityManager.connect(lp).addLiquidity(
       await weth.getAddress(),
       await usdc.getAddress(),
       await quoter.getAddress(),

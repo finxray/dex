@@ -33,15 +33,30 @@ contract UniswapV2DataBridge is IDataBridge, BaseAlias {
         IUniswapV2PairFull p = IUniswapV2PairFull(pair);
         (uint112 r0, uint112 r1, ) = p.getReserves();
         if (!(r0 > 0 && r1 > 0)) revert UniswapV2__EmptyReserves();
-        uint8 d0 = IERC20Metadata(p.token0()).decimals();
-        uint8 d1 = IERC20Metadata(p.token1()).decimals();
-        uint256 scaleNum = 10 ** (uint256(18) + uint256(d1));
-        uint256 scaleDen = 10 ** uint256(d0);
-        uint256 priceT0PerT1 = mulDiv(uint256(r0), scaleNum, uint256(r1) * scaleDen);
-        address t0 = p.token0(); address t1 = p.token1();
-        uint256 canonical = _normalizeToCanonical(t0, t1, priceT0PerT1);
-        bool asRequested = _isRequestedOrder(params.asset0, params.asset1);
-        uint256 spot = asRequested ? canonical : (1e36) / canonical;
+        address token0 = p.token0();
+        address token1 = p.token1();
+        uint8 d0 = IERC20Metadata(token0).decimals();
+        uint8 d1 = IERC20Metadata(token1).decimals();
+        
+        // We need to return the price in the format expected by QuoteParams
+        // The price should be asset1 per asset0 (USDC per WETH when asset0=WETH, asset1=USDC)
+        uint256 spot;
+        
+        if (params.asset0 == token0 && params.asset1 == token1) {
+            // Want token1 per token0 (e.g., WETH per USDC if token0=USDC, token1=WETH)
+            // Price = r1/r0 scaled to 1e18
+            uint256 scaleNum = 10 ** (uint256(18) + uint256(d0));
+            uint256 scaleDen = 10 ** uint256(d1);
+            spot = mulDiv(uint256(r1), scaleNum, uint256(r0) * scaleDen);
+        } else if (params.asset0 == token1 && params.asset1 == token0) {
+            // Want token0 per token1 (e.g., USDC per WETH if token0=USDC, token1=WETH)
+            // Price = r0/r1 scaled to 1e18
+            uint256 scaleNum = 10 ** (uint256(18) + uint256(d1));
+            uint256 scaleDen = 10 ** uint256(d0);
+            spot = mulDiv(uint256(r0), scaleNum, uint256(r1) * scaleDen);
+        } else {
+            revert UniswapV2__PairTokensMismatch();
+        }
 
         // TWAP via cumulative prices if enough time elapsed; for now, treat twap = spot
         uint256 twap = spot;
@@ -49,10 +64,12 @@ contract UniswapV2DataBridge is IDataBridge, BaseAlias {
         // V2 cumulative oracles require passing time. For safety, return spot as twap here.
         // Hook left for future: cache historical cumulative snapshots externally to compute TWAP.
 
-        return abi.encode(spot, twap);
+        return abi.encode(spot, block.timestamp);
     }
 
     function _normalizeToCanonical(address t0, address t1, uint256 priceT0PerT1) internal view returns (uint256) {
+        // priceT0PerT1 = token0 per token1 (USDC per WETH in our case)
+        // We want: canonicalExt0 per canonicalExt1 (WETH per USDC when canonicalExt0=WETH)
         if (t0 == canonicalExt0 && t1 == canonicalExt1) return priceT0PerT1;
         if (t0 == canonicalExt1 && t1 == canonicalExt0) return (1e36) / priceT0PerT1;
         revert UniswapV2__PairTokensMismatch();

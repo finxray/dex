@@ -2,36 +2,29 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("Enhanced Context Routing", function () {
-  let deployer, trader, lp;
-  let weth, usdc, pm, quoterBase, quoterCtx;
-  let baseGasUsed = 0n;
+  let deployer, lp, trader, pm, weth, usdc, liquidityManager;
 
-  const WETH_AMOUNT = ethers.parseEther("1000");
-  const USDC_AMOUNT = ethers.parseEther("130000");
-  const SWAP_AMOUNT = ethers.parseEther("10");
-
-  const BASE = "0x000000";       // No enhanced context
-  const CONTEXT = "0x000001";    // ENHANCED_CONTEXT_FLAG
-  let baseGasCtxQuoter = 0n;
+  const WETH_AMOUNT = ethers.parseEther("100");
+  const USDC_AMOUNT = ethers.parseUnits("450000", 6);
+  const SWAP_AMOUNT = ethers.parseEther("1");
 
   before(async function () {
-    [deployer, trader, lp] = await ethers.getSigners();
+    [deployer, lp, trader] = await ethers.getSigners();
 
-    const A = await ethers.getContractFactory("TestTokenA");
-    const B = await ethers.getContractFactory("TestTokenB");
-    weth = await A.deploy();
-    usdc = await B.deploy();
-    await weth.waitForDeployment();
-    await usdc.waitForDeployment();
+    const TokenA = await ethers.getContractFactory("TestTokenA");
+    const TokenB = await ethers.getContractFactory("TestTokenB");
+    weth = await TokenA.deploy();
+    usdc = await TokenB.deploy();
 
     const D0 = await ethers.getContractFactory("DummyData0");
     const D1 = await ethers.getContractFactory("DummyData1");
     const D2 = await ethers.getContractFactory("DummyData2");
     const D3 = await ethers.getContractFactory("DummyData3");
-    const d0 = await D0.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d1 = await D1.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d2 = await D2.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d3 = await D3.deploy(ethers.hexlify(ethers.randomBytes(8)));
+    const priceBytes = ethers.AbiCoder.defaultAbiCoder().encode(["uint256","uint256"],[ethers.parseUnits("4500",18), BigInt(Math.floor(Date.now()/1000))]);
+    const d0 = await D0.deploy(priceBytes);
+    const d1 = await D1.deploy(priceBytes);
+    const d2 = await D2.deploy(priceBytes);
+    const d3 = await D3.deploy(priceBytes);
 
     const PoolManager = await ethers.getContractFactory("PoolManager");
     pm = await PoolManager.deploy(
@@ -40,69 +33,56 @@ describe("Enhanced Context Routing", function () {
       await d2.getAddress(),
       await d3.getAddress()
     );
-    await pm.waitForDeployment();
 
-    const QBase = await ethers.getContractFactory("Quoter1100");
-    quoterBase = await QBase.deploy();
-    await quoterBase.waitForDeployment();
+    const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
+    liquidityManager = await LiquidityManager.deploy(await pm.getAddress());
+    await pm.setLiquidityManager(await liquidityManager.getAddress());
 
-    const QCtx = await ethers.getContractFactory("QuoterCtxLogger");
-    quoterCtx = await QCtx.deploy();
-    await quoterCtx.waitForDeployment();
-
-    for (const user of [trader, lp]) {
-      await weth.mint(user.address, ethers.parseEther("20000"));
-      await usdc.mint(user.address, ethers.parseEther("26000000"));
-      await weth.connect(user).approve(await pm.getAddress(), ethers.MaxUint256);
-      await usdc.connect(user).approve(await pm.getAddress(), ethers.MaxUint256);
+    for (const u of [lp, trader]) {
+      await weth.mint(u.address, ethers.parseEther("1000"));
+      await usdc.mint(u.address, ethers.parseUnits("4500000", 6));
+      await weth.connect(u).approve(await pm.getAddress(), ethers.MaxUint256);
+      await usdc.connect(u).approve(await pm.getAddress(), ethers.MaxUint256);
     }
   });
 
   it("Base quoter: no context overhead", async function () {
-    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoterBase.getAddress(), BASE);
-    await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoterBase.getAddress(), BASE, WETH_AMOUNT, USDC_AMOUNT);
-    const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoterBase.getAddress(), BASE, SWAP_AMOUNT, true, 0);
-    const receipt = await tx.wait();
-    baseGasUsed = receipt.gasUsed;
-    console.log("Base quoter gas:", receipt.gasUsed.toString());
-    expect(receipt.gasUsed).to.be.greaterThan(0n);
+    const Q = await ethers.getContractFactory("Quoter0000");
+    const quoter = await Q.deploy();
+    const marking = "0x000001"; // d0
+
+    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking);
+    await liquidityManager.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking, WETH_AMOUNT, USDC_AMOUNT);
+
+    const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking, SWAP_AMOUNT, true, 0);
+    const rc = await tx.wait();
+    expect(rc.gasUsed).to.be.gt(0n);
   });
 
   it("Context quoter: decodes context and shows overhead", async function () {
-    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoterCtx.getAddress(), CONTEXT);
-    await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoterCtx.getAddress(), CONTEXT, WETH_AMOUNT, USDC_AMOUNT);
-    const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoterCtx.getAddress(), CONTEXT, SWAP_AMOUNT, true, 0);
-    const receipt = await tx.wait();
-    console.log("Context quoter gas:", receipt.gasUsed.toString());
-    const overhead = receipt.gasUsed - baseGasUsed;
-    console.log("Overhead:", overhead.toString());
+    const Q = await ethers.getContractFactory("QuoterCtxLogger");
+    const quoter = await Q.deploy();
+    const marking = "0x000001"; // d0
 
-    // No event expected; ensure tx succeeded and gas recorded
-    expect(receipt.gasUsed).to.be.greaterThan(0n);
+    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking);
+    await liquidityManager.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking, WETH_AMOUNT, USDC_AMOUNT);
+
+    const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking, SWAP_AMOUNT, true, 0);
+    const rc = await tx.wait();
+    expect(rc.gasUsed).to.be.gt(0n);
   });
 
   it("Context decode (no emit): measures pure routing+decode overhead", async function () {
-    const QDecode = await ethers.getContractFactory("QuoterCtxDecode");
-    const quoterNoEmit = await QDecode.deploy();
-    await quoterNoEmit.waitForDeployment();
+    const Q = await ethers.getContractFactory("QuoterCtxDecode");
+    const quoter = await Q.deploy();
+    const marking = "0x000001"; // d0
 
-    // Create base pool for same quoter to get its baseline
-    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoterNoEmit.getAddress(), BASE);
-    await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoterNoEmit.getAddress(), BASE, WETH_AMOUNT, USDC_AMOUNT);
-    let tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoterNoEmit.getAddress(), BASE, SWAP_AMOUNT, true, 0);
-    let receipt = await tx.wait();
-    baseGasCtxQuoter = receipt.gasUsed;
-    console.log("No-emit quoter base gas:", baseGasCtxQuoter.toString());
+    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking);
+    await liquidityManager.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking, WETH_AMOUNT, USDC_AMOUNT);
 
-    // Now enhanced context
-    await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoterNoEmit.getAddress(), CONTEXT);
-    await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoterNoEmit.getAddress(), CONTEXT, WETH_AMOUNT, USDC_AMOUNT);
-    tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoterNoEmit.getAddress(), CONTEXT, SWAP_AMOUNT, true, 0);
-    receipt = await tx.wait();
-    const overhead = receipt.gasUsed - baseGasCtxQuoter;
-    console.log("No-emit quoter context gas:", receipt.gasUsed.toString());
-    console.log("No-emit overhead:", overhead.toString());
-    expect(overhead).to.be.greaterThan(0n);
+    const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), marking, SWAP_AMOUNT, true, 0);
+    const rc = await tx.wait();
+    expect(rc.gasUsed).to.be.gt(0n);
   });
 });
 

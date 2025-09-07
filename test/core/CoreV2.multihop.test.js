@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("Core V2: multi-hop batchSwap with multiple buckets", function () {
-  let deployer, lp, trader, pm, weth, usdc, dai;
+  let deployer, lp, trader, pm, weth, usdc, dai, liquidityManager;
   const LIQ = ethers.parseEther("100000");
   const SWAP_IN = ethers.parseEther("10");
 
@@ -18,10 +18,11 @@ describe("Core V2: multi-hop batchSwap with multiple buckets", function () {
     const D1 = await ethers.getContractFactory("DummyData1");
     const D2 = await ethers.getContractFactory("DummyData2");
     const D3 = await ethers.getContractFactory("DummyData3");
-    const d0 = await D0.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d1 = await D1.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d2 = await D2.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d3 = await D3.deploy(ethers.hexlify(ethers.randomBytes(8)));
+    const priceBytes = ethers.AbiCoder.defaultAbiCoder().encode(["uint256","uint256"],[ethers.parseUnits("4500",18), BigInt(Math.floor(Date.now()/1000))]);
+    const d0 = await D0.deploy(priceBytes);
+    const d1 = await D1.deploy(priceBytes);
+    const d2 = await D2.deploy(priceBytes);
+    const d3 = await D3.deploy(priceBytes);
 
     const PoolManager = await ethers.getContractFactory("PoolManager");
     pm = await PoolManager.deploy(
@@ -31,6 +32,10 @@ describe("Core V2: multi-hop batchSwap with multiple buckets", function () {
       await d3.getAddress()
     );
     await pm.waitForDeployment();
+
+    const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
+    liquidityManager = await LiquidityManager.deploy(await pm.getAddress());
+    await pm.setLiquidityManager(await liquidityManager.getAddress());
 
     for (const u of [lp, trader]) {
       for (const t of [weth, usdc, dai]) {
@@ -43,16 +48,16 @@ describe("Core V2: multi-hop batchSwap with multiple buckets", function () {
   it("WETH->USDC->DAI multi-hop across buckets", async function () {
     const Q = await ethers.getContractFactory("Quoter1110Batch");
     const quoter = await Q.deploy();
-    const m1 = "0x000001"; // bucket 1
-    const m2 = "0x000002"; // bucket 2
+    const m1 = "0x000001"; // d0
+    const m2 = "0x000004"; // d2
 
     // Create WETH/USDC pool in bucket 1 and add liquidity
     await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), m1);
-    await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), m1, LIQ, LIQ);
+    await liquidityManager.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), m1, LIQ, LIQ);
 
     // Create USDC/DAI pool in bucket 2 and add liquidity
     await pm.connect(lp).createPool(await usdc.getAddress(), await dai.getAddress(), await quoter.getAddress(), m2);
-    await pm.connect(lp).addLiquidity(await usdc.getAddress(), await dai.getAddress(), await quoter.getAddress(), m2, LIQ, LIQ);
+    await liquidityManager.connect(lp).addLiquidity(await usdc.getAddress(), await dai.getAddress(), await quoter.getAddress(), m2, LIQ, LIQ);
 
     const hops = [
       {

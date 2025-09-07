@@ -50,6 +50,8 @@ contract UniswapV3TWAPDataBridge is IDataBridge, BaseAlias {
         
         // Calculate TWAP with safety checks
         uint256 twap;
+        // Add event for debugging
+        // event TWAPDebug(int56 delta, int24 avgTick, uint256 spot, uint256 twap);
         if (avgTick > 887200 || avgTick < -887200 || delta == 0) {
             // Extreme tick values or no price movement, use spot price as fallback
             twap = spot;
@@ -72,7 +74,7 @@ contract UniswapV3TWAPDataBridge is IDataBridge, BaseAlias {
         } else {
             revert UniswapV3TWAP__PairMismatch();
         }
-        return abi.encode(spot, twap);
+        return abi.encode(twap, block.timestamp);
     }
 
     function _sortedCanonical() internal view returns (address a, address b) { a = canonicalExt0; b = canonicalExt1; if (a > b) { (a, b) = (b, a); } }

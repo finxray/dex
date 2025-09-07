@@ -102,19 +102,48 @@ abstract contract QuoteRouter {
             bucketID: m.bucketID,
             zeroForOne: p.zeroForOne
         });
-        // Build payload from default bridges 0..3
+        // Efficiently build payload from enabled bridges only
+        // Decode bridge flags: extraBridgeSlot can be:
+        // - 0: no extra bridges
+        // - 1-15: single bridge at that slot
+        // - 16-255: bitmask for multiple bridges (bit 0 = slot 4, bit 11 = slot 15)
+        
         bytes memory d0 = m.data0 ? _getMarketDataNoCache(defaultData0Bridge, params) : bytes("");
         bytes memory d1 = m.data1 ? _getMarketDataNoCache(defaultData1Bridge, params) : bytes("");
         bytes memory d2 = m.data2 ? _getMarketDataNoCache(defaultData2Bridge, params) : bytes("");
         bytes memory d3raw = m.data3 ? _getMarketDataNoCache(defaultData3Bridge, params) : bytes("");
-        // Optional extra configurable bridge (overall slots 4..15)
-        bytes memory dx = bytes("");
-        if (m.extraBridgeSlot >= 4) {
+        
+        // Handle configurable bridges (slots 4-15)
+        bytes memory dx;
+        if (m.extraBridgeSlot == 0) {
+            // No extra bridges
+            dx = bytes("");
+        } else if (m.extraBridgeSlot <= 15) {
+            // Single extra bridge at specified slot
             uint8 slotIndex = m.extraBridgeSlot - 4;
-            if (slotIndex < 12) {
-                address extra = configurableDataBridges[slotIndex];
-                dx = _getMarketDataNoCache(extra, params);
+            if (m.extraBridgeSlot >= 4 && slotIndex < 12) {
+                address bridge = configurableDataBridges[slotIndex];
+                dx = (bridge != address(0)) ? _getMarketDataNoCache(bridge, params) : bytes("");
+            } else {
+                dx = bytes("");
             }
+        } else {
+            // Bitmask mode: fetch multiple bridges
+            bytes[] memory extras = new bytes[](12);
+            uint8 bitmask = m.extraBridgeSlot;
+            bool hasData = false;
+            
+            for (uint8 i = 0; i < 12; i++) {
+                if ((bitmask & (1 << i)) != 0) {
+                    address bridge = configurableDataBridges[i];
+                    if (bridge != address(0)) {
+                        extras[i] = _getMarketDataNoCache(bridge, params);
+                        hasData = true;
+                    }
+                }
+            }
+            
+            dx = hasData ? abi.encode(extras) : bytes("");
         }
         // Always include a context slot in d3 as (bytes d3raw, bytes contextBytes)
         bytes memory contextBytes;
@@ -170,20 +199,43 @@ abstract contract QuoteRouter {
             bucketID: 0,
             zeroForOne: p.zeroForOne
         });
+        // Efficiently build payload with caching for batch operations
         bytes memory d0 = m.data0 ? _getMarketDataCached(defaultData0Bridge, baseParams) : bytes("");
         bytes memory d1 = m.data1 ? _getMarketDataCached(defaultData1Bridge, baseParams) : bytes("");
         bytes memory d2 = m.data2 ? _getMarketDataCached(defaultData2Bridge, baseParams) : bytes("");
         bytes memory d3raw = m.data3 ? _getMarketDataCached(defaultData3Bridge, baseParams) : bytes("");
-        bytes memory dx = bytes("");
-        {
-            uint8 extra = MarkingHelper.decodeMarkings(p.marking[0]).extraBridgeSlot;
-            if (extra >= 4) {
-                uint8 slotIndex = extra - 4;
-                if (slotIndex < 12) {
-                    address extraAddr = configurableDataBridges[slotIndex];
-                    dx = _getMarketDataCached(extraAddr, baseParams);
+        
+        // Handle configurable bridges with caching
+        bytes memory dx;
+        if (m.extraBridgeSlot == 0) {
+            // No extra bridges
+            dx = bytes("");
+        } else if (m.extraBridgeSlot <= 15) {
+            // Single extra bridge at specified slot
+            uint8 slotIndex = m.extraBridgeSlot - 4;
+            if (m.extraBridgeSlot >= 4 && slotIndex < 12) {
+                address bridge = configurableDataBridges[slotIndex];
+                dx = (bridge != address(0)) ? _getMarketDataCached(bridge, baseParams) : bytes("");
+            } else {
+                dx = bytes("");
+            }
+        } else {
+            // Bitmask mode: fetch multiple bridges with caching
+            bytes[] memory extras = new bytes[](12);
+            uint8 bitmask = m.extraBridgeSlot;
+            bool hasData = false;
+            
+            for (uint8 i = 0; i < 12; i++) {
+                if ((bitmask & (1 << i)) != 0) {
+                    address bridge = configurableDataBridges[i];
+                    if (bridge != address(0)) {
+                        extras[i] = _getMarketDataCached(bridge, baseParams);
+                        hasData = true;
+                    }
                 }
             }
+            
+            dx = hasData ? abi.encode(extras) : bytes("");
         }
         // Always include a context slot in d3 as (bytes d3raw, bytes contextBytes)
         bool needsContext = false;

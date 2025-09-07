@@ -4,6 +4,7 @@ const { ethers } = require("hardhat");
 describe("Ultra-Efficient Governance Test", function () {
   let deployer, protocol, emergency, trader, lp;
   let weth, usdc, pm, quoter;
+  let liquidityManager;
 
   const WETH_AMOUNT = ethers.parseEther("1000");
   const USDC_AMOUNT = ethers.parseEther("130000");
@@ -16,9 +17,9 @@ describe("Ultra-Efficient Governance Test", function () {
   before(async function () {
     [deployer, protocol, emergency, trader, lp] = await ethers.getSigners();
 
-    // Deploy test tokens
+    // Deploy test tokens (use 18 decimals for USDC in this test)
     const MockWETH = await ethers.getContractFactory("TestTokenA");
-    const MockUSDC = await ethers.getContractFactory("TestTokenB");
+    const MockUSDC = await ethers.getContractFactory("TestTokenA");
     weth = await MockWETH.deploy();
     usdc = await MockUSDC.deploy();
     await weth.waitForDeployment();
@@ -29,10 +30,11 @@ describe("Ultra-Efficient Governance Test", function () {
     const D1 = await ethers.getContractFactory("DummyData1");
     const D2 = await ethers.getContractFactory("DummyData2");
     const D3 = await ethers.getContractFactory("DummyData3");
-    const d0 = await D0.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d1 = await D1.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d2 = await D2.deploy(ethers.hexlify(ethers.randomBytes(8)));
-    const d3 = await D3.deploy(ethers.hexlify(ethers.randomBytes(8)));
+    const priceBytes = ethers.AbiCoder.defaultAbiCoder().encode(["uint256","uint256"],[ethers.parseUnits("4500",18), BigInt(Math.floor(Date.now()/1000))]);
+    const d0 = await D0.deploy(priceBytes);
+    const d1 = await D1.deploy(priceBytes);
+    const d2 = await D2.deploy(priceBytes);
+    const d3 = await D3.deploy(priceBytes);
 
     // Deploy PoolManager
     const PoolManager = await ethers.getContractFactory("PoolManager");
@@ -43,6 +45,11 @@ describe("Ultra-Efficient Governance Test", function () {
       await d3.getAddress()
     );
     await pm.waitForDeployment();
+
+    // Wire LiquidityManager
+    const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
+    liquidityManager = await LiquidityManager.deploy(await pm.getAddress());
+    await pm.setLiquidityManager(await liquidityManager.getAddress());
 
     // Set governance addresses
     await pm.setGovernance(protocol.address, emergency.address);
@@ -60,7 +67,7 @@ describe("Ultra-Efficient Governance Test", function () {
       await usdc.connect(user).approve(await pm.getAddress(), ethers.MaxUint256);
     }
 
-    console.log("\\n=== ULTRA-EFFICIENT GOVERNANCE TEST (HIGH-BIT FLAG) ===");
+    console.log("\n=== ULTRA-EFFICIENT GOVERNANCE TEST (HIGH-BIT FLAG) ===");
   });
 
   describe("Your Optimized Design Benchmark", function () {
@@ -68,7 +75,7 @@ describe("Ultra-Efficient Governance Test", function () {
 
     it("Base pool: Zero governance overhead (flag bypasses all logic)", async function () {
       await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), BASE_POOL);
-      await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), BASE_POOL, WETH_AMOUNT, USDC_AMOUNT);
+      await liquidityManager.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), BASE_POOL, WETH_AMOUNT, USDC_AMOUNT);
 
       const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), BASE_POOL, SWAP_AMOUNT, true, 0);
       baseGas = (await tx.wait()).gasUsed;
@@ -78,7 +85,7 @@ describe("Ultra-Efficient Governance Test", function () {
 
     it("Protocol pool: Minimal overhead (flag + single SLOAD)", async function () {
       await pm.connect(protocol).createPool(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), PROTOCOL_POOL);
-      await pm.connect(protocol).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), PROTOCOL_POOL, WETH_AMOUNT, USDC_AMOUNT);
+      await liquidityManager.connect(protocol).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), PROTOCOL_POOL, WETH_AMOUNT, USDC_AMOUNT);
 
       const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await quoter.getAddress(), PROTOCOL_POOL, SWAP_AMOUNT, true, 0);
       protocolGas = (await tx.wait()).gasUsed;
@@ -88,7 +95,6 @@ describe("Ultra-Efficient Governance Test", function () {
       console.log("Protocol gas:", protocolGas.toString());
       console.log("Overhead:", overhead.toString(), `(+${overheadPct}%)`);
 
-      // Target overhead: ~= one cold SLOAD (~2100) + tiny logic
       expect(overhead).to.be.lessThan(2500n);
     });
   });

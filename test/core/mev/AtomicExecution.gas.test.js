@@ -56,6 +56,11 @@ describe("AtomicExecution MEV Protection - Gas Analysis", function () {
     );
     await pm.waitForDeployment();
 
+    // LiquidityManager
+    const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
+    const liquidityManager = await LiquidityManager.deploy(await pm.getAddress());
+    await pm.setLiquidityManager(await liquidityManager.getAddress());
+
     // Deploy baseline quoter (same as working tests)
     const Q1100 = await ethers.getContractFactory("Quoter1100");
     quoter = await Q1100.deploy();
@@ -77,7 +82,7 @@ describe("AtomicExecution MEV Protection - Gas Analysis", function () {
       marking
     );
 
-    await pm.connect(lp).addLiquidity(
+    await liquidityManager.connect(lp).addLiquidity(
       await weth.getAddress(),
       await usdc.getAddress(),
       await quoter.getAddress(),

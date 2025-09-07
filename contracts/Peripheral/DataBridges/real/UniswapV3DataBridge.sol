@@ -50,7 +50,7 @@ contract UniswapV3DataBridge is IDataBridge, BaseAlias {
         } else {
             revert UniswapV3__PairMismatch();
         }
-        return abi.encode(spot, spot);
+        return abi.encode(spot, block.timestamp);
     }
 
     function _sortedCanonical() internal view returns (address a, address b) {

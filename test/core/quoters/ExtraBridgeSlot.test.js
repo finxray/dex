@@ -3,10 +3,10 @@ const { ethers } = require("hardhat");
 
 describe("Extra Bridge Slot (dx) routing", function () {
   let deployer, protocol, trader, lp;
-  let weth, usdc, pm, dxQuoter, extraBridge;
+  let weth, usdc, pm, dxQuoter, extraBridge, liquidityManager;
 
   const WETH_AMOUNT = ethers.parseEther("1000");
-  const USDC_AMOUNT = ethers.parseEther("130000");
+  const USDC_AMOUNT = ethers.parseUnits("130000", 6);
   const SWAP_AMOUNT = ethers.parseEther("10");
 
   // Use overall slot 10 (in range 4..15) → internal index 6
@@ -14,7 +14,6 @@ describe("Extra Bridge Slot (dx) routing", function () {
 
   // Helper to compose markings: data0..3 off, bucketID=0, extra=slot
   function markingsWithExtra(extraSlot) {
-    // bits: [0..3]=0, [4..15]=bucketID=0, [16..19]=0, [20..23]=extra
     const value = (BigInt(extraSlot & 0xF) << 20n);
     const hex = '0x' + value.toString(16).padStart(6, '0');
     return hex;
@@ -49,6 +48,11 @@ describe("Extra Bridge Slot (dx) routing", function () {
     );
     await pm.waitForDeployment();
 
+    // Wire LiquidityManager
+    const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
+    liquidityManager = await LiquidityManager.deploy(await pm.getAddress());
+    await pm.setLiquidityManager(await liquidityManager.getAddress());
+
     // Set protocol/ emergency multisigs to allow setDataBridge
     await pm.setGovernance(protocol.address, protocol.address);
 
@@ -59,12 +63,11 @@ describe("Extra Bridge Slot (dx) routing", function () {
 
     const QDX = await ethers.getContractFactory("QuoterDXLogger");
     dxQuoter = await QDX.deploy();
-    await dxQuoter.waitForDeployment();
 
     // Setup balances and approvals
     for (const user of [trader, lp, protocol]) {
       await weth.mint(user.address, ethers.parseEther("20000"));
-      await usdc.mint(user.address, ethers.parseEther("26000000"));
+      await usdc.mint(user.address, ethers.parseUnits("26000000", 6));
       await weth.connect(user).approve(await pm.getAddress(), ethers.MaxUint256);
       await usdc.connect(user).approve(await pm.getAddress(), ethers.MaxUint256);
     }
@@ -72,7 +75,7 @@ describe("Extra Bridge Slot (dx) routing", function () {
     // Create pool with markings that set extra bridge slot 10
     const markings = markingsWithExtra(OVERALL_SLOT);
     await pm.connect(lp).createPool(await weth.getAddress(), await usdc.getAddress(), await dxQuoter.getAddress(), markings);
-    await pm.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await dxQuoter.getAddress(), markings, WETH_AMOUNT, USDC_AMOUNT);
+    await liquidityManager.connect(lp).addLiquidity(await weth.getAddress(), await usdc.getAddress(), await dxQuoter.getAddress(), markings, WETH_AMOUNT, USDC_AMOUNT);
 
     // Swap and assert DXSeen event indicates non-zero dx length
     const tx = await pm.connect(trader).swap(await weth.getAddress(), await usdc.getAddress(), await dxQuoter.getAddress(), markings, SWAP_AMOUNT, true, 0);
