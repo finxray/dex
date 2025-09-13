@@ -7,27 +7,16 @@ describe("Optimized PoolManager - Size Test", function () {
     
     console.log("\n=== CONTRACT SIZE OPTIMIZATION TEST ===\n");
     
-    // Deploy dummy bridges for testing
-    const DummyBridge0 = await ethers.getContractFactory("DummyData0");
-    const DummyBridge1 = await ethers.getContractFactory("DummyData1");
-    const DummyBridge2 = await ethers.getContractFactory("DummyData2");
-    const DummyBridge3 = await ethers.getContractFactory("DummyData3");
-    const priceBytes = ethers.AbiCoder.defaultAbiCoder().encode(["uint256","uint256"],[ethers.parseUnits("4500",18), BigInt(Math.floor(Date.now()/1000))]);
-    const bridge0 = await DummyBridge0.deploy(priceBytes);
-    const bridge1 = await DummyBridge1.deploy(priceBytes);
-    const bridge2 = await DummyBridge2.deploy(priceBytes);
-    const bridge3 = await DummyBridge3.deploy(priceBytes);
+    // Deploy MockStoixDataBridge for testing
+    const MockBridge = await ethers.getContractFactory("MockStoixDataBridge");
+    const bridge = await MockBridge.deploy();
+    await bridge.waitForDeployment();
     
-    console.log("✅ Dummy bridges deployed");
+    console.log("✅ MockStoixDataBridge deployed");
     
-    // Deploy the PoolManager
+    // Deploy the PoolManager with consolidated bridge
     const PoolManager = await ethers.getContractFactory("PoolManager");
-    const pm = await PoolManager.deploy(
-      await bridge0.getAddress(),
-      await bridge1.getAddress(),
-      await bridge2.getAddress(),
-      await bridge3.getAddress()
-    );
+    const pm = await PoolManager.deploy(await bridge.getAddress());
     console.log("✅ PoolManager: Deployed successfully");
     console.log(`   Address: ${await pm.getAddress()}`);
     

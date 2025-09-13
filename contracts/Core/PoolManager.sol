@@ -36,11 +36,8 @@ contract PoolManager is ERC6909Claims, QuoteRouter, ReentrancyGuard, IPoolManage
     address public liquidityManager;
     
     constructor(
-        address _defaultData0Bridge,
-        address _defaultData1Bridge,
-        address _defaultData2Bridge,
-        address _defaultData3Bridge
-    ) QuoteRouter(_defaultData0Bridge, _defaultData1Bridge, _defaultData2Bridge, _defaultData3Bridge) {
+        address _defaultData0Bridge
+    ) QuoteRouter(_defaultData0Bridge) {
         // Initialize libraries with minimal setup
         AtomicExecutionLib.initializeDefaultConfigs(_storage.atomicData);
         AccessControlLib.initializeUniversalAccess(_storage.accessData);

@@ -21,26 +21,18 @@ abstract contract QuoteRouter {
     bytes3 constant ENHANCED_CONTEXT_FLAG = 0x000001;
     
     address immutable public defaultData0Bridge;
-    address immutable public defaultData1Bridge;
-    address immutable public defaultData2Bridge;
-    address immutable public defaultData3Bridge;
 
     // 12 configurable data bridges (slots 4..15 overall). These are storage-based and can be updated post-deploy.
     // Index mapping:
-    // - Overall slots 0..3 map to immutables defaultData0..3
-    // - Overall slots 4..15 map to configurableDataBridges[0..11]
+    // - Overall slots 0..3 map to immutables defaultData0..3 (future expansion)
+    // - Overall slots 4..14 map to configurableDataBridges[0..10] 
+    // - Overall slot 15 is special consolidated bridge slot (dx) - no caching, uses defaultData0Bridge
     address[12] public configurableDataBridges;
 
     constructor(
-        address _defaultData0Bridge,
-        address _defaultData1Bridge,
-        address _defaultData2Bridge,
-        address _defaultData3Bridge
+        address _defaultData0Bridge
     ) {
         defaultData0Bridge = _defaultData0Bridge;
-        defaultData1Bridge = _defaultData1Bridge;
-        defaultData2Bridge = _defaultData2Bridge;
-        defaultData3Bridge = _defaultData3Bridge;
     }
 
     // Internal setter to be called by inheritors (e.g., PoolManager) with proper access control
@@ -100,50 +92,40 @@ abstract contract QuoteRouter {
             asset0Balance: asset0Balance,
             asset1Balance: asset1Balance,
             bucketID: m.bucketID,
-            zeroForOne: p.zeroForOne
+            zeroForOne: p.zeroForOne,
+            functionFlags: _inferFunctionFlags(m)
         });
         // Efficiently build payload from enabled bridges only
         // Decode bridge flags: extraBridgeSlot can be:
         // - 0: no extra bridges
-        // - 1-15: single bridge at that slot
-        // - 16-255: bitmask for multiple bridges (bit 0 = slot 4, bit 11 = slot 15)
+        // - 1-14: single configurable bridge at that slot (slots 4-14)
+        // - 15: special consolidated bridge slot (dx) - uses defaultData0Bridge, no caching
         
-        bytes memory d0 = m.data0 ? _getMarketDataNoCache(defaultData0Bridge, params) : bytes("");
-        bytes memory d1 = m.data1 ? _getMarketDataNoCache(defaultData1Bridge, params) : bytes("");
-        bytes memory d2 = m.data2 ? _getMarketDataNoCache(defaultData2Bridge, params) : bytes("");
-        bytes memory d3raw = m.data3 ? _getMarketDataNoCache(defaultData3Bridge, params) : bytes("");
+        bytes memory d0 = bytes(""); // Reserved for future use (slots 0-3)
+        bytes memory d1 = bytes("");
+        bytes memory d2 = bytes("");
+        bytes memory d3raw = bytes("");
         
-        // Handle configurable bridges (slots 4-15)
+        // Handle configurable bridges and special slot 16
         bytes memory dx;
         if (m.extraBridgeSlot == 0) {
             // No extra bridges
             dx = bytes("");
-        } else if (m.extraBridgeSlot <= 15) {
-            // Single extra bridge at specified slot
+        } else if (m.extraBridgeSlot <= 14) {
+            // Single configurable bridge at specified slot (4-14)
             uint8 slotIndex = m.extraBridgeSlot - 4;
-            if (m.extraBridgeSlot >= 4 && slotIndex < 12) {
+            if (m.extraBridgeSlot >= 4 && slotIndex < 11) {
                 address bridge = configurableDataBridges[slotIndex];
                 dx = (bridge != address(0)) ? _getMarketDataNoCache(bridge, params) : bytes("");
             } else {
                 dx = bytes("");
             }
+        } else if (m.extraBridgeSlot == 15) {
+            // Special slot 15: consolidated bridge (dx) - no caching, uses defaultData0Bridge
+            dx = _getMarketDataNoCache(defaultData0Bridge, params);
         } else {
-            // Bitmask mode: fetch multiple bridges
-            bytes[] memory extras = new bytes[](12);
-            uint8 bitmask = m.extraBridgeSlot;
-            bool hasData = false;
-            
-            for (uint8 i = 0; i < 12; i++) {
-                if ((bitmask & (1 << i)) != 0) {
-                    address bridge = configurableDataBridges[i];
-                    if (bridge != address(0)) {
-                        extras[i] = _getMarketDataNoCache(bridge, params);
-                        hasData = true;
-                    }
-                }
-            }
-            
-            dx = hasData ? abi.encode(extras) : bytes("");
+            // Reserved for future expansion
+            dx = bytes("");
         }
         // Always include a context slot in d3 as (bytes d3raw, bytes contextBytes)
         bytes memory contextBytes;
@@ -186,7 +168,8 @@ abstract contract QuoteRouter {
             asset0Balances: asset0Balances,
             asset1Balances: asset1Balances,
             bucketID: bucketIDs,
-            zeroForOne: p.zeroForOne
+            zeroForOne: p.zeroForOne,
+            functionFlags: _inferFunctionFlags(m)
         });
         // For batch, fetch once per marking set; cached fetches to enable hits across hops
         QuoteParams memory baseParams = QuoteParams({
@@ -197,45 +180,36 @@ abstract contract QuoteRouter {
             asset0Balance: 0,
             asset1Balance: 0,
             bucketID: 0,
-            zeroForOne: p.zeroForOne
+            zeroForOne: p.zeroForOne,
+            functionFlags: 0
         });
         // Efficiently build payload with caching for batch operations
-        bytes memory d0 = m.data0 ? _getMarketDataCached(defaultData0Bridge, baseParams) : bytes("");
-        bytes memory d1 = m.data1 ? _getMarketDataCached(defaultData1Bridge, baseParams) : bytes("");
-        bytes memory d2 = m.data2 ? _getMarketDataCached(defaultData2Bridge, baseParams) : bytes("");
-        bytes memory d3raw = m.data3 ? _getMarketDataCached(defaultData3Bridge, baseParams) : bytes("");
+        // For StoixDataBridge architecture: put consolidated bridge data in dx, not d0
+        bytes memory d0 = bytes("");
+        bytes memory d1 = bytes("");
+        bytes memory d2 = bytes("");
+        bytes memory d3raw = bytes("");
         
-        // Handle configurable bridges with caching
+        // Handle configurable bridges and special slot 16 with caching
         bytes memory dx;
         if (m.extraBridgeSlot == 0) {
             // No extra bridges
             dx = bytes("");
-        } else if (m.extraBridgeSlot <= 15) {
-            // Single extra bridge at specified slot
+        } else if (m.extraBridgeSlot <= 14) {
+            // Single configurable bridge at specified slot (4-14)
             uint8 slotIndex = m.extraBridgeSlot - 4;
-            if (m.extraBridgeSlot >= 4 && slotIndex < 12) {
+            if (m.extraBridgeSlot >= 4 && slotIndex < 11) {
                 address bridge = configurableDataBridges[slotIndex];
                 dx = (bridge != address(0)) ? _getMarketDataCached(bridge, baseParams) : bytes("");
             } else {
                 dx = bytes("");
             }
+        } else if (m.extraBridgeSlot == 15) {
+            // Special slot 15: consolidated bridge (dx) - no caching, uses defaultData0Bridge
+            dx = _getMarketDataNoCache(defaultData0Bridge, baseParams);
         } else {
-            // Bitmask mode: fetch multiple bridges with caching
-            bytes[] memory extras = new bytes[](12);
-            uint8 bitmask = m.extraBridgeSlot;
-            bool hasData = false;
-            
-            for (uint8 i = 0; i < 12; i++) {
-                if ((bitmask & (1 << i)) != 0) {
-                    address bridge = configurableDataBridges[i];
-                    if (bridge != address(0)) {
-                        extras[i] = _getMarketDataCached(bridge, baseParams);
-                        hasData = true;
-                    }
-                }
-            }
-            
-            dx = hasData ? abi.encode(extras) : bytes("");
+            // Reserved for future expansion
+            dx = bytes("");
         }
         // Always include a context slot in d3 as (bytes d3raw, bytes contextBytes)
         bool needsContext = false;
@@ -315,15 +289,18 @@ abstract contract QuoteRouter {
                 asset0Balance: asset0Balance,
                 asset1Balance: asset1Balance,
                 bucketID: m.bucketID,
-                zeroForOne: p.zeroForOne
+                zeroForOne: p.zeroForOne,
+                functionFlags: _inferFunctionFlags(m)
             });
-            bytes memory d0 = m.data0 ? _getMarketDataNoCache(defaultData0Bridge, qp) : bytes("");
-            bytes memory d1 = m.data1 ? _getMarketDataNoCache(defaultData1Bridge, qp) : bytes("");
-            bytes memory d2 = m.data2 ? _getMarketDataNoCache(defaultData2Bridge, qp) : bytes("");
-            bytes memory d3raw = m.data3 ? _getMarketDataNoCache(defaultData3Bridge, qp) : bytes("");
+            // For StoixDataBridge architecture with context: put bridge data in dx (5th position)
+            bytes memory d0 = bytes("");
+            bytes memory d1 = bytes("");
+            bytes memory d2 = bytes("");
+            bytes memory d3raw = bytes("");
+            bytes memory dx = m.data0 ? _getMarketDataNoCache(defaultData0Bridge, qp) : bytes("");
             // Combine d3 payload with context: (bytes d3raw, bytes contextBytes)
             bytes memory d3 = abi.encode(d3raw, contextBytes);
-            bytes memory routed = abi.encode(d0, d1, d2, d3);
+            bytes memory routed = abi.encode(d0, d1, d2, d3, dx);
             quote = IQuoter(qp.quoter).quote(qp, routed);
             return (quote, poolID);
         }
@@ -370,6 +347,7 @@ abstract contract QuoteRouter {
         });
         bytes memory contextBytes = abi.encode(context);
         // For batch, fetch once per marking set; cached fetches to enable hits across hops
+        Markings memory m0 = MarkingHelper.decodeMarkings(p.marking[0]);
         QuoteParams memory baseParams = QuoteParams({
             asset0: p.asset0,
             asset1: p.asset1,
@@ -378,16 +356,18 @@ abstract contract QuoteRouter {
             asset0Balance: 0,
             asset1Balance: 0,
             bucketID: 0,
-            zeroForOne: p.zeroForOne
+            zeroForOne: p.zeroForOne,
+            functionFlags: _inferFunctionFlags(m0)
         });
-        Markings memory m0 = MarkingHelper.decodeMarkings(p.marking[0]);
-        bytes memory d0 = m0.data0 ? _getMarketDataCached(defaultData0Bridge, baseParams) : bytes("");
-        bytes memory d1 = m0.data1 ? _getMarketDataCached(defaultData1Bridge, baseParams) : bytes("");
-        bytes memory d2 = m0.data2 ? _getMarketDataCached(defaultData2Bridge, baseParams) : bytes("");
-        bytes memory d3raw = m0.data3 ? _getMarketDataCached(defaultData3Bridge, baseParams) : bytes("");
+        // For StoixDataBridge architecture with context batch: put bridge data in dx (5th position)
+        bytes memory d0 = bytes("");
+        bytes memory d1 = bytes("");
+        bytes memory d2 = bytes("");
+        bytes memory d3raw = bytes("");
+        bytes memory dx = m0.data0 ? _getMarketDataCached(defaultData0Bridge, baseParams) : bytes("");
         // Combine d3 payload with context once for batch
         bytes memory d3 = abi.encode(d3raw, contextBytes);
-        bytes memory routed = abi.encode(d0, d1, d2, d3);
+        bytes memory routed = abi.encode(d0, d1, d2, d3, dx);
         QuoteParamsBatch memory params = QuoteParamsBatch({
             asset0: p.asset0,
             asset1: p.asset1,
@@ -396,9 +376,19 @@ abstract contract QuoteRouter {
             asset0Balances: asset0Balances,
             asset1Balances: asset1Balances,
             bucketID: bucketIDs,
-            zeroForOne: p.zeroForOne
+            zeroForOne: p.zeroForOne,
+            functionFlags: 0
         });
         quote = IQuoter(p.quoter).quoteBatch(params, routed);
+    }
+
+    // Map markings to StoixBridge function flags. Use slot 15 for consolidated bridge.
+    function _inferFunctionFlags(Markings memory m) internal pure returns (uint8) {
+        // If slot 15 used (consolidated StoixBridge), use bucketID lower 8 bits as function flags.
+        // Default to 0x0F (v2|v3|twap|cl) when override is zero.
+        if (m.extraBridgeSlot != 15) return 0;
+        uint8 overrideFlags = uint8(m.bucketID & 0xFF);
+        return overrideFlags == 0 ? 0x0F : overrideFlags;
     }
 }
 

@@ -8,8 +8,11 @@ struct Markings {
     // Layout in bytes3 (24 bits total):
     // bits [0..3]   -> data0..data3 (booleans)
     // bits [4..15]  -> bucketID (12 bits)
-    // bits [16]     -> reserved (protocol flag used elsewhere)
-    // bits [17..19] -> reserved
+    // bits [16..19] -> reserved
+    // bits [20..23] -> extraBridgeSlot (4 bits)
+    // Extended meanings when data0 (StoixBridge) is used:
+    // - bucketID remains for quoter logic
+    // - function flags for StoixBridge are passed separately in QuoteParams.functionFlags
     // bits [20..23] -> extraBridgeSlot (0 = none, 4..15 = configurable slots)
     bool data0;
     bool data1;

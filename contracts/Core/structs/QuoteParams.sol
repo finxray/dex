@@ -11,6 +11,7 @@ struct QuoteParams {
     uint128 asset1Balance;
     uint16 bucketID;
     bool zeroForOne;
+    uint8 functionFlags; // per-bridge function flags (e.g., StoixBridge subflags)
 }
 
 /// @notice Flattened batch quote parameters - no nested structs for gas optimization
@@ -23,5 +24,6 @@ struct QuoteParamsBatch {
     uint128[] asset1Balances;
     uint16[] bucketID;
     bool zeroForOne;
+    uint8 functionFlags;
 }
 

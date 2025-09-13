@@ -6,7 +6,8 @@
     "test": "hardhat test",
     "compile": "hardhat compile",
     "test:quoters": "hardhat test test/Quoters.test.js",
-    "test:redstone": "FORK=1 HARDHAT_CONFIG=hardhat.redstone.v5.config.js npx hardhat test test/peripheral/quoters/real/RealDataBridge/StoixQuoter.fork.test.js --grep StoixQuoter"
+    "test:redstone": "FORK=1 HARDHAT_CONFIG=hardhat.redstone.v5.config.js npx hardhat test test/peripheral/quoters/real/RealDataBridge/StoixQuoter.fork.test.js --grep StoixQuoter",
+    "test:stoix:dummy": "npx hardhat test test/peripheral/quoters/dummy/dummyDataBridge/StoixBridge.DummyQuoters.test.js test/peripheral/quoters/dummy/dummyDataBridge/StoixBridge.DummyQuoters.display.test.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",

@@ -46,6 +46,11 @@
               "internalType": "bool",
               "name": "zeroForOne",
               "type": "bool"
+            },
+            {
+              "internalType": "uint8",
+              "name": "functionFlags",
+              "type": "uint8"
             }
           ],
           "internalType": "struct QuoteParams",

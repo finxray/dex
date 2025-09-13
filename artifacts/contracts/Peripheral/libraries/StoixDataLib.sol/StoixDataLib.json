@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "StoixDataLib",
+  "sourceName": "contracts/Peripheral/libraries/StoixDataLib.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea26469706673582212201fc8e72c34bd47f9766dfe722b25526719c9739bf8963a218a00468be0b319d964736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea26469706673582212201fc8e72c34bd47f9766dfe722b25526719c9739bf8963a218a00468be0b319d964736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
