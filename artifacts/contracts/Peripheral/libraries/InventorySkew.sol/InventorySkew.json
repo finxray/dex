@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "InventorySkew",
+  "sourceName": "contracts/Peripheral/libraries/InventorySkew.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea26469706673582212209d3b5eed18afd71d4b6b896b2d97dd5834a5c38b1c51c0ea1b28bc4462dce6a364736f6c634300081e0033",
+  "deployedBytecode": "0x5f80fdfea26469706673582212209d3b5eed18afd71d4b6b896b2d97dd5834a5c38b1c51c0ea1b28bc4462dce6a364736f6c634300081e0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

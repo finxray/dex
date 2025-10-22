@@ -37,8 +37,20 @@ contract StoixDataBridge is IDataBridge {
 
     // No storage caches - rely on router-level transient caching for gas efficiency
 
-    function getData(QuoteParams memory params) external override returns (bytes memory) {
-        uint8 flags = params.functionFlags;
+    // BucketID markers understood by the quoter. We mirror two here only to avoid
+    // unnecessary std dev requests when the quoter won't use them:
+    //  - SIGMA_FIXED_MASK: fixed-σ bucket (σ equals target level); no external σ needed
+    //  - GAMMA_ZERO_MASK: γ = 0 bucket; half-spread is 1/k and σ is unused
+    uint16 internal constant SIGMA_FIXED_MASK = 0x0080; // bit7
+    uint16 internal constant GAMMA_ZERO_MASK  = 0x0100; // bit8
+
+    function getData(QuoteParams memory params) external view override returns (bytes memory) {
+        uint8 flags = params.functionFlags; // consumer-provided feature mask
+        // If the bucket indicates fixed σ or γ=0, drop std dev requests to save gas
+        uint16 bucketID = params.bucketID;
+        if ((bucketID & (SIGMA_FIXED_MASK | GAMMA_ZERO_MASK)) != 0) {
+            flags &= ~uint8(0x60); // clear std dev short (0x20) and long (0x40)
+        }
         uint8 mask = 0;
         uint128 v2Q; uint128 v3Q; uint128 twQ; uint128 clQ;
         uint64 ts; uint16 sdShort; uint16 sdLong;

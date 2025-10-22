@@ -170,7 +170,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/QuoteRouter.sol": {
-      "lastModificationDate": 1757794342434,
+      "lastModificationDate": 1757794933609,
       "contentHash": "d38648bc47c2b0bc60d499fbd54f382c",
       "sourceName": "contracts/Core/QuoteRouter.sol",
       "solcConfig": {
@@ -1435,7 +1435,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/real/RealDataBridge/StoixQuoter.sol": {
-      "lastModificationDate": 1757790063695,
+      "lastModificationDate": 1757791925415,
       "contentHash": "80e274890299ae755777998652387c4d",
       "sourceName": "contracts/Peripheral/quoters/real/RealDataBridge/StoixQuoter.sol",
       "solcConfig": {
@@ -2708,7 +2708,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/dummy_tokens/TestTokenB.sol": {
-      "lastModificationDate": 1757150948716,
+      "lastModificationDate": 1757230788623,
       "contentHash": "1e1af117cdc05735a6b56ac8886b1a0d",
       "sourceName": "contracts/Peripheral/dummy_tokens/TestTokenB.sol",
       "solcConfig": {
@@ -3168,8 +3168,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/real/StoixDataBridge.sol": {
-      "lastModificationDate": 1757801008657,
-      "contentHash": "2e10c55d9efcea985fac2f9f6bb478ac",
+      "lastModificationDate": 1760158684551,
+      "contentHash": "25fc984bc84e436cc98043cab852161d",
       "sourceName": "contracts/Peripheral/DataBridges/real/StoixDataBridge.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -3246,7 +3246,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/MockStoixDataBridge.sol": {
-      "lastModificationDate": 1757796073117,
+      "lastModificationDate": 1757796099910,
       "contentHash": "f7a9b6c572e1d5c38b5ef3a2ba45b038",
       "sourceName": "contracts/Peripheral/DataBridges/dummy/MockStoixDataBridge.sol",
       "solcConfig": {
@@ -3287,7 +3287,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/test/MinimalDummyQuoter.sol": {
-      "lastModificationDate": 1757795774455,
+      "lastModificationDate": 1757795915264,
       "contentHash": "acaf3d66c5c346a919a944f0a925f438",
       "sourceName": "contracts/test/MinimalDummyQuoter.sol",
       "solcConfig": {
@@ -3327,7 +3327,7 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/libraries/StoixDataLib.sol": {
-      "lastModificationDate": 1757800886090,
+      "lastModificationDate": 1757801044726,
       "contentHash": "b578b8b9afb6bce0109f66fb974d4a32",
       "sourceName": "contracts/Peripheral/libraries/StoixDataLib.sol",
       "solcConfig": {
@@ -3368,6 +3368,322 @@
         "IUniswapV3FactoryLike",
         "IUniswapV3PoolLike",
         "StoixDataLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/real/RealDataBridge/StoicovQuoter.sol": {
+      "lastModificationDate": 1761157399544,
+      "contentHash": "c4c2916b92a18214968ae9419b3f4f22",
+      "sourceName": "contracts/Peripheral/quoters/real/RealDataBridge/StoicovQuoter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../../Core/interfaces/internal/quoters/IQuoter.sol",
+        "../../../../Core/structs/QuoteParams.sol",
+        "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol",
+        "../../../libraries/Q64x64PriceMath.sol",
+        "../../../libraries/StoicovTables.sol",
+        "../../../libraries/InventorySkew.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "StoicovQuoter"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/libraries/LnQ64.sol": {
+      "lastModificationDate": 1758456069790,
+      "contentHash": "c13cda970f1af111383bd3817a3bceed",
+      "sourceName": "contracts/Peripheral/libraries/LnQ64.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./FixedPoint64x64.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "LnQ64"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/libraries/tests/LnHarness.sol": {
+      "lastModificationDate": 1758456001668,
+      "contentHash": "2d0dc3f09ba65ecb7c54e1763435ad1f",
+      "sourceName": "contracts/Peripheral/libraries/tests/LnHarness.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../FixedPoint64x64.sol",
+        "../LnQ64.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "LnHarness"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/libraries/StoicovTables.sol": {
+      "lastModificationDate": 1760882690009,
+      "contentHash": "6050ddb9e943062f476abbe775be5ea5",
+      "sourceName": "contracts/Peripheral/libraries/StoicovTables.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "StoicovTables"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/quoters/real/RealDataBridge/tests/StoicovQuoterHarness.sol": {
+      "lastModificationDate": 1760367767169,
+      "contentHash": "eda7a2bb3b9e5a2726631b2c0141fa8c",
+      "sourceName": "contracts/Peripheral/quoters/real/RealDataBridge/tests/StoicovQuoterHarness.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../StoicovQuoter.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "StoicovQuoterHarness"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/libraries/InventorySkew.sol": {
+      "lastModificationDate": 1760884238396,
+      "contentHash": "7a63abadb645d5250616062012129069",
+      "sourceName": "contracts/Peripheral/libraries/InventorySkew.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "InventorySkew"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/libraries/tests/InventorySkewTest.sol": {
+      "lastModificationDate": 1760874325021,
+      "contentHash": "e06a2472203052e97af2e143389a9249",
+      "sourceName": "contracts/Peripheral/libraries/tests/InventorySkewTest.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../InventorySkew.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "InventorySkewTest"
+      ]
+    },
+    "/Users/alexey/dex/contracts/Peripheral/DataBridges/dummy/MockStoicovDataBridge125.sol": {
+      "lastModificationDate": 1761157269633,
+      "contentHash": "8e454c7652afc03786ac617f6c82ec97",
+      "sourceName": "contracts/Peripheral/DataBridges/dummy/MockStoicovDataBridge125.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../Core/interfaces/internal/IDataBridge.sol",
+        "../../../Core/structs/QuoteParams.sol",
+        "../../libraries/FixedPoint64x64.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MockStoicovDataBridge125"
       ]
     }
   }

@@ -1,0 +1,3 @@
+.exit
+npx hardhat test test/peripheral/DummyBridges/StoicovQuoter.e2e.dummy.test.js
+cd /Users/alexey/dex && npx hardhat test test/peripheral/DummyBridges/StoicovQuoter.e2e.dummy.test.js
