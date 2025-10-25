@@ -16,6 +16,10 @@ contract StoicovQuoterHarness is StoicovQuoter {
     function gammaMidScalePpb() external pure returns (uint32) { return GAMMA_MID_SCALE_PPB; }
     function gammaHighScalePpb() external pure returns (uint32) { return GAMMA_HIGH_SCALE_PPB; }
 
+    // Backwards-compat helpers for tests expecting direct gamma values
+    function gammaMidPpb() external pure returns (uint32) { return GAMMA_MID_SCALE_PPB; }
+    function gammaHighPpb() external pure returns (uint32) { return GAMMA_HIGH_SCALE_PPB; }
+
     // Helper to get actual gamma value from scale and k index
     function gammaFromScaleAndIdx(uint8 idx, uint32 scalePpb) external pure returns (uint32) {
         return StoicovTables.gammaFromScale(idx, scalePpb);

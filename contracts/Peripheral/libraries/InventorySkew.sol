@@ -34,8 +34,8 @@ library InventorySkew {
     ///
     /// @param inventory0Raw Current inventory of asset0
     /// @param inventory1Raw Current inventory of asset1
-    /// @param amount Trade amount in input asset units
-    /// @param zeroForOne Trade direction (true = asset0→asset1, false = asset1→asset0)
+    /// @param amount Trade amount in INPUT asset units (asset0 if zeroForOne=true, asset1 if zeroForOne=false)
+    /// @param zeroForOne Trade direction (true = trader gives asset0, false = trader gives asset1)
     /// @param riskyMode Determines which asset is considered risky
     /// @param midPricePpb Mid price (asset0/asset1) in PPB - how many asset1 per asset0
     /// @return skew Trade-induced skew change in range [-1e9, +1e9] in PPB
@@ -58,20 +58,22 @@ library InventorySkew {
         uint256 value1After;
         
         if (zeroForOne) {
-            // Selling asset0 for asset1
-            value0After = inventory0Raw > amount ? inventory0Raw - amount : 0;
-            // Buying asset1: receive (amount × midPrice) of asset1, convert to asset0 terms
-            uint256 receivedAsset1 = (amount * midPricePpb) / 1e9;
-            uint256 receivedAsset1InAsset0 = (receivedAsset1 * 1e9) / midPricePpb;
-            value1After = value1Before + receivedAsset1InAsset0;
+            // zeroForOne=true: Trader gives asset0 (amount in asset0 units)
+            // Pool receives asset0, gives asset1
+            value0After = value0Before + amount;  // Pool gains asset0
+            // Pool gives asset1 equivalent (amount × midPrice), convert to asset0 terms
+            uint256 givenAsset1 = (amount * midPricePpb) / 1e9;
+            uint256 givenAsset1InAsset0 = (givenAsset1 * 1e9) / midPricePpb;
+            value1After = value1Before > givenAsset1InAsset0 ? value1Before - givenAsset1InAsset0 : 0;  // Pool loses asset1
         } else {
-            // Selling asset1 for asset0
-            // Convert amount (in asset1) to asset0 terms for comparison
+            // zeroForOne=false: Trader gives asset1 (amount in asset1 units)
+            // Pool receives asset1, gives asset0
+            // Convert amount (in asset1) to asset0 terms
             uint256 amountInAsset0 = (amount * 1e9) / midPricePpb;
-            value1After = value1Before > amountInAsset0 ? value1Before - amountInAsset0 : 0;
-            // Buying asset0: receive amount/midPrice of asset0
-            uint256 receivedAsset0 = (amount * 1e9) / midPricePpb;
-            value0After = inventory0Raw + receivedAsset0;
+            value1After = value1Before + amountInAsset0;  // Pool gains asset1 (in asset0 value terms)
+            // Pool gives asset0 equivalent (amount in asset1 / midPrice)
+            uint256 givenAsset0 = (amount * 1e9) / midPricePpb;
+            value0After = inventory0Raw > givenAsset0 ? inventory0Raw - givenAsset0 : 0;  // Pool loses asset0 (clamp to 0 if insufficient)
         }
         
         // Calculate skew before and after
