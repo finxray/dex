@@ -93,7 +93,7 @@ abstract contract QuoteRouter {
             asset1Balance: asset1Balance,
             bucketID: m.bucketID,
             zeroForOne: p.zeroForOne,
-            functionFlags: _inferFunctionFlags(m)
+            functionFlags: _inferFunctionFlags(p.quoter, m)
         });
         // Efficiently build payload from enabled bridges only
         // Decode bridge flags: extraBridgeSlot can be:
@@ -169,7 +169,7 @@ abstract contract QuoteRouter {
             asset1Balances: asset1Balances,
             bucketID: bucketIDs,
             zeroForOne: p.zeroForOne,
-            functionFlags: _inferFunctionFlags(m)
+            functionFlags: _inferFunctionFlags(p.quoter, m)
         });
         // For batch, fetch once per marking set; cached fetches to enable hits across hops
         QuoteParams memory baseParams = QuoteParams({
@@ -290,7 +290,7 @@ abstract contract QuoteRouter {
                 asset1Balance: asset1Balance,
                 bucketID: m.bucketID,
                 zeroForOne: p.zeroForOne,
-                functionFlags: _inferFunctionFlags(m)
+                functionFlags: _inferFunctionFlags(p.quoter, m)
             });
             // For StoixDataBridge architecture with context: put bridge data in dx (5th position)
             bytes memory d0 = bytes("");
@@ -357,7 +357,7 @@ abstract contract QuoteRouter {
             asset1Balance: 0,
             bucketID: 0,
             zeroForOne: p.zeroForOne,
-            functionFlags: _inferFunctionFlags(m0)
+            functionFlags: _inferFunctionFlags(p.quoter, m0)
         });
         // For StoixDataBridge architecture with context batch: put bridge data in dx (5th position)
         bytes memory d0 = bytes("");
@@ -383,10 +383,30 @@ abstract contract QuoteRouter {
     }
 
     // Map markings to StoixBridge function flags. Use slot 15 for consolidated bridge.
-    function _inferFunctionFlags(Markings memory m) internal pure returns (uint8) {
-        // If slot 15 used (consolidated StoixBridge), use bucketID lower 8 bits as function flags.
-        // Default to 0x0F (v2|v3|twap|cl) when override is zero.
+    function _inferFunctionFlags(address quoter, Markings memory m) internal view returns (uint8) {
+        // If not using consolidated StoixBridge slot, no flags are relevant
         if (m.extraBridgeSlot != 15) return 0;
+
+        // For quoters that expose requiresSigmaData(uint16), prefer intent-based flags to avoid collisions
+        // with bucketID lower 8 bits used for model configuration (e.g., StoicovQuoter gamma/inventory bits).
+        // Try/catch to keep compatibility with quoters that do not implement this function.
+        (bool ok, bytes memory ret) = quoter.staticcall(abi.encodeWithSignature("requiresSigmaData(uint16)", m.bucketID));
+        if (ok && ret.length >= 32) {
+            bool needsSigma = abi.decode(ret, (bool));
+            // Start with baseline sources: V2 | V3 | CL (price)
+            uint8 flags = 0x03 | 0x08; // V2 | V3 | Chainlink
+            // If sigma is required by the model, request short std dev; TWAP will come via stddev path
+            if (needsSigma) {
+                flags |= 0x20; // std dev short
+                flags |= 0x04; // TWAP bit (bridge uses stddev TWAP path)
+            } else {
+                // Even if sigma not required, include TWAP for richer mid aggregation
+                flags |= 0x04;
+            }
+            return flags;
+        }
+
+        // Legacy behavior: treat lower 8 bits of bucketID as explicit function flag override
         uint8 overrideFlags = uint8(m.bucketID & 0xFF);
         return overrideFlags == 0 ? 0x0F : overrideFlags;
     }

@@ -225,13 +225,16 @@ contract StoicovQuoter is IQuoter {
             sdBpsx100 = sdLongBps;
         }
 
-        // Convert σ² from (bps × 100) format to PPB for calculations
-        // sdBpsx100 = 12500 represents 125.00 bps → σ = 0.0125 in decimal = 1.25% = 1.25 as volatility parameter
-        // First convert to actual bps: sdBps = sdBpsx100 / 100
-        // Then σ = sdBps / 100 (since 125 bps means σ = 1.25)
-        // σ² = (sdBpsx100 / 100 / 100)² = (sdBpsx100 / 10000)²
-        // For PPB: σ²_ppb = (sdBpsx100 / 10000)² × 1e9 = sdBpsx100² × 10
-        uint256 sigma2Ppb = uint256(sdBpsx100) * uint256(sdBpsx100) * 10;
+        // Convert σ² to PPB for calculations
+        // If sigma is fixed by bucket, set σ = 1/k (in PPB), so σ²_ppb = (invK_ppb^2) / 1e9
+        // Else convert from (bps×100) feed: sdBpsx100² × 10 (matches prior tests)
+        uint256 sigma2Ppb;
+        if (_sigmaIsFixed(bucketID)) {
+            uint32 invKPpb = _invKppb(kIdx);
+            sigma2Ppb = (uint256(invKPpb) * uint256(invKPpb)) / 1_000_000_000;
+        } else {
+            sigma2Ppb = uint256(sdBpsx100) * uint256(sdBpsx100) * 10;
+        }
 
         // Base spread terms in PPB units (bps × 1e5 scale)
         uint32 invKPpb = _invKppb(kIdx);
@@ -262,22 +265,50 @@ contract StoicovQuoter is IQuoter {
         // Convert mid price Q64.64 to PPB (asset1 per asset0)
         uint256 midPricePpb = Q64x64PriceMath.mulDiv(uint256(midQ), 1_000_000_000, 1 << 64);
 
-        int256 skewPpb = InventorySkew.calculateSkew(
-            params.asset0Balance,
+        // Compute CURRENT inventory skew (not trade-induced delta):
+        // Convert inventory1 to asset0 units using mid price
+        uint256 inv1AsAsset0Now = Q64x64PriceMath.amountOutFromQ64(
             params.asset1Balance,
-            params.amount,
-            params.zeroForOne,
-            riskyMode,
-            midPricePpb
+            IERC20Metadata(params.asset1).decimals(),
+            IERC20Metadata(params.asset0).decimals(),
+            midQ,
+            false // asset1 -> asset0
         );
+        uint256 totalValueNow = params.asset0Balance + inv1AsAsset0Now;
+        int256 skewPpb;
+        if (totalValueNow == 0) {
+            skewPpb = 0;
+        } else {
+            if (riskyMode == InventorySkew.RiskyAssetMode.RISKY1) {
+                skewPpb = int256((inv1AsAsset0Now * 1_000_000_000) / totalValueNow);
+            } else if (riskyMode == InventorySkew.RiskyAssetMode.RISKY0) {
+                skewPpb = int256((uint256(params.asset0Balance) * 1_000_000_000) / totalValueNow);
+            } else {
+                // NEUTRAL mode: value-neutral deviation
+                int256 ratioTwice = (int256(uint256(params.asset0Balance)) * 2 * 1_000_000_000) / int256(totalValueNow);
+                skewPpb = ratioTwice - 1_000_000_000; // [-1e9, +1e9]
+            }
+        }
 
-        // Compute reservation price adjustment: q·γ·σ²·τ (with τ=1)
-        // This shifts the mid price based on inventory position
-        // q (skewPpb) is in range [-1e9, +1e9], γ is in PPB, σ² is in PPB
-        // Compute γ·σ² in relative units by dividing by 1e9 twice (once for each PPB factor)
-        // Result: (γ_ppb / 1e9) × (σ²_ppb / 1e9) × 1e9 (back to PPB) = (γ_ppb × σ²_ppb) / 1e9
-        uint256 gammaSigma2Rel = (uint256(gammaPpb) * sigma2Ppb) / 1_000_000_000 / 1_000_000_000;
-        int256 reservationAdjustmentPpb = (skewPpb * int256(gammaSigma2Rel));
+        // Compute reservation price adjustment: q·γ·σ²·τ (τ=1)
+        // Fixed-σ buckets: σ equals bucket target level in bps (not decimal). Match project scaling:
+        //   adjustment_bps = (skew / 1e9) * (gamma / 1e9) * (sigma_bps^2)
+        //   reservationAdjustmentPpb = adjustment_bps * 1e5 (since 1 bps = 1e5 PPB)
+        int256 reservationAdjustmentPpb;
+        if (_sigmaIsFixed(bucketID)) {
+            uint32 invKPpbLocal = _invKppb(kIdx); // equals bucket δ_min in PPB
+            // sigma_bps = invKPpb / 1e5; so sigma_bps^2 = (invKPpb^2) / 1e10
+            uint256 sigmaBpsSquared = (uint256(invKPpbLocal) * uint256(invKPpbLocal)) / 10_000_000_000; // 1e10
+            // adjustment_bps = skewPpb * gammaPpb * sigmaBpsSquared / 1e9 / 1e9
+            uint256 adjustmentBps = (uint256(skewPpb >= 0 ? skewPpb : -skewPpb) * uint256(gammaPpb) * sigmaBpsSquared) / 1_000_000_000 / 1_000_000_000;
+            // Preserve sign of skew
+            int256 signedAdjustBps = skewPpb >= 0 ? int256(adjustmentBps) : -int256(adjustmentBps);
+            reservationAdjustmentPpb = signedAdjustBps * 100_000; // bps -> PPB
+        } else {
+            // Legacy path using σ² in PPB: (γ_ppb × σ²_ppb) / 1e9 gives PPB; multiply by skew (PPB) / 1e9 → PPB
+            uint256 gammaSigma2Ppb = (uint256(gammaPpb) * sigma2Ppb) / 1_000_000_000; // PPB
+            reservationAdjustmentPpb = (skewPpb * int256(gammaSigma2Ppb)) / 1_000_000_000;
+        }
 
         // Compute reservation price: r = mid - q·γ·σ²·τ
         // Apply adjustment to mid price (both in Q64.64)

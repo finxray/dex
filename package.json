@@ -2,6 +2,11 @@
   "name": "dex-quoter-testing",
   "version": "1.0.0",
   "description": "Testing suite for DEX quoters",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "test": "hardhat test",
     "compile": "hardhat compile",

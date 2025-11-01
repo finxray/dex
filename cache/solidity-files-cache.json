@@ -170,8 +170,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Core/QuoteRouter.sol": {
-      "lastModificationDate": 1757794933609,
-      "contentHash": "d38648bc47c2b0bc60d499fbd54f382c",
+      "lastModificationDate": 1761462018848,
+      "contentHash": "ef5e442f50351827bf2f0bb2256f5cbc",
       "sourceName": "contracts/Core/QuoteRouter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -3327,8 +3327,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/libraries/StoixDataLib.sol": {
-      "lastModificationDate": 1757801044726,
-      "contentHash": "b578b8b9afb6bce0109f66fb974d4a32",
+      "lastModificationDate": 1761469142312,
+      "contentHash": "a12bb9ce9a59d64ed574cd4243e715c3",
       "sourceName": "contracts/Peripheral/libraries/StoixDataLib.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -3356,7 +3356,8 @@
         }
       },
       "imports": [
-        "./FixedPoint64x64.sol"
+        "./FixedPoint64x64.sol",
+        "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -3371,8 +3372,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/real/RealDataBridge/StoicovQuoter.sol": {
-      "lastModificationDate": 1761157726514,
-      "contentHash": "c4c2916b92a18214968ae9419b3f4f22",
+      "lastModificationDate": 1761508457173,
+      "contentHash": "46aefd827a6ec2b4eb625b996a699cc7",
       "sourceName": "contracts/Peripheral/quoters/real/RealDataBridge/StoicovQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -3531,8 +3532,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/Peripheral/quoters/real/RealDataBridge/tests/StoicovQuoterHarness.sol": {
-      "lastModificationDate": 1761405970705,
-      "contentHash": "9b73b18afcae4c880c8fabe901677cc6",
+      "lastModificationDate": 1761461365423,
+      "contentHash": "1ce16a7955be65e5e67ff1100f0e7e1f",
       "sourceName": "contracts/Peripheral/quoters/real/RealDataBridge/tests/StoicovQuoterHarness.sol",
       "solcConfig": {
         "version": "0.8.30",
