@@ -8,5 +8,5 @@ export { CompanySection } from "./CompanySection/CompanySection";
 export { Footer } from "./Footer/Footer";
 export { CodeBlock } from "./CodeBlock/CodeBlock";
 export { ArchitectureSection } from "./ArchitectureSection/ArchitectureSection";
-export { VideoBackground } from "./VideoBackground/VideoBackground";
+export { SwapModal } from "./Swap/SwapModal";
 

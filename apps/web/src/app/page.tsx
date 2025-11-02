@@ -10,13 +10,11 @@ import {
   CompanySection,
   Footer,
   ArchitectureSection,
-  VideoBackground,
 } from "./components";
 
 export default function Home() {
   return (
     <div className="relative min-h-screen bg-black overflow-hidden">
-      <VideoBackground />
       <Header />
 
       <main className="relative z-10 px-6 pt-20">

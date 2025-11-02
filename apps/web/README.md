@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Stoix Web App
 
-## Getting Started
+This package contains the public Stoix marketing site and a lightweight swap prototype for testing the core contracts on testnets.
 
-First, run the development server:
+### Prerequisites
+
+- Node 18+
+- pnpm (recommended)
+- Metamask or any EVM wallet with access to Sepolia (or another configured testnet)
+
+### Install & Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev --filter web
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The site is served on [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` inside `apps/web/` and configure:
 
-## Learn More
+```
+NEXT_PUBLIC_RPC_URL=https://sepolia.infura.io/v3/<key>
+NEXT_PUBLIC_POOL_MANAGER_ADDRESS=0x...
+NEXT_PUBLIC_QUOTER_ADDRESS=0x...
+NEXT_PUBLIC_POOL_MARKINGS=0x000000
+NEXT_PUBLIC_ASSET0_ADDRESS=0x0000000000000000000000000000000000000000
+NEXT_PUBLIC_ASSET0_SYMBOL=ETH
+NEXT_PUBLIC_ASSET0_DECIMALS=18
+NEXT_PUBLIC_ASSET1_ADDRESS=0x0000000000000000000000000000000000000000
+NEXT_PUBLIC_ASSET1_SYMBOL=USDC
+NEXT_PUBLIC_ASSET1_DECIMALS=6
+NEXT_PUBLIC_EXPLORER_URL=https://sepolia.etherscan.io
+```
 
-To learn more about Next.js, take a look at the following resources:
+The swap modal reads these values at runtime. By default the modal assumes an ETH→USDC pool. Adjust addresses/decimals to match your deployment.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Swap Prototype
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `Launch App` opens a modal with a single-pool swap form.
+- Wallet connectivity uses the injected Metamask connector via wagmi.
+- Quotes call the configured quoter contract (`quote(QuoteParams)`)
+- Swaps call `PoolManager.swap` with the supplied pool markings.
 
-## Deploy on Vercel
+### Deploying Test Contracts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Use Hardhat to compile and deploy Stoix contracts to Sepolia (or fork):
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm compile
+pnpm hardhat run scripts/deployStoixTestPool.ts --network sepolia
+```
+
+Record the deployed addresses and pool markings, then update `.env.local` accordingly.
+
+### Notes
+
+- The quoter ABI expects full `QuoteParams` including bucket IDs and bridge flags. The dummy quoter can be used for initial wiring.
+- Production deployments should replace the dummy quoter/data bridge with the real Stoix modules.
+- Error surfaces within the modal when configuration is incomplete to prevent accidental transactions.

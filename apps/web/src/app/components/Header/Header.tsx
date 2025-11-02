@@ -106,7 +106,7 @@ export function Header() {
         </nav>
         <div className="flex items-center gap-6">
           <Link
-            href="#app"
+            href="/swap"
             className="hidden rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white md:block"
           >
             Launch App
@@ -210,6 +210,13 @@ export function Header() {
                 ) : null}
               </div>
             ))}
+                  <Link
+                    href="/swap"
+                    onClick={handleNavClick}
+                    className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    Launch App
+                  </Link>
           </nav>
         </div>
       ) : null}
