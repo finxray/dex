@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createChart } from "lightweight-charts";
 
 interface ChartData {
@@ -20,6 +20,7 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<any>(null);
+  const [crosshairData, setCrosshairData] = useState<{ price: number | null; time: number | null; point: { x: number; y: number } | null }>({ price: null, time: null, point: null });
 
   // Update price line color when permanent dot color changes
   useEffect(() => {
@@ -139,14 +140,15 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
               color: "rgba(255, 255, 255, 0.3)",
               width: 1,
               style: 2, // Dashed
-              labelBackgroundColor: "#ffffff",
+              labelBackgroundColor: "transparent",
             },
             horzLine: {
               color: "rgba(255, 255, 255, 0.3)",
               width: 1,
               style: 2, // Dashed
-              labelBackgroundColor: "#ffffff",
+              labelBackgroundColor: "transparent",
             },
+            mode: 1, // Normal crosshair mode
           },
         });
 
@@ -192,6 +194,22 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
           onSeriesReady(series, chart);
         }
 
+        // Track crosshair position for custom labels
+        chart.subscribeCrosshairMove((param: any) => {
+          if (param.point) {
+            const price = param.seriesData?.get(series)?.value;
+            const time = param.time;
+            const point = param.point;
+            setCrosshairData({ 
+              price: price ?? null, 
+              time: time ?? null,
+              point: point ? { x: point.x, y: point.y } : null
+            });
+          } else {
+            setCrosshairData({ price: null, time: null, point: null });
+          }
+        });
+
         const resizeObserver = new ResizeObserver(() => {
           if (container.clientWidth > 0 && container.clientHeight > 0) {
             chart.applyOptions({
@@ -223,10 +241,17 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full crosshair-custom" />
       
-      {/* Custom styles for crosshair labels */}
+      {/* Hide default crosshair labels since we use custom components */}
       <style jsx global>{`
         .crosshair-custom div[style*="background-color: rgb(255, 255, 255)"] {
-          color: #000000 !important;
+          display: none !important;
+        }
+        .crosshair-custom div[style*="background-color: rgb(0, 0, 0)"] {
+          display: none !important;
+        }
+        /* Hide any crosshair labels that might be showing */
+        .crosshair-custom > div[style*="position: absolute"] {
+          display: none !important;
         }
       `}</style>
       
@@ -249,6 +274,23 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
           lastDataPoint={data[data.length - 1]}
           color={pulseColor}
         />
+      )}
+      
+      {/* Custom crosshair labels */}
+      {crosshairData.price !== null && crosshairData.time !== null && crosshairData.point && chartRef.current && seriesRef.current && (
+        <>
+          <CrosshairYAxisLabel
+            chart={chartRef.current}
+            series={seriesRef.current}
+            price={crosshairData.price}
+            point={crosshairData.point}
+          />
+          <CrosshairXAxisLabel
+            chart={chartRef.current}
+            time={crosshairData.time}
+            point={crosshairData.point}
+          />
+        </>
       )}
       
       {/* Unified arrow-rectangle shape on Y-axis */}
@@ -300,12 +342,25 @@ function PermanentDot({ chart, series, lastDataPoint, color }: {
 
     updatePosition();
     
+    // Update on resize
     const resizeObserver = new ResizeObserver(updatePosition);
     if (dotRef.current?.parentElement) {
       resizeObserver.observe(dotRef.current.parentElement);
     }
 
-    return () => resizeObserver.disconnect();
+    // Subscribe to time scale changes (when chart is scrolled/dragged)
+    // This ensures the dot moves with the chart when user scrolls horizontally
+    const timeScale = chart.timeScale();
+    const unsubscribeVisibleTimeRangeChange = timeScale.subscribeVisibleTimeRangeChange(() => {
+      updatePosition();
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+      if (unsubscribeVisibleTimeRangeChange) {
+        unsubscribeVisibleTimeRangeChange();
+      }
+    };
   }, [chart, series, lastDataPoint, color]);
 
   return (
@@ -387,7 +442,19 @@ function PulseMarker({ chart, series, lastDataPoint, color }: {
       resizeObserver.observe(markerRef.current.parentElement);
     }
 
-    return () => resizeObserver.disconnect();
+    // Subscribe to time scale changes (when chart is scrolled/dragged)
+    // This ensures the pulse marker moves with the chart when user scrolls horizontally
+    const timeScale = chart.timeScale();
+    const unsubscribeVisibleTimeRangeChange = timeScale.subscribeVisibleTimeRangeChange(() => {
+      updatePosition();
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+      if (unsubscribeVisibleTimeRangeChange) {
+        unsubscribeVisibleTimeRangeChange();
+      }
+    };
   }, [chart, series, lastDataPoint, color]);
 
   return (
@@ -491,7 +558,19 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
       resizeObserver.observe(arrowRef.current.parentElement);
     }
 
-    return () => resizeObserver.disconnect();
+    // Subscribe to time scale changes (when chart is scrolled/dragged)
+    // This ensures the arrow shape moves with the chart when user scrolls horizontally
+    const timeScale = chart.timeScale();
+    const unsubscribeVisibleTimeRangeChange = timeScale.subscribeVisibleTimeRangeChange(() => {
+      updatePosition();
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+      if (unsubscribeVisibleTimeRangeChange) {
+        unsubscribeVisibleTimeRangeChange();
+      }
+    };
   }, [chart, series, lastDataPoint, color]);
 
   // Format price for display
@@ -502,24 +581,24 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
       ref={arrowRef}
       className="absolute pointer-events-none"
       width="84"
-      height="17"
+      height="23"
       style={{
         transform: "translate(0, calc(-50% + 0.5px))",
         zIndex: 9997,
       }}
     >
-      {/* Single unified path: triangle + rectangle */}
+      {/* Combined shape: triangle + rectangle with rounded corners only on right side */}
       <path
-        d="M 10,0 L 0,8.5 L 10,17 L 84,17 L 84,0 L 10,0 Z"
+        d="M 10,0 L 0,11.5 L 10,23 L 80,23 Q 84,23 84,19 L 84,4 Q 84,0 80,0 Z"
         fill={color}
         style={{
           transition: "fill 0.3s ease-in-out",
         }}
       />
-      {/* Price text */}
+      {/* Price text - centered vertically with equal padding */}
       <text
         x="47"
-        y="12"
+        y="15.5"
         fontSize="12"
         fill="rgba(0, 0, 0, 0.9)"
         textAnchor="middle"
@@ -534,3 +613,159 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
     </svg>
   );
 }
+
+// Crosshair Y-axis label - matches live price caret shape but with white color, reduced top padding, rounded upper corners
+function CrosshairYAxisLabel({ chart, series, price, point }: { 
+  chart: any; 
+  series: any; 
+  price: number;
+  point: { x: number; y: number };
+}) {
+  const labelRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    const updatePosition = () => {
+      if (!labelRef.current || !chart || !series) return;
+
+      try {
+        const coordinate = series.priceToCoordinate(price);
+        const containerWidth = chart.options().width;
+
+        if (coordinate !== null && containerWidth) {
+          // Position on the right side
+          const shapeX = containerWidth - 84;
+          labelRef.current.style.left = `${shapeX}px`;
+          labelRef.current.style.top = `${coordinate}px`;
+        }
+      } catch (error) {
+        console.error("Error positioning crosshair Y-axis label:", error);
+      }
+    };
+
+    updatePosition();
+    
+    const resizeObserver = new ResizeObserver(updatePosition);
+    if (labelRef.current?.parentElement) {
+      resizeObserver.observe(labelRef.current.parentElement);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, [chart, series, price]);
+
+  const priceText = price.toFixed(6);
+
+  return (
+    <svg
+      ref={labelRef}
+      className="absolute pointer-events-none"
+      width="84"
+      height="28"
+      style={{
+        transform: "translate(0, calc(-50% + 1px))",
+        zIndex: 9998,
+      }}
+    >
+      {/* Combined shape: triangle + rectangle matching live price caret - no rounding on left corners, only right corners rounded */}
+      {/* Triangle: tip at (0,13.0), extends from (10,1.5) to (10,24.5) - symmetric triangle with equal sides and angles, moved down 0.5px */}
+      {/* Rectangle: from y=1.5 to y=24.5 (23px tall, moved down 0.5px) - rounded only on right side */}
+      {/* Path: Rectangle (y=1.5 to y=24.5), triangle tip at y=13.0 (center between y=1.5 and y=24.5) for equal sides and angles */}
+      <path
+        d="M 10,1.5 L 80,1.5 Q 84,1.5 84,5.5 L 84,20.5 Q 84,24.5 80,24.5 L 10,24.5 L 0,13.0 L 10,1.5 Z"
+        fill="#ffffff"
+      />
+      {/* Price text - centered vertically in rectangle (moved down 0.5px, so y=16.5 + 0.5 = 17.0) */}
+      <text
+        x="47"
+        y="17.0"
+        fontSize="12"
+        fill="rgba(0, 0, 0, 0.9)"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontWeight="500"
+      >
+        {priceText}
+      </text>
+    </svg>
+  );
+}
+
+// Crosshair X-axis label - simple rectangle with equal padding (no triangle, as it was before)
+function CrosshairXAxisLabel({ chart, time, point }: { 
+  chart: any; 
+  time: number;
+  point: { x: number; y: number };
+}) {
+  const labelRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    const updatePosition = () => {
+      if (!labelRef.current || !chart) return;
+
+      try {
+        const timeCoordinate = chart.timeScale().timeToCoordinate(time);
+        const containerHeight = chart.options().height;
+
+        if (timeCoordinate !== null && containerHeight) {
+          // Position at the bottom
+          const shapeY = containerHeight - 23;
+          labelRef.current.style.left = `${timeCoordinate}px`;
+          labelRef.current.style.top = `${shapeY}px`;
+        }
+      } catch (error) {
+        console.error("Error positioning crosshair X-axis label:", error);
+      }
+    };
+
+    updatePosition();
+    
+    const resizeObserver = new ResizeObserver(updatePosition);
+    if (labelRef.current?.parentElement) {
+      resizeObserver.observe(labelRef.current.parentElement);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, [chart, time]);
+
+  // Format date and time for display - include date and month
+  const date = new Date(time * 1000);
+  const dateText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const timeText = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const displayText = `${dateText} ${timeText}`;
+
+  return (
+    <svg
+      ref={labelRef}
+      className="absolute pointer-events-none"
+      width="140"
+      height="23"
+      style={{
+        transform: "translate(calc(-50% + 0.5px), 0)",
+        zIndex: 9999,
+      }}
+    >
+      {/* Simple rectangle with all corners rounded and equal padding (3px top and bottom) */}
+      <rect
+        x="0"
+        y="0"
+        width="140"
+        height="23"
+        rx="4"
+        ry="4"
+        fill="#ffffff"
+      />
+      {/* Date and time text - centered vertically with equal padding (3px top and bottom) */}
+      <text
+        x="70"
+        y="15.5"
+        fontSize="12"
+        fill="rgba(0, 0, 0, 0.9)"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontWeight="500"
+      >
+        {displayText}
+      </text>
+    </svg>
+  );
+}
+

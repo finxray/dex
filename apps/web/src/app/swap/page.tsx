@@ -11,6 +11,7 @@ import { poolManagerAbi } from "../../lib/abi/poolManager";
 import { quoterAbi } from "../../lib/abi/quoter";
 import { erc20Abi } from "../../lib/abi/erc20";
 import LightweightChart from "./components/LightweightChart";
+import { GlowingCardWrapper } from "./components/GlowingCardWrapper";
 
 
 type Token = {
@@ -114,6 +115,7 @@ export default function SwapPage() {
   const [amountOutValue, setAmountOutValue] = useState<string>("");
   const [activeField, setActiveField] = useState<"in" | "out">("in");
   const [isChartOpen, setIsChartOpen] = useState(false);
+  const [chartPhase, setChartPhase] = useState<"closed" | "opening" | "open" | "closing">("closed");
   const [isChartMaximized, setIsChartMaximized] = useState(false);
   const [viewport, setViewport] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [overlayOffset, setOverlayOffset] = useState({ x: 0, y: 0 });
@@ -217,8 +219,10 @@ export default function SwapPage() {
   const [direction, setDirection] = useState<SwapDirection>("a-to-b");
   const cardRef = useRef<HTMLDivElement | null>(null);
   const swapTitleRef = useRef<HTMLDivElement | null>(null);
+  const swapCardRef = useRef<HTMLDivElement | null>(null); // Full swap card reference
   const [cardRect, setCardRect] = useState<DOMRect | null>(null);
   const [swapTitleRect, setSwapTitleRect] = useState<DOMRect | null>(null);
+  const [swapCardRect, setSwapCardRect] = useState<DOMRect | null>(null);
   const [chartData, setChartData] = useState<AreaData[]>([]);
   const [quote, setQuote] = useState<QuoteState | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -238,6 +242,13 @@ export default function SwapPage() {
   const [pulseKey, setPulseKey] = useState(0);
   const [permanentDotColor, setPermanentDotColor] = useState<string | null>(null);
   const chartSeriesRef = useRef<any>(null);
+  const [isDraggingSwapCard, setIsDraggingSwapCard] = useState(false);
+  const [swapCardOffset, setSwapCardOffset] = useState({ x: 0, y: 0 });
+  const swapCardDragLastRef = useRef<{ x: number; y: number } | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeEdge, setResizeEdge] = useState<string | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const resizeStartRef = useRef<{ x: number; y: number; width: number; height: number; offsetX: number; offsetY: number } | null>(null);
   const fiatRates = {
     USD: 1,
     EUR: 0.9,
@@ -325,16 +336,22 @@ export default function SwapPage() {
     } else {
       console.log("  ⚠️ WARNING: No chart data available when opening chart!");
     }
+    setChartPhase("closed");
     setIsChartOpen(true);
+    requestAnimationFrame(() => {
+      setChartPhase("opening");
+      // After card opening animation completes (0.52s), set phase to "open" to show glow
+      setTimeout(() => {
+        setChartPhase("open");
+      }, 520);
+    });
   };
 
-  const [chartDisappearing, setChartDisappearing] = useState(false);
-
   const handleCloseChart = () => {
-    setChartDisappearing(true);
+    setChartPhase("closing");
     setTimeout(() => {
       setIsChartOpen(false);
-      setChartDisappearing(false);
+      setChartPhase("closed");
     }, 600); // 400ms * 1.5 = 600ms
   };
 
@@ -356,6 +373,9 @@ export default function SwapPage() {
     const updateRect = () => {
       if (cardRef.current) {
         setCardRect(cardRef.current.getBoundingClientRect());
+      }
+      if (swapCardRef.current) {
+        setSwapCardRect(swapCardRef.current.getBoundingClientRect());
       }
     };
     updateRect();
@@ -898,31 +918,146 @@ export default function SwapPage() {
     setIsDraggingChart(true);
   }, []);
 
+  const handleSwapCardDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    swapCardDragLastRef.current = { x: event.clientX, y: event.clientY };
+    setIsDraggingSwapCard(true);
+  }, []);
+
+  const handleResizeStart = useCallback((edge: string, event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    const chartHeightVh = isChartMaximized ? 90 : 77;
+    const currentWidth = chartSize.width > 0 ? chartSize.width : (isChartMaximized ? window.innerWidth * 0.8 : Math.min(window.innerWidth * 0.92, 1100));
+    const currentHeight = chartSize.height > 0 ? chartSize.height : (isChartMaximized ? window.innerHeight * 0.9 : Math.min(window.innerHeight * (chartHeightVh / 100), 840));
+    
+    resizeStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      width: currentWidth,
+      height: currentHeight,
+      offsetX: overlayOffsetRef.current.x,
+      offsetY: overlayOffsetRef.current.y,
+    };
+    
+    setResizeEdge(edge);
+    setIsResizing(true);
+    if (chartSize.width === 0) {
+      setChartSize({ width: currentWidth, height: currentHeight });
+    }
+  }, [isChartMaximized, chartSize]);
+
   useEffect(() => {
-    if (!isDraggingChart) return;
+    if (!isDraggingSwapCard) return;
 
     const handleMove = (event: PointerEvent) => {
-      if (overlayPointerIdRef.current !== null && event.pointerId !== overlayPointerIdRef.current) {
-        return;
+      if (swapCardDragLastRef.current) {
+        const deltaX = event.clientX - swapCardDragLastRef.current.x;
+        const deltaY = event.clientY - swapCardDragLastRef.current.y;
+        swapCardDragLastRef.current = { x: event.clientX, y: event.clientY };
+        setSwapCardOffset(prev => ({
+          x: prev.x + deltaX,
+          y: prev.y + deltaY,
+        }));
       }
-      if (!overlayDragLastRef.current) return;
-      const deltaX = event.clientX - overlayDragLastRef.current.x;
-      const deltaY = event.clientY - overlayDragLastRef.current.y;
-      overlayDragLastRef.current = { x: event.clientX, y: event.clientY };
-      overlayOffsetRef.current = {
-        x: overlayOffsetRef.current.x + deltaX,
-        y: overlayOffsetRef.current.y + deltaY,
-      };
-      setOverlayOffset({ ...overlayOffsetRef.current });
+    };
+
+    const handleUp = () => {
+      swapCardDragLastRef.current = null;
+      setIsDraggingSwapCard(false);
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [isDraggingSwapCard]);
+
+  useEffect(() => {
+    if (!isDraggingChart && !isResizing) return;
+
+    const handleMove = (event: PointerEvent) => {
+      if (isDraggingChart) {
+        if (overlayPointerIdRef.current !== null && event.pointerId !== overlayPointerIdRef.current) {
+          return;
+        }
+        if (!overlayDragLastRef.current) return;
+        const deltaX = event.clientX - overlayDragLastRef.current.x;
+        const deltaY = event.clientY - overlayDragLastRef.current.y;
+        overlayDragLastRef.current = { x: event.clientX, y: event.clientY };
+        overlayOffsetRef.current = {
+          x: overlayOffsetRef.current.x + deltaX,
+          y: overlayOffsetRef.current.y + deltaY,
+        };
+        setOverlayOffset({ ...overlayOffsetRef.current });
+      } else if (isResizing && resizeStartRef.current && resizeEdge) {
+        const deltaX = event.clientX - resizeStartRef.current.x;
+        const deltaY = event.clientY - resizeStartRef.current.y;
+        
+        let newWidth = resizeStartRef.current.width;
+        let newHeight = resizeStartRef.current.height;
+        
+        if (resizeEdge.includes('right')) {
+          newWidth = Math.max(400, Math.min(window.innerWidth - 100, resizeStartRef.current.width + deltaX));
+        }
+        if (resizeEdge.includes('left')) {
+          newWidth = Math.max(400, Math.min(window.innerWidth - 100, resizeStartRef.current.width - deltaX));
+        }
+        if (resizeEdge.includes('bottom')) {
+          newHeight = Math.max(300, Math.min(window.innerHeight - 100, resizeStartRef.current.height + deltaY));
+        }
+        if (resizeEdge.includes('top')) {
+          newHeight = Math.max(400, Math.min(window.innerHeight - 100, resizeStartRef.current.height - deltaY));
+        }
+        
+        setChartSize({ width: newWidth, height: newHeight });
+        
+        let newOffsetX = resizeStartRef.current.offsetX;
+        let newOffsetY = resizeStartRef.current.offsetY;
+        
+        if (resizeEdge.includes('left')) {
+          const widthChange = newWidth - resizeStartRef.current.width;
+          newOffsetX = resizeStartRef.current.offsetX - (widthChange / 2);
+        } else if (resizeEdge.includes('right')) {
+          const widthChange = newWidth - resizeStartRef.current.width;
+          newOffsetX = resizeStartRef.current.offsetX + (widthChange / 2);
+        }
+        
+        if (resizeEdge.includes('top')) {
+          const heightChange = newHeight - resizeStartRef.current.height;
+          newOffsetY = resizeStartRef.current.offsetY - (heightChange / 2);
+        } else if (resizeEdge.includes('bottom')) {
+          const heightChange = newHeight - resizeStartRef.current.height;
+          newOffsetY = resizeStartRef.current.offsetY + (heightChange / 2);
+        }
+        
+        overlayOffsetRef.current = {
+          x: newOffsetX,
+          y: newOffsetY,
+        };
+        setOverlayOffset({ ...overlayOffsetRef.current });
+      }
     };
 
     const handleUp = (event: PointerEvent) => {
-      if (overlayPointerIdRef.current !== null && event.pointerId !== overlayPointerIdRef.current) {
-        return;
+      if (isDraggingChart) {
+        if (overlayPointerIdRef.current !== null && event.pointerId !== overlayPointerIdRef.current) {
+          return;
+        }
+        overlayPointerIdRef.current = null;
+        overlayDragLastRef.current = null;
+        setIsDraggingChart(false);
+      } else if (isResizing) {
+        setIsResizing(false);
+        setResizeEdge(null);
+        resizeStartRef.current = null;
       }
-      overlayPointerIdRef.current = null;
-      overlayDragLastRef.current = null;
-      setIsDraggingChart(false);
     };
 
     window.addEventListener("pointermove", handleMove);
@@ -1053,15 +1188,23 @@ export default function SwapPage() {
         if (dataA.prices && dataB.prices && dataA.prices.length > 0 && dataB.prices.length > 0) {
           const minLength = Math.min(dataA.prices.length, dataB.prices.length);
           console.log("\n🔢 Processing data points:", minLength);
+          console.log("📐 Exchange rate direction:", `${symbolA}/${symbolB}`);
+          console.log("   Formula: priceA / priceB =", symbolA, "per", symbolB);
           
           const points = [];
           
+          // Match timestamps and calculate cross-rate
+          // CoinGecko doesn't provide direct cross-rates, so we calculate from USD prices:
+          // TokenA/USD / TokenB/USD = TokenA/TokenB
+          // Example: ETH/USD ($2500) / USDC/USD ($1) = 2500 USDC per ETH (ETH/USDC)
           for (let i = 0; i < minLength; i++) {
             const timeA = Math.floor(dataA.prices[i][0] / 1000);
-            const priceA = dataA.prices[i][1];
-            const priceB = dataB.prices[i][1];
+            const priceA = dataA.prices[i][1]; // TokenA price in USD
+            const priceB = dataB.prices[i][1]; // TokenB price in USD
             
             if (priceB > 0) {
+              // Calculate TokenA/TokenB exchange rate
+              // This gives: how many TokenB units per 1 TokenA unit
               const ratio = priceA / priceB;
               points.push({
                 time: timeA as UTCTimestamp,
@@ -1069,6 +1212,11 @@ export default function SwapPage() {
               });
             }
           }
+          
+          console.log("✅ Exchange rate calculation:");
+          console.log("   Example: If ETH = $2500 USD and USDC = $1 USD");
+          console.log("   Then ETH/USDC = $2500 / $1 = 2500 USDC per ETH");
+          console.log("   This means 1 ETH = 2500 USDC ✓");
           
           console.log("\n✨ Processed Chart Data:");
           console.log("Total points:", points.length);
@@ -1130,7 +1278,7 @@ export default function SwapPage() {
     fetchRealPriceData();
   }, [tokenA.symbol, tokenB.symbol]);
 
-  // Live price updates - USING DUMMY DATA for testing pulse animation
+  // Live price updates - USING COINGECKO API for real-time prices
   useEffect(() => {
     console.log("\n╔════════════════════════════════════════════════════════╗");
     console.log("║  🔴 LIVE PRICE UPDATE EFFECT TRIGGERED                ║");
@@ -1144,143 +1292,177 @@ export default function SwapPage() {
       return;
     }
 
-    console.log("✅ Starting DUMMY DATA updates every 5 seconds!");
-    console.log("   Random movement: -1% to +1% (normal distribution)");
-    console.log("   Every 15 seconds: 0% movement (blue ripple test)");
+    const symbolA = tokenA.symbol.toUpperCase();
+    const symbolB = tokenB.symbol.toUpperCase();
+    
+    // Coin mapping for CoinGecko API
+    const coins: Record<string, string> = {
+      ETH: "ethereum",
+      WETH: "ethereum",
+      BTC: "bitcoin",
+      WBTC: "wrapped-bitcoin",
+      USDC: "usd-coin",
+      DAI: "dai",
+      USDT: "tether",
+      LINK: "chainlink",
+      UNI: "uniswap",
+      MKR: "maker",
+      AAVE: "aave",
+      COMP: "compound-governance-token",
+      ARB: "arbitrum",
+    };
+    
+    const coinA = coins[symbolA];
+    const coinB = coins[symbolB];
+    
+    if (!coinA || !coinB) {
+      console.log("⚠️  Pair not supported for live updates, skipping");
+      return;
+    }
+
+    console.log("✅ Starting REAL-TIME updates from CoinGecko API every 30 seconds!");
+    console.log("   Pair:", `${symbolA}/${symbolB}`);
+    console.log("   Note: CoinGecko free tier has rate limits (10-50 calls/minute)");
 
     let updateCounter = 0;
 
-    // Normal distribution random number generator (Box-Muller transform)
-    const randomNormal = () => {
-      const u1 = Math.random();
-      const u2 = Math.random();
-      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    };
-
-    const generateDummyUpdate = () => {
-      console.log("\n🚀 === DUMMY UPDATE ===");
+    const fetchLatestPrice = async () => {
+      console.log(`\n🚀 === REAL-TIME PRICE UPDATE #${updateCounter + 1} ===`);
       
       if (chartData.length === 0) {
         console.log("❌ No previous data to update from");
         return;
       }
       
-      const lastPoint = chartData[chartData.length - 1];
-      const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
-      
-      updateCounter++;
-      
-      let percentChange: number;
-      let changePercent: number;
-      
-      // Every 3rd update (15 seconds): 0% movement
-      if (updateCounter % 3 === 0) {
-        percentChange = 1.0;
-        changePercent = 0;
-        console.log("🔵 BLUE RIPPLE TEST - Zero movement (update #" + updateCounter + ")");
-      } else {
-        // Random movement with normal distribution
-        // Mean = 0%, Std Dev = 0.3% (so ±1% is ~3 standard deviations, rare)
-        const randomChange = randomNormal() * 0.003; // 0.3% std dev
-        // Clamp to -1% to +1%
-        const clampedChange = Math.max(-0.01, Math.min(0.01, randomChange));
+      try {
+        const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        updateCounter++;
         
-        percentChange = 1 + clampedChange;
-        changePercent = clampedChange * 100;
+        // Fetch current prices from CoinGecko
+        // Using simple price endpoint (faster than market_chart for current price)
+        const urlA = `https://api.coingecko.com/api/v3/simple/price?ids=${coinA}&vs_currencies=usd`;
+        const urlB = `https://api.coingecko.com/api/v3/simple/price?ids=${coinB}&vs_currencies=usd`;
         
-        console.log("🎲 Random movement generated:");
-        console.log("  Raw normal value:", randomChange.toFixed(6));
-        console.log("  Clamped to ±1%:", clampedChange.toFixed(6));
-      }
-      
-      const newValue = Number((lastPoint.value * percentChange).toFixed(6));
-      
-      // Determine direction
-      let direction: "up" | "down" | "same";
-      if (newValue > lastPoint.value) {
-        direction = "up";
-      } else if (newValue < lastPoint.value) {
-        direction = "down";
-      } else {
-        direction = "same";
-      }
-      
-      console.log("📊 DUMMY DATA GENERATED:");
-      console.log("  Update #:", updateCounter);
-      console.log("  Previous value:", lastPoint.value);
-      console.log("  Change percent:", changePercent >= 0 ? "+" + changePercent.toFixed(4) : changePercent.toFixed(4), "%");
-      console.log("  Multiplier:", percentChange.toFixed(6));
-      console.log("  New value:", newValue);
-      console.log("  Direction:", direction.toUpperCase());
-      console.log("  Expected color:", direction === "up" ? "🟢 GREEN" : direction === "down" ? "🔴 RED" : "🔵 BLUE");
-      console.log("  Time:", new Date(now * 1000).toISOString());
-      console.log("  Next update in: 5 seconds");
-      
-      const newPoint = { time: now, value: newValue };
-      
-      // Use chart series update method if available (smooth update, no refresh)
-      if (chartSeriesRef.current?.series) {
-        console.log("  ✅ Using series.update() - SMOOTH addition, no chart refresh");
-        try {
-          chartSeriesRef.current.series.update(newPoint);
-          console.log("  ✅ Point added smoothly to chart via update()!");
-          
-          // Update local state WITHOUT triggering re-render (for reference only)
-          chartData.push(newPoint);
-        } catch (error) {
-          console.error("  ❌ Error updating series:", error);
-          // Fallback to state update
+        console.log("🌐 Fetching latest prices from CoinGecko...");
+        const fetchStartTime = Date.now();
+        
+        const [responseA, responseB] = await Promise.all([
+          fetch(urlA),
+          fetch(urlB)
+        ]);
+        
+        const fetchDuration = Date.now() - fetchStartTime;
+        console.log(`✅ Fetch completed in ${fetchDuration}ms`);
+        
+        if (!responseA.ok || !responseB.ok) {
+          throw new Error(`API error: ${responseA.status} / ${responseB.status}`);
+        }
+        
+        const dataA = await responseA.json();
+        const dataB = await responseB.json();
+        
+        const priceA = dataA[coinA]?.usd;
+        const priceB = dataB[coinB]?.usd;
+        
+        if (!priceA || !priceB || priceB === 0) {
+          throw new Error("Invalid price data received");
+        }
+        
+        // Calculate cross-rate: TokenA/TokenB = priceA/USD / priceB/USD
+        const newValue = Number((priceA / priceB).toFixed(6));
+        const lastPoint = chartData[chartData.length - 1];
+        
+        // Determine direction
+        let direction: "up" | "down" | "same";
+        const changePercent = ((newValue - lastPoint.value) / lastPoint.value) * 100;
+        
+        if (newValue > lastPoint.value) {
+          direction = "up";
+        } else if (newValue < lastPoint.value) {
+          direction = "down";
+        } else {
+          direction = "same";
+        }
+        
+        console.log("📊 REAL PRICE DATA:");
+        console.log("  Update #:", updateCounter);
+        console.log("  Pair:", `${symbolA}/${symbolB}`);
+        console.log(`  ${symbolA} price: $${priceA.toFixed(6)} USD`);
+        console.log(`  ${symbolB} price: $${priceB.toFixed(6)} USD`);
+        console.log(`  Exchange rate: ${newValue.toFixed(6)} ${symbolB} per ${symbolA}`);
+        console.log("  Previous value:", lastPoint.value);
+        console.log("  Change percent:", changePercent >= 0 ? "+" + changePercent.toFixed(4) : changePercent.toFixed(4), "%");
+        console.log("  Direction:", direction.toUpperCase());
+        console.log("  Expected color:", direction === "up" ? "🟢 GREEN" : direction === "down" ? "🔴 RED" : "🔵 BLUE");
+        console.log("  Time:", new Date(now * 1000).toISOString());
+        
+        const newPoint = { time: now, value: newValue };
+        
+        // Use chart series update method if available (smooth update, no refresh)
+        if (chartSeriesRef.current?.series) {
+          console.log("  ✅ Using series.update() - SMOOTH addition, no chart refresh");
+          try {
+            chartSeriesRef.current.series.update(newPoint);
+            console.log("  ✅ Point added smoothly to chart via update()!");
+            
+            // Update local state WITHOUT triggering re-render (for reference only)
+            chartData.push(newPoint);
+          } catch (error) {
+            console.error("  ❌ Error updating series:", error);
+            // Fallback to state update
+            setChartData(prev => [...prev, newPoint]);
+          }
+        } else {
+          console.log("  ⚠️ Series ref not ready, using setChartData (will refresh chart)");
           setChartData(prev => [...prev, newPoint]);
         }
-      } else {
-        console.log("  ⚠️ Series ref not ready, using setChartData (will refresh chart)");
-        setChartData(prev => [...prev, newPoint]);
+        
+        // Update counters
+        const currentTime = new Date();
+        setLastUpdateTime(currentTime.toLocaleTimeString());
+        setUpdateCount(prev => prev + 1);
+        
+        // Trigger pulse animation
+        const colorToUse = direction === "up" ? "#10b981" : direction === "down" ? "#ef4444" : "#3b82f6";
+        const colorName = direction === "up" ? "GREEN" : direction === "down" ? "RED" : "BLUE";
+        
+        console.log("🎯 Triggering pulse animation:");
+        console.log("  Direction:", direction.toUpperCase());
+        console.log("  Color:", colorName, "→", colorToUse);
+        console.log("  Time:", currentTime.toLocaleTimeString());
+        
+        // Update permanent dot color
+        setPermanentDotColor(colorToUse);
+        setLatestPriceChange(direction);
+        setShowPulse(true);
+        setPulseKey(prev => prev + 1);
+        
+        // Hide ripple after animation (but keep the center dot)
+        setTimeout(() => {
+          console.log("🎯 Hiding ripples (keeping permanent dot)");
+          setShowPulse(false);
+          setLatestPriceChange(null);
+        }, 2500);
+        
+        console.log("🏁 === REAL-TIME UPDATE COMPLETED ===\n");
+      } catch (error) {
+        console.error("❌ Failed to fetch latest price:", error);
+        console.log("  Will retry on next interval");
       }
-      
-      // Update counters
-      const currentTime = new Date();
-      setLastUpdateTime(currentTime.toLocaleTimeString());
-      setUpdateCount(prev => prev + 1);
-      
-      // Trigger pulse animation
-      const colorToUse = direction === "up" ? "#10b981" : direction === "down" ? "#ef4444" : "#3b82f6";
-      const colorName = direction === "up" ? "GREEN" : direction === "down" ? "RED" : "BLUE";
-      
-      console.log("🎯 Triggering pulse animation:");
-      console.log("  Direction:", direction.toUpperCase());
-      console.log("  Color:", colorName, "→", colorToUse);
-      console.log("  Time:", currentTime.toLocaleTimeString());
-      console.log("  Logic: up=GREEN(#10b981), down=RED(#ef4444), same=BLUE(#3b82f6)");
-      console.log("  💎 Permanent dot will keep this color until next update");
-      
-      // Update permanent dot color
-      setPermanentDotColor(colorToUse);
-      setLatestPriceChange(direction);
-      setShowPulse(true);
-      setPulseKey(prev => prev + 1);
-      
-      // Hide ripple after animation (but keep the center dot)
-      setTimeout(() => {
-        console.log("🎯 Hiding ripples (keeping permanent dot)");
-        setShowPulse(false);
-        setLatestPriceChange(null);
-      }, 2500);
-      
-      console.log("🏁 === DUMMY UPDATE COMPLETED ===\n");
     };
 
-    // Generate first dummy update immediately
-    console.log("⏰ Generating first dummy update IMMEDIATELY");
-    generateDummyUpdate();
+    // Fetch first update immediately
+    console.log("⏰ Fetching first real-time update IMMEDIATELY");
+    fetchLatestPrice();
 
-    // Then generate every 5 seconds
-    console.log("⏰ Setting up interval to generate dummy data every 5 seconds");
+    // Then fetch every 30 seconds (to respect CoinGecko rate limits)
+    console.log("⏰ Setting up interval to fetch real prices every 30 seconds");
     let callCount = 0;
     const interval = setInterval(() => {
       callCount++;
       console.log(`\n⏰⏰⏰ INTERVAL FIRED - Call #${callCount} at ${new Date().toLocaleTimeString()}`);
-      generateDummyUpdate();
-    }, 5000);
+      fetchLatestPrice();
+    }, 30000); // 30 seconds
 
     return () => {
       console.log("🛑 Cleaning up interval - effect is re-running");
@@ -1416,11 +1598,19 @@ export default function SwapPage() {
     }
   }, [chartData]);
 
-  function TokenSelector({ selected, tokens, onSelect, side = "left", cardRect }: { selected: Token; tokens: Token[]; onSelect: (t: Token) => void; side?: "left" | "right"; cardRect: DOMRect | null }) {
+  function TokenSelector({ selected, tokens, onSelect, side = "left", cardRect, swapTitleRect, swapCardRect }: { selected: Token; tokens: Token[]; onSelect: (t: Token) => void; side?: "left" | "right"; cardRect: DOMRect | null; swapTitleRect?: DOMRect | null; swapCardRect?: DOMRect | null }) {
     const [isDesktop, setIsDesktop] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [shouldRender, setShouldRender] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizingSelector, setIsResizingSelector] = useState(false);
+  const [resizeEdgeSelector, setResizeEdgeSelector] = useState<string | null>(null);
+  const [selectorOffset, setSelectorOffset] = useState({ x: 0, y: 0 });
+  const [selectorSize, setSelectorSize] = useState({ width: 360, height: 0 }); // Will match swap card height
+    const dragLastRef = useRef<{ x: number; y: number } | null>(null);
+    const resizeSelectorStartRef = useRef<{ x: number; y: number; width: number; height: number; offsetX: number; offsetY: number } | null>(null);
 
     useEffect(() => {
       const check = () => setIsDesktop(window.innerWidth >= 1024);
@@ -1446,11 +1636,122 @@ export default function SwapPage() {
       setSearchTerm("");
       setShouldRender(true);
       setPhase("closed");
+      setSelectorOffset({ x: 0, y: 0 });
+      // Match full swap card height
+      const matchHeight = swapCardRect?.height || 600;
+      setSelectorSize({ width: 360, height: matchHeight });
+      console.log("🪙 Token selector height set to match swap card:", matchHeight);
       requestAnimationFrame(() => {
         setPhase("opening");
         setIsOpen(true);
+        // After card opening animation completes (0.52s), set phase to "open" to show glow
+        setTimeout(() => {
+          setPhase("open");
+        }, 520);
       });
     };
+
+    const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      dragLastRef.current = { x: event.clientX, y: event.clientY };
+      setIsDragging(true);
+    };
+
+    const handleResizeSelectorStart = (edge: string, event: React.PointerEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      
+      resizeSelectorStartRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        width: selectorSize.width,
+        height: selectorSize.height,
+        offsetX: selectorOffset.x,
+        offsetY: selectorOffset.y,
+      };
+      
+      setResizeEdgeSelector(edge);
+      setIsResizingSelector(true);
+    };
+
+    useEffect(() => {
+      if (!isDragging && !isResizingSelector) return;
+
+      const handleMove = (event: PointerEvent) => {
+        if (isDragging && dragLastRef.current) {
+          const deltaX = event.clientX - dragLastRef.current.x;
+          const deltaY = event.clientY - dragLastRef.current.y;
+          dragLastRef.current = { x: event.clientX, y: event.clientY };
+          setSelectorOffset(prev => ({
+            x: prev.x + deltaX,
+            y: prev.y + deltaY,
+          }));
+        } else if (isResizingSelector && resizeSelectorStartRef.current && resizeEdgeSelector) {
+          const deltaX = event.clientX - resizeSelectorStartRef.current.x;
+          const deltaY = event.clientY - resizeSelectorStartRef.current.y;
+          
+          let newWidth = resizeSelectorStartRef.current.width;
+          let newHeight = resizeSelectorStartRef.current.height;
+          
+          if (resizeEdgeSelector.includes('right')) {
+            newWidth = Math.max(300, Math.min(window.innerWidth - 100, resizeSelectorStartRef.current.width + deltaX));
+          }
+          if (resizeEdgeSelector.includes('left')) {
+            newWidth = Math.max(300, Math.min(window.innerWidth - 100, resizeSelectorStartRef.current.width - deltaX));
+          }
+          if (resizeEdgeSelector.includes('bottom')) {
+            newHeight = Math.max(400, Math.min(window.innerHeight - 100, resizeSelectorStartRef.current.height + deltaY));
+          }
+          if (resizeEdgeSelector.includes('top')) {
+            newHeight = Math.max(400, Math.min(window.innerHeight - 100, resizeSelectorStartRef.current.height - deltaY));
+          }
+          
+          setSelectorSize({ width: newWidth, height: newHeight });
+          
+          let newOffsetX = resizeSelectorStartRef.current.offsetX;
+          let newOffsetY = resizeSelectorStartRef.current.offsetY;
+          
+          if (resizeEdgeSelector.includes('left')) {
+            const widthChange = newWidth - resizeSelectorStartRef.current.width;
+            newOffsetX = resizeSelectorStartRef.current.offsetX - (widthChange / 2);
+          } else if (resizeEdgeSelector.includes('right')) {
+            const widthChange = newWidth - resizeSelectorStartRef.current.width;
+            newOffsetX = resizeSelectorStartRef.current.offsetX + (widthChange / 2);
+          }
+          
+          if (resizeEdgeSelector.includes('top')) {
+            const heightChange = newHeight - resizeSelectorStartRef.current.height;
+            newOffsetY = resizeSelectorStartRef.current.offsetY - (heightChange / 2);
+          } else if (resizeEdgeSelector.includes('bottom')) {
+            const heightChange = newHeight - resizeSelectorStartRef.current.height;
+            newOffsetY = resizeSelectorStartRef.current.offsetY + (heightChange / 2);
+          }
+          
+          setSelectorOffset({ x: newOffsetX, y: newOffsetY });
+        }
+      };
+
+      const handleUp = () => {
+        if (isDragging) {
+          dragLastRef.current = null;
+          setIsDragging(false);
+        } else if (isResizingSelector) {
+          setIsResizingSelector(false);
+          setResizeEdgeSelector(null);
+          resizeSelectorStartRef.current = null;
+        }
+      };
+
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("pointercancel", handleUp);
+
+      return () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("pointercancel", handleUp);
+      };
+    }, [isDragging, isResizingSelector, resizeEdgeSelector]);
 
     const closeDropdown = () => {
       setPhase("closing");
@@ -1567,54 +1868,122 @@ export default function SwapPage() {
             </svg>
           </div>
         </button>
-        {shouldRender && isDesktop && cardRect
+        {shouldRender && isDesktop && swapTitleRect && cardRect
           ? createPortal(
               <div
-                className={`fixed z-50 w-72 overflow-hidden rounded-2xl border border-white/10 bg-black/95 px-[18px] pb-4 pt-6 shadow-2xl backdrop-blur-2xl transition-all duration-[${animateDuration}ms] ${
-                  isOpen ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-3"
-                }`}
+                className="fixed z-[9999] pointer-events-none"
                 style={{
-                  top: cardRect.top,
-                  bottom: 24,
-                  left:
-                    side === "left"
-                      ? Math.max(16, cardRect.left - 50 - 288)
-                      : Math.min(window.innerWidth - 16 - 288, cardRect.right + 50),
+                  top: swapTitleRect.top,
+                  left: side === "left" 
+                    ? Math.max(16, cardRect.left - 65 - selectorSize.width)
+                    : Math.min(window.innerWidth - 16 - selectorSize.width, cardRect.right + 65),
+                  transform: `translate(0, 0) translate(${selectorOffset.x}px, ${selectorOffset.y}px)`,
                 }}
               >
-                <div className="flex h-full flex-col gap-4">
-                  <div className="relative flex items-center justify-center pt-2 text-xs text-white/60">
-                    <span className="bg-gradient-to-r from-[#38bdf8] via-[#6366f1] to-[#ec4899] bg-clip-text text-base font-semibold tracking-wide text-transparent">
+                {/* Wrapper for glow effect */}
+                <GlowingCardWrapper phase={phase}>
+                  <div
+                    ref={dropdownRef}
+                    className={`pointer-events-auto relative overflow-hidden rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] transition-all ${
+                      isOpen ? "opacity-100" : "pointer-events-none opacity-0"
+                    }`}
+                    style={{
+                      width: `${selectorSize.width}px`,
+                      height: `${selectorSize.height}px`,
+                      backgroundColor: "rgb(12, 14, 22)",
+                      backdropFilter: "blur(40px) saturate(180%)",
+                      WebkitBackdropFilter: "blur(40px) saturate(180%)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
+                      transition: isResizingSelector ? "none" : "opacity 0.3s ease",
+                      animation: phase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : phase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
+                      zIndex: 0,
+                      position: "relative",
+                    }}
+                  >
+                  {/* Header with drag and buttons - fully transparent for glow */}
+                  <div
+                    className={`flex h-12 items-center justify-between px-4 border-b border-white/10 relative ${
+                      isDragging ? "cursor-grabbing" : "cursor-grab"
+                    }`}
+                    onPointerDown={handleDragStart}
+                  >
+                    {/* Transparent overlay to let glow through */}
+                    <div 
+                      className="absolute inset-0" 
+                      style={{ 
+                        backgroundColor: "rgba(12, 14, 22, 0)",
+                        backdropFilter: "none"
+                      }}
+                    />
+                    <span 
+                      className="text-sm font-semibold tracking-wide relative z-10"
+                      style={{
+                        background: "linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)",
+                        backgroundSize: "200% 100%",
+                        animation: "glowShift 8s linear infinite",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        filter: "drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(99, 102, 241, 0.4))",
+                      }}
+                    >
                       Select a token
                     </span>
                     <button
                       type="button"
-                      onClick={closeDropdown}
-                      className="absolute right-0 flex h-8 w-8 items-center justify-center rounded-full text-2xl leading-none text-white/70 transition hover:bg-white/10 hover:text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeDropdown();
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57] relative z-10"
+                      style={{ 
+                        lineHeight: "0",
+                        paddingBottom: "2px"
+                      }}
                       aria-label="Close token selector"
                     >
-                      ×
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search token"
-                    autoFocus
-                    className="w-full rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-                  />
-                  <div className="flex-1 pt-3">
-                    {renderList(tokensToDisplay)}
+                  
+                  {/* Content area */}
+                  <div className="flex h-full flex-col gap-4 p-4" style={{ height: "calc(100% - 48px)" }}>
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Search token"
+                      autoFocus
+                      className="w-full rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                    <div className="flex-1 overflow-hidden">
+                      {renderList(tokensToDisplay)}
+                    </div>
                   </div>
+                  
+                  {/* Resize handles */}
+                  <>
+                    <div className="absolute top-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('top', e)} />
+                    <div className="absolute bottom-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('bottom', e)} />
+                    <div className="absolute top-4 bottom-4 left-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('left', e)} />
+                    <div className="absolute top-4 bottom-4 right-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('right', e)} />
+                    <div className="absolute top-0 left-0 h-4 w-4 cursor-nwse-resize z-50 rounded-tl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-left', e)} />
+                    <div className="absolute top-0 right-0 h-4 w-4 cursor-nesw-resize z-50 rounded-tr-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-right', e)} />
+                    <div className="absolute bottom-0 left-0 h-4 w-4 cursor-nesw-resize z-50 rounded-bl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-left', e)} />
+                    <div className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize z-50 rounded-br-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-right', e)} />
+                  </>
                 </div>
-              </div>,
-              document.body
-            )
+                </GlowingCardWrapper>
+            </div>,
+            document.body
+          )
           :
           shouldRender &&
             createPortal(
-              <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-[${animateDuration}ms] ${
+              <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-[${animateDuration}ms] ${
                 isOpen ? "opacity-100" : "pointer-events-none opacity-0"
               }`}>
                 <div
@@ -1630,7 +1999,12 @@ export default function SwapPage() {
                     <button
                       type="button"
                       onClick={closeDropdown}
-                      className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-3xl leading-none text-white/70 transition hover:bg-white/10 hover:text-white"
+                      className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-3xl text-white/70 transition hover:bg-white/10 hover:text-white"
+                      style={{ 
+                        top: "-2px",
+                        lineHeight: "0",
+                        paddingBottom: "3px"
+                      }}
                       aria-label="Close token selector"
                     >
                       ×
@@ -1686,7 +2060,7 @@ export default function SwapPage() {
       </header>
 
       {/* Simple blur test rectangle */}
-      {(isChartOpen || chartDisappearing) && (() => {
+      {(isChartOpen || chartPhase === "closing") && (() => {
         console.log("🎨 Rendering Chart Overlay:");
         console.log("  Chart data available:", chartData.length, "points");
         console.log("  Token pair:", tokenA.symbol, "/", tokenB.symbol);
@@ -1705,172 +2079,234 @@ export default function SwapPage() {
               transform,
             }}
           >
-            <div
-              className="pointer-events-auto relative rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]"
-              style={{
-                width: isChartMaximized ? "80vw" : "92vw",
-                maxWidth: isChartMaximized ? "none" : "1100px",
-                height: isChartMaximized ? "90vh" : "77vh",
-                maxHeight: isChartMaximized ? "none" : "840px",
-                backgroundColor: "rgba(12, 14, 22, 0.25)",
-                backdropFilter: "blur(40px) saturate(180%)",
-                WebkitBackdropFilter: "blur(40px) saturate(180%)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
-                transition: "width 0.3s ease, height 0.3s ease",
-                animation: chartDisappearing 
-                  ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards"
-                  : "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-              }}
+            <GlowingCardWrapper 
+              phase={chartPhase}
+              glowGradient="linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)"
             >
-              {/* Header with drag and buttons */}
               <div
-                className={`flex h-12 items-center justify-between px-4 border-b border-white/10 ${
-                  isChartMaximized || isDraggingChart ? "cursor-grabbing" : "cursor-grab"
-                }`}
-                onPointerDown={handleOverlayPointerDown}
-              >
-                {/* Token pair with icons */}
-                <div className="flex items-center gap-2">
-                  {tokenA.icon && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={tokenA.icon}
-                      alt={tokenA.symbol}
-                      className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
-                      onError={(event) => {
-                        event.currentTarget.onerror = null;
-                        event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
-                      }}
-                    />
-                  )}
-                  <span className="text-xs uppercase tracking-[0.35em] text-white/55">
-                    {chartPairLabel}
-                  </span>
-                  {tokenB.icon && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={tokenB.icon}
-                      alt={tokenB.symbol}
-                      className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
-                      onError={(event) => {
-                        event.currentTarget.onerror = null;
-                        event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
-                      }}
-                    />
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Maximize button - 20% bigger */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsChartMaximized((prev) => !prev);
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
-                    aria-label={isChartMaximized ? "Restore" : "Maximize"}
-                  >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      {isChartMaximized ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l-6 6m0 0l6 6m-6-6h12a2 2 0 002-2V3" />
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                      )}
-                    </svg>
-                  </button>
-                  {/* Close button - 20% bigger */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCloseChart();
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57]"
-                    aria-label="Close"
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {/* Lightweight Chart */}
-              <div
-                key={`chart-${tokenA.symbol}-${tokenB.symbol}`}
-                className="absolute overflow-hidden"
+                className="pointer-events-auto relative rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]"
                 style={{
-                  top: "48px",
-                  left: "0",
-                  right: "0",
-                  bottom: "0",
-                  borderBottomLeftRadius: "20px",
-                  borderBottomRightRadius: "20px",
+                  width: chartSize.width > 0 ? `${chartSize.width}px` : (isChartMaximized ? "80vw" : "92vw"),
+                  maxWidth: chartSize.width > 0 ? "none" : (isChartMaximized ? "none" : "1100px"),
+                  height: chartSize.height > 0 ? `${chartSize.height}px` : (isChartMaximized ? "90vh" : "77vh"),
+                  maxHeight: chartSize.height > 0 ? "none" : (isChartMaximized ? "none" : "840px"),
+                  backgroundColor: "rgb(12, 14, 22)",
+                  backdropFilter: "blur(40px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(40px) saturate(180%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
+                  transition: isResizing ? "none" : "width 0.3s ease, height 0.3s ease",
+                  animation: chartPhase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : chartPhase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
+                  zIndex: 1,
+                  position: "relative",
                 }}
               >
-                {chartData.length > 0 ? (
-                  <div className="relative w-full h-full">
-                    <LightweightChart 
-                      key={`lw-${tokenA.symbol}-${tokenB.symbol}`} 
-                      data={chartData}
-                      pulseColor={latestPriceChange === "up" ? "#10b981" : latestPriceChange === "down" ? "#ef4444" : "#3b82f6"}
-                      showPulse={showPulse}
-                      permanentDotColor={permanentDotColor}
-                      onSeriesReady={(series, chart) => {
-                        console.log("📢 Chart series ready, storing reference");
-                        chartSeriesRef.current = { series, chart };
+                {/* Header with drag and buttons */}
+                <div
+                  className={`flex h-12 items-center justify-between px-4 border-b border-white/10 ${
+                    isChartMaximized || isDraggingChart ? "cursor-grabbing" : "cursor-grab"
+                  }`}
+                  onPointerDown={handleOverlayPointerDown}
+                >
+                  {/* Token pair with icons */}
+                  <div className="flex items-center gap-2">
+                    {tokenA.icon && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tokenA.icon}
+                        alt={tokenA.symbol}
+                        className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
+                        }}
+                      />
+                    )}
+                    <span className="text-xs uppercase tracking-[0.35em] text-white/55">
+                      {chartPairLabel}
+                    </span>
+                    {tokenB.icon && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tokenB.icon}
+                        alt={tokenB.symbol}
+                        className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Maximize button - 20% bigger */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsChartMaximized((prev) => !prev);
                       }}
-                    />
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
+                      aria-label={isChartMaximized ? "Restore" : "Maximize"}
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        {isChartMaximized ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l-6 6m0 0l6 6m-6-6h12a2 2 0 002-2V3" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        )}
+                      </svg>
+                    </button>
+                    {/* Close button - 20% bigger */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCloseChart();
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57]"
+                      aria-label="Close"
+                    >
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-                    <LoadingAnimation />
-                    <p className="text-sm text-white/40 font-medium">Loading chart data...</p>
-                  </div>
-                )}
+                </div>
+                {/* Lightweight Chart */}
+                <div
+                  key={`chart-${tokenA.symbol}-${tokenB.symbol}`}
+                  className="absolute overflow-hidden"
+                  style={{
+                    top: "48px",
+                    left: "0",
+                    right: "0",
+                    bottom: "0",
+                    borderBottomLeftRadius: "20px",
+                    borderBottomRightRadius: "20px",
+                  }}
+                >
+                  {chartData.length > 0 ? (
+                    <div className="relative w-full h-full">
+                      <LightweightChart 
+                        key={`lw-${tokenA.symbol}-${tokenB.symbol}`} 
+                        data={chartData}
+                        pulseColor={latestPriceChange === "up" ? "#10b981" : latestPriceChange === "down" ? "#ef4444" : "#3b82f6"}
+                        showPulse={showPulse}
+                        permanentDotColor={permanentDotColor}
+                        onSeriesReady={(series, chart) => {
+                          console.log("📢 Chart series ready, storing reference");
+                          chartSeriesRef.current = { series, chart };
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+                      <LoadingAnimation />
+                      <p className="text-sm text-white/40 font-medium">Loading chart data...</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </GlowingCardWrapper>
           </div>
         );
       })()}
 
       {/* Main swap interface */}
       <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4">
-        <div ref={swapTitleRef} className="w-full max-w-md text-center mb-8 space-y-4">
-          <h1
-            className="bg-clip-text text-3xl font-semibold text-transparent"
-            style={{
-              backgroundImage:
-                "linear-gradient(90deg, #9333ea, #a855f7, #d946ef, #ec4899, #f472b6, #06b6d4, #3b82f6, #6366f1, #8b5cf6, #9333ea)",
-              backgroundSize: "150% 100%",
-              animation: "swapGradientShift 12s linear infinite",
-              WebkitAnimation: "swapGradientShift 12s linear infinite",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-            }}
-          >
-            Swap tokens
-          </h1>
-        </div>
-        <div className="w-full max-w-md px-6">
-          <div className="mb-3 pl-6 text-left text-xs font-medium py-2">
-            <span 
-              className="font-medium tracking-wide"
+        <div 
+          className="w-full max-w-md"
+          style={{
+            transform: `translate(${swapCardOffset.x}px, ${swapCardOffset.y}px)`,
+            transition: isDraggingSwapCard ? "none" : "transform 0.3s ease",
+          }}
+        >
+          {/* Wrapper for glow effect */}
+          <div className="relative">
+            {/* Animated glow shadow underneath card - left to right */}
+            <div 
+              className="absolute -inset-[2px] rounded-[22px]"
               style={{
-                background: "linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.8) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.8) 70%, rgba(255,255,255,0.5) 100%)",
+                background: "linear-gradient(90deg, #9333ea, #a855f7, #d946ef, #ec4899, #f472b6, #06b6d4, #3b82f6, #6366f1, #8b5cf6, #9333ea)",
                 backgroundSize: "200% 100%",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                animation: "shimmer 3s ease-in-out infinite",
+                animation: "glowShift 8s linear infinite",
+                filter: "blur(12px)",
+                opacity: 0.45,
+                zIndex: 0,
+              }}
+            />
+            
+            {/* Unified swap card with glassmorphic styling - auto height */}
+            <div 
+              ref={swapCardRef}
+              className="rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] overflow-visible flex flex-col relative"
+              style={{
+                backgroundColor: "rgb(12, 14, 22)",
+                backdropFilter: "blur(40px) saturate(180%)",
+                WebkitBackdropFilter: "blur(40px) saturate(180%)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
+                zIndex: 1,
               }}
             >
-              {spotRateDisplay}
-            </span>
-          </div>
-          <div ref={cardRef} className="rounded-[28px] border border-white/10 bg-black/40 p-6 shadow-2xl backdrop-blur-xl">
-            {!configReady && (
+            {/* Draggable Header with title - full width, fully transparent for glow */}
+            <div 
+              ref={swapTitleRef}
+              className={`pt-6 pb-4 flex items-center justify-center border-b border-white/10 relative ${
+                isDraggingSwapCard ? "cursor-grabbing" : "cursor-grab"
+              }`}
+              onPointerDown={handleSwapCardDragStart}
+            >
+              {/* Transparent overlay to let glow through */}
+              <div 
+                className="absolute inset-0" 
+                style={{ 
+                  backgroundColor: "rgba(12, 14, 22, 0)",
+                  backdropFilter: "none"
+                }}
+              />
+              <h1
+                className="text-3xl font-semibold relative z-10"
+                style={{
+                  background: "linear-gradient(90deg, #9333ea, #a855f7, #d946ef, #ec4899, #f472b6, #06b6d4, #3b82f6, #6366f1, #8b5cf6, #9333ea)",
+                  backgroundSize: "200% 100%",
+                  animation: "glowShift 8s linear infinite",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  filter: "drop-shadow(0 0 8px rgba(147, 51, 234, 0.6)) drop-shadow(0 0 16px rgba(236, 72, 153, 0.4))",
+                }}
+              >
+                Swap tokens
+              </h1>
+            </div>
+            
+            {/* Content area with rate and swap fields */}
+            <div className="flex flex-col flex-1 min-h-0">
+              {/* Rate - centered vertically between title bottom and Display values in */}
+              <div className="flex-1 flex items-center px-6 min-h-[60px]">
+                <div className="text-left text-xs font-medium w-full">
+                  <span 
+                    className="font-medium tracking-wide"
+                    style={{
+                      background: "linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.8) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.8) 70%, rgba(255,255,255,0.5) 100%)",
+                      backgroundSize: "200% 100%",
+                      backgroundClip: "text",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      animation: "shimmer 3s ease-in-out infinite",
+                    }}
+                  >
+                    {spotRateDisplay}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Swap card content */}
+              <div className="px-6">
+              <div ref={cardRef}>
+                {!configReady && (
               <div className="mb-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
                 Swap not configured. Check environment variables.
               </div>
@@ -1921,6 +2357,8 @@ export default function SwapPage() {
                       }}
                       side="left"
                       cardRect={cardRect}
+                      swapTitleRect={swapTitleRect}
+                      swapCardRect={swapCardRect}
                     />
                     <div className="flex-1 text-right">
                       <input
@@ -2016,6 +2454,8 @@ export default function SwapPage() {
                       }}
                       side="right"
                       cardRect={cardRect}
+                      swapTitleRect={swapTitleRect}
+                      swapCardRect={swapCardRect}
                     />
                   </div>
                 </div>
@@ -2070,6 +2510,9 @@ export default function SwapPage() {
                   </button>
                 )}
 
+                {/* Consistent spacing before Connect Wallet button */}
+                <div style={{ height: "20px" }} />
+
                 {/* Swap button */}
                 <button
                   onClick={() => {
@@ -2123,30 +2566,72 @@ export default function SwapPage() {
                     Swap failed. Check console for details.
                   </div>
                 )}
+
+                {/* Consistent spacing after Connect Wallet button */}
+                <div style={{ height: "20px" }} />
+            </div>
               </div>
+            </div>
+            </div>
+            
+            {/* Loading Animation */}
+            {isLoadingChartData && (
+              <>
+                <div className="px-6 flex flex-col items-center justify-center gap-3">
+                  <LoadingAnimation />
+                  <p className="text-xs text-white/50 font-medium">Loading chart data...</p>
+                </div>
+                <div className="h-4" />
+              </>
+            )}
+            
+            {/* Action buttons */}
+            <div className="px-6">
+              <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleOpenChart();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                disabled={isLoadingChartData}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                </svg>
+                View live chart
+              </button>
+              
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  console.log("⚙️ Advanced view clicked");
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white"
+              >
+                <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Advanced view
+              </button>
+              </div>
+            </div>
+            
+            {/* Consistent padding at bottom - matches other paddings */}
+            <div className="h-8" />
           </div>
-        </div>
-        
-        {/* Loading Animation */}
-        {isLoadingChartData && (
-          <div className="mt-6 flex flex-col items-center justify-center gap-3">
-            <LoadingAnimation />
-            <p className="text-xs text-white/50 font-medium">Loading chart data...</p>
           </div>
-        )}
-        
-        <div className="mt-6 flex items-center justify-center">
-          <button
-            type="button"
-            onClick={handleOpenChart}
-            disabled={isLoadingChartData}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-            </svg>
-            View live chart
-          </button>
         </div>
       </main>
 
@@ -2169,6 +2654,33 @@ export default function SwapPage() {
           }
           100% {
             background-position: -200% 0;
+          }
+        }
+        
+        @keyframes glowShift {
+          0% {
+            background-position: 200% 50%;
+          }
+          100% {
+            background-position: -200% 50%;
+          }
+        }
+        
+        @keyframes glowFadeIn {
+          0% {
+            opacity: 0;
+          }
+          100% {
+            opacity: 0.45;
+          }
+        }
+        
+        @keyframes glowFadeOut {
+          0% {
+            opacity: 0.45;
+          }
+          100% {
+            opacity: 0;
           }
         }
         
