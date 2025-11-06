@@ -21,7 +21,7 @@ export const quoterAbi = [
     ],
     name: "quote",
     outputs: [{ internalType: "uint256", name: "quote", type: "uint256" }],
-    stateMutability: "nonpayable",
+    stateMutability: "pure", // Changed from "nonpayable" to match MinimalDummyQuoter
     type: "function",
   },
 ];

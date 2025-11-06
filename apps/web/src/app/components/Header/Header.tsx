@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useAccount, useConnect, useDisconnect, useConnectors } from "wagmi";
 import { NavLink } from "../../types/navigation";
 import { navLinks } from "../../data/navLinks";
 import styles from "./Header.module.css";
@@ -13,6 +14,14 @@ export function Header() {
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
 
   const lastScrollYRef = useRef(0);
+
+  const { address, isConnected } = useAccount();
+  const connectors = useConnectors();
+  const { connect, isPending: isConnectPending, error: connectError } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  // Safely check if connectors are available
+  const hasConnector = connectors && connectors.length > 0;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -105,6 +114,35 @@ export function Header() {
           ))}
         </nav>
         <div className="flex items-center gap-6">
+          {isConnected ? (
+            <div className="hidden items-center gap-3 md:flex">
+              <span className="text-xs text-white/60">
+                {address?.slice(0, 6)}...{address?.slice(-4)}
+              </span>
+              <button
+                onClick={() => disconnect()}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white"
+              >
+                Disconnect
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                try {
+                  if (hasConnector && connectors[0]) {
+                    connect({ connector: connectors[0] });
+                  }
+                } catch (error) {
+                  console.error("Failed to connect wallet:", error);
+                }
+              }}
+              disabled={isConnectPending || !hasConnector}
+              className="hidden rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed md:block"
+            >
+              {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
+            </button>
+          )}
           <Link
             href="/swap"
             className="hidden rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white md:block"
@@ -210,13 +248,48 @@ export function Header() {
                 ) : null}
               </div>
             ))}
-                  <Link
-                    href="/swap"
-                    onClick={handleNavClick}
+            <div className="space-y-4">
+              {isConnected ? (
+                <div className="flex flex-col gap-2">
+                  <div className="text-xs text-white/60 px-3">
+                    {address?.slice(0, 6)}...{address?.slice(-4)}
+                  </div>
+                  <button
+                    onClick={() => {
+                      disconnect();
+                      handleNavClick();
+                    }}
                     className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
                   >
-                    Launch App
-                  </Link>
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    try {
+                      if (hasConnector && connectors[0]) {
+                        connect({ connector: connectors[0] });
+                      }
+                    } catch (error) {
+                      console.error("Failed to connect wallet:", error);
+                    }
+                    handleNavClick();
+                  }}
+                  disabled={isConnectPending || !hasConnector}
+                  className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
+                </button>
+              )}
+              <Link
+                href="/swap"
+                onClick={handleNavClick}
+                className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Launch App
+              </Link>
+            </div>
           </nav>
         </div>
       ) : null}

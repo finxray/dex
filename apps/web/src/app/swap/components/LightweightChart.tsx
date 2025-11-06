@@ -238,10 +238,10 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
   }, [data]);
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full lightweight-chart-container">
       <div ref={containerRef} className="h-full w-full crosshair-custom" />
       
-      {/* Hide default crosshair labels since we use custom components */}
+      {/* Hide default crosshair labels and TradingView logo/watermark */}
       <style jsx global>{`
         .crosshair-custom div[style*="background-color: rgb(255, 255, 255)"] {
           display: none !important;
@@ -252,6 +252,26 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
         /* Hide any crosshair labels that might be showing */
         .crosshair-custom > div[style*="position: absolute"] {
           display: none !important;
+        }
+        /* Hide TradingView logo/watermark if present - comprehensive selectors */
+        .lightweight-chart-container a[href*="tradingview"],
+        .lightweight-chart-container img[src*="tradingview"],
+        .lightweight-chart-container div[class*="watermark"],
+        .lightweight-chart-container div[class*="logo"],
+        .lightweight-chart-container svg[class*="logo"],
+        .lightweight-chart-container [data-watermark],
+        .lightweight-chart-container [data-logo],
+        .crosshair-custom a[href*="tradingview"],
+        .crosshair-custom img[src*="tradingview"],
+        .crosshair-custom div[class*="watermark"],
+        .crosshair-custom div[class*="logo"],
+        .crosshair-custom svg[class*="logo"],
+        .crosshair-custom [data-watermark],
+        .crosshair-custom [data-logo] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
         }
       `}</style>
       

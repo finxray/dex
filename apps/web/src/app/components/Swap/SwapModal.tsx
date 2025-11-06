@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors } from "wagmi";
 import { formatUnits, parseUnits, maxUint256 } from "viem";
 
 import { useSwapModal } from "../../../lib/swap-modal-context";
@@ -34,9 +33,8 @@ type QuoteState = {
 export function SwapModal() {
   const { isOpen, closeModal } = useSwapModal();
   const { address, isConnecting, isConnected } = useAccount();
-  const { connect, error: connectError, isPending: isConnectPending } = useConnect({
-    connector: injected({ shimDisconnect: true }),
-  });
+  const connectors = useConnectors();
+  const { connect, error: connectError, isPending: isConnectPending } = useConnect();
   const { disconnect } = useDisconnect();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -141,7 +139,10 @@ export function SwapModal() {
         !publicClient ||
         !configReady ||
         !env.poolManagerAddress ||
-        !address
+        !address ||
+        isNativeInput ||
+        !inputToken ||
+        inputToken === "0x0000000000000000000000000000000000000000"
       ) {
         setAllowance(null);
         setAllowanceError(null);
@@ -151,16 +152,66 @@ export function SwapModal() {
       setIsFetchingAllowance(true);
       setAllowanceError(null);
       try {
-        const result = await publicClient.readContract({
-          address: inputToken,
-          abi: erc20Abi,
-          functionName: "allowance",
-          args: [address, env.poolManagerAddress],
-        });
-        setAllowance(result as bigint);
-      } catch (error) {
-        console.error("Failed to fetch allowance", error);
-        setAllowanceError("Unable to fetch allowance.");
+        // Add retry logic for network errors
+        let lastError: any = null;
+        const maxRetries = 2;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const result = await publicClient.readContract({
+              address: inputToken as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [address, env.poolManagerAddress],
+            });
+            setAllowance(result as bigint);
+            setAllowanceError(null);
+            return; // Success, exit retry loop
+          } catch (error: any) {
+            lastError = error;
+            const errorMessage = error?.message || error?.toString() || "Unknown error";
+            
+            // Only retry on network errors, not contract errors
+            if (attempt < maxRetries && (
+              errorMessage.includes("network") || 
+              errorMessage.includes("fetch") ||
+              errorMessage.includes("timeout") ||
+              errorMessage.includes("ECONNREFUSED") ||
+              errorMessage.includes("Failed to fetch")
+            )) {
+              console.warn(`Allowance fetch attempt ${attempt + 1} failed, retrying...`, errorMessage);
+              // Wait before retry (exponential backoff)
+              await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+              continue;
+            }
+            throw error; // Re-throw if not a retryable error or max retries reached
+          }
+        }
+      } catch (error: any) {
+        console.error("Failed to fetch allowance after retries", error);
+        const errorMessage = error?.message || error?.toString() || "Unknown error";
+        const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
+        
+        // Provide more helpful error messages
+        if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
+          setAllowanceError("Token contract error. Check token address.");
+        } else if (errorMessage.includes("network") || errorMessage.includes("fetch") || errorMessage.includes("timeout")) {
+          setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
+        } else if (errorMessage.includes("returned no data") || errorMessage.includes("contract")) {
+          // Check if this might be a localhost address on Sepolia network
+          const isLocalhostAddress = inputToken.startsWith("0x5FbDB") || inputToken.startsWith("0xe7f17");
+          const isPlaceholderAddress = /^0x000000000000000000000000000000000000000[0-9a-f]$/i.test(inputToken);
+          
+          if (isPlaceholderAddress) {
+            setAllowanceError("This token doesn't exist on localhost. Only sWETH and sUSDC are available.");
+          } else if (isLocalhostAddress && rpcUrl.includes("sepolia")) {
+            setAllowanceError("Contract not found. These addresses are for localhost. Deploy to Sepolia or use localhost RPC.");
+          } else {
+            setAllowanceError("Contract not found at this address. Check token address.");
+          }
+        } else {
+          setAllowanceError(`Unable to fetch allowance: ${errorMessage.substring(0, 50)}`);
+        }
       } finally {
         setIsFetchingAllowance(false);
       }
@@ -176,6 +227,7 @@ export function SwapModal() {
     env.poolManagerAddress,
     address,
     inputToken,
+    isNativeInput,
     txStatus,
   ]);
 
@@ -293,8 +345,12 @@ export function SwapModal() {
 
         {!isConnected ? (
           <button
-            onClick={() => connect()}
-            disabled={isConnecting || isConnectPending}
+            onClick={() => {
+              if (connectors[0]) {
+                connect({ connector: connectors[0] });
+              }
+            }}
+            disabled={isConnecting || isConnectPending || !connectors[0]}
             className="w-full rounded-2xl bg-white text-black py-3 font-medium transition hover:bg-white/80"
           >
             {isConnecting || isConnectPending ? "Connecting..." : "Connect Wallet"}

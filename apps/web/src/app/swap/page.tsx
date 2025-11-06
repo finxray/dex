@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient } from "wagmi";
-import { injected } from "wagmi/connectors";
-import { formatUnits, parseUnits, maxUint256 } from "viem";
+import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors } from "wagmi";
+import { formatUnits, parseUnits, maxUint256, encodeFunctionData, decodeFunctionResult } from "viem";
 import type { UTCTimestamp } from "lightweight-charts";
 
 import { poolManagerAbi } from "../../lib/abi/poolManager";
@@ -94,9 +93,8 @@ export default function SwapPage() {
   console.log("  ASSET1_DECIMALS:", env.asset1Decimals);
   
   const { address, isConnecting, isConnected } = useAccount();
-  const { connect, error: connectError, isPending: isConnectPending } = useConnect({
-    connector: injected({ shimDisconnect: true }),
-  });
+  const connectors = useConnectors();
+  const { connect, error: connectError, isPending: isConnectPending } = useConnect();
   const { disconnect } = useDisconnect();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -141,6 +139,8 @@ export default function SwapPage() {
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
     },
+    // Only include other tokens if we're not on localhost (they don't exist on Hardhat)
+    ...(process.env.NEXT_PUBLIC_RPC_URL?.includes("localhost") || process.env.NEXT_PUBLIC_RPC_URL?.includes("127.0.0.1") ? [] : [
     {
       symbol: "DAI",
       name: "Dai Stablecoin",
@@ -205,6 +205,7 @@ export default function SwapPage() {
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png",
     },
+    ]),
   ];
 
   const defaultA = tokens[0];
@@ -213,6 +214,10 @@ export default function SwapPage() {
   console.log("\n🎲 Initial Token State:");
   console.log("  Default Token A:", defaultA.symbol, defaultA.address);
   console.log("  Default Token B:", defaultB.symbol, defaultB.address);
+  console.log("  Env Asset0:", env.asset0Symbol, env.asset0);
+  console.log("  Env Asset1:", env.asset1Symbol, env.asset1);
+  console.log("  Pool Manager:", env.poolManagerAddress);
+  console.log("  Quoter:", env.quoterAddress);
 
   const [tokenA, setTokenA] = useState<Token>(defaultA);
   const [tokenB, setTokenB] = useState<Token>(defaultB);
@@ -478,27 +483,98 @@ export default function SwapPage() {
       setIsQuoting(true);
       setQuoteError(null);
 
+      console.log("🔵 Starting quote attempt...");
+      console.log("  publicClient:", publicClient ? "✅" : "❌");
+      console.log("  quoterAddress:", quoterAddress);
+      console.log("  tokenA:", tokenA.address, tokenA.symbol);
+      console.log("  tokenB:", tokenB.address, tokenB.symbol);
+      console.log("  amountInBigInt:", amountInBigInt.toString());
+
       try {
         const quoteStartTime = Date.now();
-        const result = await publicClient.readContract({
-          address: quoterAddress,
+        
+        // Log the exact parameters being sent
+        const quoteParams = {
+          asset0: tokenA.address,
+          asset1: tokenB.address,
+          quoter: quoterAddress,
+          amount: amountInBigInt,
+          asset0Balance: 0n,
+          asset1Balance: 0n,
+          bucketID: 0,
+          zeroForOne,
+          functionFlags: 0,
+        };
+        
+        console.log("📞 Calling quoter with params:", {
+          quoterAddress,
+          params: quoteParams,
+          dataParam: "0x",
+        });
+        
+        // Always use direct call as fallback since readContract has issues with pure functions
+        const callData = encodeFunctionData({
           abi: quoterAbi,
           functionName: "quote",
-          args: [
-            {
-              asset0: tokenA.address,
-              asset1: tokenB.address,
-              quoter: quoterAddress,
-              amount: amountInBigInt,
-              asset0Balance: 0n,
-              asset1Balance: 0n,
-              bucketID: 0,
-              zeroForOne,
-              functionFlags: 0,
-            },
-            "0x",
-          ],
-        }) as bigint;
+          args: [quoteParams, "0x"],
+        });
+        
+        console.log("Call data:", callData);
+        console.log("🔵 About to try readContract...");
+        
+        // Use raw RPC call to completely bypass viem's decoder
+        let result: bigint;
+        try {
+          // Make raw eth_call request to avoid viem's automatic decoding
+          const rawResponse = await publicClient.request({
+            method: 'eth_call',
+            params: [
+              {
+                to: quoterAddress,
+                data: callData,
+              },
+              'latest',
+            ],
+          }) as `0x${string}`;
+          
+          console.log("📥 Raw RPC response:", rawResponse);
+          
+          if (!rawResponse || rawResponse === "0x" || rawResponse === "0x0") {
+            throw new Error(`Quoter returned empty data. Raw response: ${rawResponse}`);
+          }
+          
+          // Manually decode the result
+          result = decodeFunctionResult({
+            abi: quoterAbi,
+            functionName: "quote",
+            data: rawResponse,
+          }) as bigint;
+          
+          console.log("✅ Quoter call succeeded! Result:", result.toString());
+        } catch (rpcError: any) {
+          console.error("Raw RPC call failed:", rpcError);
+          // If raw RPC fails, try the regular call as fallback
+          const callResult = await publicClient.call({
+            to: quoterAddress,
+            data: callData,
+          });
+          
+          console.log("Fallback call result:", callResult);
+          
+          const returnData = typeof callResult === "string" ? callResult : callResult?.data;
+          
+          if (!returnData || returnData === "0x") {
+            throw new Error(`Quoter returned empty data. Raw response: ${JSON.stringify(callResult)}`);
+          }
+          
+          result = decodeFunctionResult({
+            abi: quoterAbi,
+            functionName: "quote",
+            data: returnData as `0x${string}`,
+          }) as bigint;
+          
+          console.log("✅ Fallback call succeeded! Result:", result.toString());
+        }
 
         const quoteDuration = Date.now() - quoteStartTime;
 
@@ -523,11 +599,31 @@ export default function SwapPage() {
         });
         setIsQuoting(false);
         setQuoteError(null);
-      } catch (error) {
+      } catch (error: any) {
         if (!cancelled) {
           console.error("❌ Quote failed:");
-          console.error(error);
-          setQuoteError("Unable to fetch quote. Ensure quoter address is correct.");
+          console.error("Error details:", error);
+          console.error("Error message:", error?.message || error?.toString());
+          console.error("Quoter address:", quoterAddress);
+          console.error("Token A:", tokenA.address, tokenA.symbol);
+          console.error("Token B:", tokenB.address, tokenB.symbol);
+          console.error("Amount in:", amountInBigInt.toString());
+          console.error("Zero for one:", zeroForOne);
+          
+          const errorMessage = error?.message || error?.toString() || "Unknown error";
+          let userFriendlyError = "Unable to fetch quote.";
+          
+          if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
+            userFriendlyError = "Quote reverted. Check quoter contract.";
+          } else if (errorMessage.includes("contract") || errorMessage.includes("no data")) {
+            userFriendlyError = "Quoter contract not found. Check quoter address.";
+          } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+            userFriendlyError = "Network error. Check RPC connection.";
+          } else {
+            userFriendlyError = `Quote failed: ${errorMessage.substring(0, 100)}`;
+          }
+          
+          setQuoteError(userFriendlyError);
           setIsQuoting(false);
         }
       }
@@ -640,10 +736,28 @@ export default function SwapPage() {
         let quoted: bigint;
         try {
           quoted = await readQuote(guess);
-        } catch (error) {
+        } catch (error: any) {
           if (!cancelled) {
-            console.error("❌ Failed to invert quote:", error);
-            setQuoteError("Unable to fetch quote. Ensure quoter address is correct.");
+            console.error("❌ Failed to invert quote:");
+            console.error("Error details:", error);
+            console.error("Error message:", error?.message || error?.toString());
+            console.error("Quoter address:", quoterAddress);
+            console.error("Guess amount:", guess.toString());
+            
+            const errorMessage = error?.message || error?.toString() || "Unknown error";
+            let userFriendlyError = "Unable to fetch quote.";
+            
+            if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
+              userFriendlyError = "Quote reverted. Check quoter contract.";
+            } else if (errorMessage.includes("contract") || errorMessage.includes("no data")) {
+              userFriendlyError = "Quoter contract not found. Check quoter address.";
+            } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+              userFriendlyError = "Network error. Check RPC connection.";
+            } else {
+              userFriendlyError = `Quote failed: ${errorMessage.substring(0, 100)}`;
+            }
+            
+            setQuoteError(userFriendlyError);
           }
           return;
         }
@@ -706,7 +820,10 @@ export default function SwapPage() {
         !publicClient ||
         !configReady ||
         !env.poolManagerAddress ||
-        !address
+        !address ||
+        isNativeInput ||
+        !inputToken ||
+        inputToken === "0x0000000000000000000000000000000000000000"
       ) {
         setAllowance(null);
         setAllowanceError(null);
@@ -716,16 +833,110 @@ export default function SwapPage() {
       setIsFetchingAllowance(true);
       setAllowanceError(null);
       try {
-        const result = await publicClient.readContract({
-          address: inputToken,
-          abi: erc20Abi,
-          functionName: "allowance",
-          args: [address, env.poolManagerAddress],
-        });
-        setAllowance(result as bigint);
-      } catch (error) {
-        console.error("Failed to fetch allowance", error);
-        setAllowanceError("Unable to fetch allowance.");
+        // Add retry logic for network errors
+        let lastError: any = null;
+        const maxRetries = 2;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const result = await publicClient.readContract({
+              address: inputToken as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [address, env.poolManagerAddress],
+            });
+            setAllowance(result as bigint);
+            setAllowanceError(null);
+            return; // Success, exit retry loop
+          } catch (error: any) {
+            lastError = error;
+            const errorMessage = error?.message || error?.toString() || "Unknown error";
+            
+            // Handle "Cannot decode zero data" error - this can happen when contract returns empty response
+            // Try fallback: use direct call or treat as allowance = 0
+            if (errorMessage.includes("Cannot decode zero data") || errorMessage.includes("zero data")) {
+              try {
+                // Try using call directly as fallback
+                const data = await publicClient.call({
+                  to: inputToken as `0x${string}`,
+                  data: encodeFunctionData({
+                    abi: erc20Abi,
+                    functionName: "allowance",
+                    args: [address, env.poolManagerAddress],
+                  }),
+                });
+                
+                if (data && data.data && data.data !== "0x") {
+                  const decoded = decodeFunctionResult({
+                    abi: erc20Abi,
+                    functionName: "allowance",
+                    data: data.data,
+                  });
+                  setAllowance(decoded as bigint);
+                  setAllowanceError(null);
+                  return;
+                } else {
+                  // If still empty, treat as allowance = 0 (safe default)
+                  console.warn("Contract returned empty data, treating as allowance = 0");
+                  setAllowance(0n);
+                  setAllowanceError(null);
+                  return;
+                }
+              } catch (fallbackError: any) {
+                // If fallback also fails, treat as allowance = 0
+                console.warn("Fallback allowance fetch failed, treating as allowance = 0", fallbackError);
+                setAllowance(0n);
+                setAllowanceError(null);
+                return;
+              }
+            }
+            
+            // Only retry on network errors, not contract errors
+            if (attempt < maxRetries && (
+              errorMessage.includes("network") || 
+              errorMessage.includes("fetch") ||
+              errorMessage.includes("timeout") ||
+              errorMessage.includes("ECONNREFUSED") ||
+              errorMessage.includes("Failed to fetch")
+            )) {
+              console.warn(`Allowance fetch attempt ${attempt + 1} failed, retrying...`, errorMessage);
+              // Wait before retry (exponential backoff)
+              await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+              continue;
+            }
+            throw error; // Re-throw if not a retryable error or max retries reached
+          }
+        }
+      } catch (error: any) {
+        console.error("Failed to fetch allowance after retries", error);
+        const errorMessage = error?.message || error?.toString() || "Unknown error";
+        const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
+        
+        // Provide more helpful error messages
+        if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
+          setAllowanceError("Token contract error. Check token address.");
+        } else if (errorMessage.includes("network") || errorMessage.includes("fetch") || errorMessage.includes("timeout")) {
+          setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
+        } else if (
+          errorMessage.includes("Cannot decode zero data") ||
+          errorMessage.includes("zero data") ||
+          errorMessage.includes("returned no data") ||
+          errorMessage.includes("contract")
+        ) {
+          // Check if this might be a localhost address on Sepolia network
+          const isLocalhostAddress = inputToken.startsWith("0x5FbDB") || inputToken.startsWith("0xe7f17");
+          const isPlaceholderAddress = /^0x000000000000000000000000000000000000000[0-9a-f]$/i.test(inputToken);
+          
+          if (isPlaceholderAddress) {
+            setAllowanceError("This token doesn't exist on localhost. Only sWETH and sUSDC are available.");
+          } else if (isLocalhostAddress && rpcUrl.includes("sepolia")) {
+            setAllowanceError("Contract not found. These addresses are for localhost. Deploy to Sepolia or use localhost RPC.");
+          } else {
+            setAllowanceError("Contract not found at this address. The token contract may not be deployed or doesn't exist on this network.");
+          }
+        } else {
+          setAllowanceError(`Unable to fetch allowance: ${errorMessage.substring(0, 50)}`);
+        }
       } finally {
         setIsFetchingAllowance(false);
       }
@@ -740,6 +951,7 @@ export default function SwapPage() {
     env.poolManagerAddress,
     address,
     inputToken,
+    isNativeInput,
     txStatus,
   ]);
 
@@ -1902,7 +2114,7 @@ export default function SwapPage() {
                   >
                   {/* Header with drag and buttons - fully transparent for glow */}
                   <div
-                    className={`flex h-12 items-center justify-between px-4 border-b border-white/10 relative ${
+                    className={`flex h-12 items-center justify-between px-6 relative ${
                       isDragging ? "cursor-grabbing" : "cursor-grab"
                     }`}
                     onPointerDown={handleDragStart}
@@ -1915,6 +2127,8 @@ export default function SwapPage() {
                         backdropFilter: "none"
                       }}
                     />
+                    {/* Border that respects padding */}
+                    <div className="absolute bottom-0 left-6 right-6 h-px bg-white/10" />
                     <span 
                       className="text-sm font-semibold tracking-wide relative z-10"
                       style={{
@@ -1950,7 +2164,7 @@ export default function SwapPage() {
                   </div>
                   
                   {/* Content area */}
-                  <div className="flex h-full flex-col gap-4 p-4" style={{ height: "calc(100% - 48px)" }}>
+                  <div className="flex h-full flex-col gap-4 p-6" style={{ height: "calc(100% - 48px)" }}>
                     <input
                       type="text"
                       value={searchTerm}
@@ -2253,7 +2467,7 @@ export default function SwapPage() {
             {/* Draggable Header with title - full width, fully transparent for glow */}
             <div 
               ref={swapTitleRef}
-              className={`pt-6 pb-4 flex items-center justify-center border-b border-white/10 relative ${
+              className={`pt-6 pb-4 px-6 flex items-center justify-center relative ${
                 isDraggingSwapCard ? "cursor-grabbing" : "cursor-grab"
               }`}
               onPointerDown={handleSwapCardDragStart}
@@ -2266,6 +2480,8 @@ export default function SwapPage() {
                   backdropFilter: "none"
                 }}
               />
+              {/* Border that respects padding */}
+              <div className="absolute bottom-0 left-6 right-6 h-px bg-white/10" />
               <h1
                 className="text-3xl font-semibold relative z-10"
                 style={{
@@ -2517,7 +2733,9 @@ export default function SwapPage() {
                 <button
                   onClick={() => {
                     if (!isConnected) {
-                      connect();
+                      if (connectors[0]) {
+                        connect({ connector: connectors[0] });
+                      }
                     } else {
                       handleSwap();
                     }
@@ -2529,7 +2747,8 @@ export default function SwapPage() {
                     (isConnected && !configReady) ||
                     (isConnected && (!parsedAmountIn || parsedAmountIn === 0n)) ||
                     isConnecting ||
-                    isConnectPending
+                    isConnectPending ||
+                    (!isConnected && !connectors[0])
                   }
                   className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
                 >
