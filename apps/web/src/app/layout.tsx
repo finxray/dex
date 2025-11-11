@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stoix Protocol",
+  title: "Stoix App - Stoix",
   description:
     "Stoix is a liquidity coordination layer for institutional trading desks and market makers.",
   icons: {
-    icon: '/stoix helmet black.svg',
-    shortcut: '/stoix helmet black.svg',
-    apple: '/stoix helmet black.svg',
+    icon: '/stoix tab mid grey.svg',
+    shortcut: '/stoix tab mid grey.svg',
+    apple: '/stoix tab mid grey.svg',
   },
 };
 
@@ -31,6 +31,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link href="https://fonts.cdnfonts.com/css/anita-semi-square" rel="stylesheet" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} bg-black text-zinc-100 antialiased`}>
         <Providers>{children}</Providers>
       </body>

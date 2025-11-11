@@ -84,6 +84,18 @@ export function SwapModal() {
     }
   }, [isOpen]);
 
+  // Update document title when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.title = "Stoix App - Stoix";
+    } else {
+      // Reset to default when modal closes (only if not on swap page)
+      if (typeof window !== "undefined" && !window.location.pathname.includes("/swap")) {
+        document.title = "Stoix App - Stoix";
+      }
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     const fetchQuote = async () => {
       if (!publicClient || !env.quoterAddress || !parsedAmountIn || parsedAmountIn === 0n) {
@@ -191,23 +203,33 @@ export function SwapModal() {
         console.error("Failed to fetch allowance after retries", error);
         const errorMessage = error?.message || error?.toString() || "Unknown error";
         const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
+        const isLocalhost = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
         
         // Provide more helpful error messages
         if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
           setAllowanceError("Token contract error. Check token address.");
         } else if (errorMessage.includes("network") || errorMessage.includes("fetch") || errorMessage.includes("timeout")) {
-          setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
+          if (isLocalhost) {
+            setAllowanceError("Network error. Is Hardhat node running? Start with: npx hardhat node");
+          } else {
+            setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
+          }
         } else if (errorMessage.includes("returned no data") || errorMessage.includes("contract")) {
           // Check if this might be a localhost address on Sepolia network
           const isLocalhostAddress = inputToken.startsWith("0x5FbDB") || inputToken.startsWith("0xe7f17");
           const isPlaceholderAddress = /^0x000000000000000000000000000000000000000[0-9a-f]$/i.test(inputToken);
+          const isLocalhostRpc = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
           
           if (isPlaceholderAddress) {
             setAllowanceError("This token doesn't exist on localhost. Only sWETH and sUSDC are available.");
           } else if (isLocalhostAddress && rpcUrl.includes("sepolia")) {
-            setAllowanceError("Contract not found. These addresses are for localhost. Deploy to Sepolia or use localhost RPC.");
+            setAllowanceError(`Contract not found. Token ${inputToken.substring(0, 10)}... is a localhost address. Switch to localhost RPC or deploy to Sepolia.`);
+          } else if (isLocalhostAddress && isLocalhostRpc) {
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Ensure Hardhat node is running and contracts are deployed.`);
+          } else if (!isLocalhostRpc && !rpcUrl.includes("sepolia")) {
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not exist on this network. Check token address and network match.`);
           } else {
-            setAllowanceError("Contract not found at this address. Check token address.");
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not be deployed or doesn't exist on ${isLocalhostRpc ? "localhost" : "this network"}.`);
           }
         } else {
           setAllowanceError(`Unable to fetch allowance: ${errorMessage.substring(0, 50)}`);

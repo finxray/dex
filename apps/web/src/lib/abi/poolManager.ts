@@ -26,5 +26,44 @@ export const poolManagerAbi = [
     stateMutability: "view",
     type: "function",
   },
-];
+  {
+    inputs: [{ internalType: "uint256", name: "poolId", type: "uint256" }],
+    name: "getInventory",
+    outputs: [
+      { internalType: "uint128", name: "asset0", type: "uint128" },
+      { internalType: "uint128", name: "asset1", type: "uint128" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  // Custom errors
+  {
+    inputs: [
+      { internalType: "uint256", name: "required", type: "uint256" },
+      { internalType: "uint256", name: "available", type: "uint256" },
+    ],
+    name: "PoolManager__InsufficientAsset0",
+    type: "error",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "required", type: "uint256" },
+      { internalType: "uint256", name: "available", type: "uint256" },
+    ],
+    name: "PoolManager__InsufficientAsset1",
+    type: "error",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "minOut", type: "uint256" },
+      { internalType: "uint256", name: "actual", type: "uint256" },
+    ],
+    name: "PoolManager__InsufficientOutput",
+    type: "error",
+  },
+  {
+    name: "PoolManager__InvalidQuote",
+    type: "error",
+  },
+] as const;
 

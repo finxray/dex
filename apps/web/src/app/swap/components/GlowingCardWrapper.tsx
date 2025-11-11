@@ -21,20 +21,23 @@ export function GlowingCardWrapper({
 }: GlowingCardWrapperProps) {
   return (
     <div className={`relative ${className}`} style={{ isolation: "isolate", ...style }}>
-      {/* Animated glow shadow underneath - only shown when phase is "open", hidden immediately on close */}
-      {phase === "open" ? (
+      {/* Animated glow shadow underneath - starts fading in after size animation completes */}
+      {(phase === "opening" || phase === "open") ? (
         <div 
           className="absolute -inset-[2px] rounded-[22px]"
           style={{
             background: glowGradient,
             backgroundSize: "200% 100%",
-            animation: "glowShift 8s linear infinite",
+            animation: phase === "opening" 
+              ? "glowShift 8s linear infinite, glowFadeIn 2s ease-in 0.52s forwards"
+              : "glowShift 8s linear infinite",
             filter: "blur(12px)",
-            opacity: 0.45,
+            opacity: phase === "opening" ? 0 : 0.45,
             zIndex: -1,
             position: "absolute",
             transform: "scale(1)",
             transformOrigin: "center",
+            willChange: phase === "opening" ? "opacity" : "auto",
           }}
         />
       ) : null}

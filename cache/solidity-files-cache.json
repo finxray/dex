@@ -1166,8 +1166,8 @@
       ]
     },
     "/Users/alexey/dex/contracts/test/MinimalDummyQuoter.sol": {
-      "lastModificationDate": 1757795915264,
-      "contentHash": "acaf3d66c5c346a919a944f0a925f438",
+      "lastModificationDate": 1762612273313,
+      "contentHash": "ca8da6ea2f252346270047639288b03f",
       "sourceName": "contracts/test/MinimalDummyQuoter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1196,7 +1196,8 @@
       },
       "imports": [
         "../Core/interfaces/internal/quoters/IQuoter.sol",
-        "../Core/structs/QuoteParams.sol"
+        "../Core/structs/QuoteParams.sol",
+        "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol"
       ],
       "versionPragmas": [
         "^0.8.30"
@@ -3338,6 +3339,43 @@
       ],
       "artifacts": [
         "VolumeControlLib"
+      ]
+    },
+    "/Users/alexey/dex/contracts/test/CREATE2Factory.sol": {
+      "lastModificationDate": 1762584964127,
+      "contentHash": "ce554bc66335864008ef042b8349d6ec",
+      "sourceName": "contracts/test/CREATE2Factory.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": true,
+          "evmVersion": "cancun",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "CREATE2Factory"
       ]
     }
   }

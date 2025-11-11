@@ -2,8 +2,27 @@
 
 import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors } from "wagmi";
-import { formatUnits, parseUnits, maxUint256, encodeFunctionData, decodeFunctionResult } from "viem";
+import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors, useChainId, useSwitchChain } from "wagmi";
+import { sepolia } from "wagmi/chains";
+import { defineChain } from "viem";
+
+// Define Hardhat chain with chain ID 31337
+const hardhat = defineChain({
+  id: 31337,
+  name: "Hardhat Local",
+  nativeCurrency: {
+    decimals: 18,
+    name: "Ether",
+    symbol: "ETH",
+  },
+  rpcUrls: {
+    default: {
+      http: ["http://127.0.0.1:8545"],
+    },
+  },
+});
+import { formatUnits, parseUnits, maxUint256, encodeFunctionData, decodeFunctionResult, createWalletClient, custom, decodeErrorResult } from "viem";
+import type { WalletClient } from "viem";
 import type { UTCTimestamp } from "lightweight-charts";
 
 import { poolManagerAbi } from "../../lib/abi/poolManager";
@@ -11,6 +30,7 @@ import { quoterAbi } from "../../lib/abi/quoter";
 import { erc20Abi } from "../../lib/abi/erc20";
 import LightweightChart from "./components/LightweightChart";
 import { GlowingCardWrapper } from "./components/GlowingCardWrapper";
+import { Header } from "../components/Header/Header";
 
 
 type Token = {
@@ -50,6 +70,49 @@ const formatWithCommas = (value: string): string => {
     return `${integerPartFormatted}.${decimalPart ?? ""}`;
   }
   return integerPartFormatted;
+};
+
+// Format number with responsive sizing - returns formatted string and suggested font size class
+const formatNumberResponsive = (value: string): { formatted: string; fontSize: string } => {
+  if (!value) return { formatted: "", fontSize: "text-3xl" };
+  
+  // Validate the value is a reasonable number string
+  const cleaned = value.replace(/,/g, "");
+  const num = Number(cleaned);
+  
+  // Check if number is invalid or suspiciously large (likely a formatting error)
+  if (!Number.isFinite(num) || num < 0) {
+    return { formatted: value, fontSize: "text-3xl" };
+  }
+  
+  // If number seems unreasonably large (likely a bug), return original
+  if (num > 1e15) {
+    console.warn("Suspiciously large number detected:", value, "->", num);
+    return { formatted: value, fontSize: "text-xl" };
+  }
+  
+  // For very large numbers, use scientific notation or abbreviated format
+  if (Math.abs(num) >= 1e12) {
+    return { formatted: num.toExponential(2), fontSize: "text-xl" };
+  }
+  if (Math.abs(num) >= 1e9) {
+    return { formatted: `${(num / 1e9).toFixed(2)}B`, fontSize: "text-2xl" };
+  }
+  if (Math.abs(num) >= 1e6) {
+    return { formatted: `${(num / 1e6).toFixed(2)}M`, fontSize: "text-2xl" };
+  }
+  if (Math.abs(num) >= 1e3) {
+    return { formatted: formatWithCommas(num.toFixed(2)), fontSize: "text-2xl" };
+  }
+  
+  // For normal numbers, format with commas
+  const formatted = formatWithCommas(value);
+  const length = formatted.replace(/,/g, "").length;
+  
+  // Adjust font size based on length
+  if (length > 15) return { formatted, fontSize: "text-xl" };
+  if (length > 12) return { formatted, fontSize: "text-2xl" };
+  return { formatted, fontSize: "text-3xl" };
 };
 
 const trimTrailingZeros = (value: string): string => {
@@ -92,12 +155,147 @@ export default function SwapPage() {
   console.log("  ASSET0_DECIMALS:", env.asset0Decimals);
   console.log("  ASSET1_DECIMALS:", env.asset1Decimals);
   
-  const { address, isConnecting, isConnected } = useAccount();
+  // Warn if quoter address is missing
+  if (!env.quoterAddress) {
+    console.error("⚠️  WARNING: QUOTER_ADDRESS is not set in environment variables!");
+    console.error("   Set NEXT_PUBLIC_QUOTER_ADDRESS in .env.local");
+  }
+  
+  // Update document title when on swap page
+  useEffect(() => {
+    document.title = "Stoix App - Stoix";
+    return () => {
+      // Reset to default when leaving the page
+      document.title = "Stoix App - Stoix";
+    };
+  }, []);
+  
+  const { address, isConnecting, isConnected, connector } = useAccount();
   const connectors = useConnectors();
   const { connect, error: connectError, isPending: isConnectPending } = useConnect();
   const { disconnect } = useDisconnect();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const chainId = useChainId();
+  const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
+  const [fallbackWalletClient, setFallbackWalletClient] = useState<WalletClient | undefined>(undefined);
+  const [isRetryingWalletClient, setIsRetryingWalletClient] = useState(false);
+
+  // Determine target chain based on RPC URL
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "";
+  const isLocalhost = rpcUrl.includes("localhost") || rpcUrl.includes("127.0.0.1") || rpcUrl === "";
+  const targetChain = isLocalhost ? hardhat : sepolia;
+
+  // Check if connected to the correct chain
+  const isCorrectChain = chainId === targetChain.id;
+
+  // Function to manually retry getting wallet client
+  const retryGetWalletClient = useCallback(async () => {
+    if (!isConnected) {
+      console.log("❌ Cannot retry: Wallet not connected");
+      return;
+    }
+
+    setIsRetryingWalletClient(true);
+    try {
+      // Try method 1: Get from connector
+      if (connector) {
+        console.log("🔄 Method 1: Trying to get wallet client from connector...");
+        try {
+          const client = await (connector as any).getWalletClient?.();
+          if (client) {
+            console.log("✅ Successfully retrieved wallet client from connector");
+            setFallbackWalletClient(client);
+            return;
+          }
+        } catch (error) {
+          console.log("⚠️ Connector method failed:", error);
+        }
+      }
+
+      // Try method 2: Create directly from window.ethereum
+      if (typeof window !== "undefined" && (window as any).ethereum && address) {
+        console.log("🔄 Method 2: Creating wallet client directly from window.ethereum...");
+        try {
+          const provider = (window as any).ethereum;
+          const chain = publicClient?.chain;
+          
+          if (chain) {
+            const client = createWalletClient({
+              account: address as `0x${string}`,
+              chain: chain,
+              transport: custom(provider),
+            });
+            console.log("✅ Successfully created wallet client from window.ethereum");
+            setFallbackWalletClient(client);
+            return;
+          } else {
+            console.log("⚠️ Public client chain not available");
+          }
+        } catch (error) {
+          console.log("⚠️ Direct creation method failed:", error);
+        }
+      }
+
+      console.log("❌ All methods failed to get wallet client");
+      setFallbackWalletClient(undefined);
+    } catch (error) {
+      console.log("❌ Failed to get wallet client:", error);
+      setFallbackWalletClient(undefined);
+    } finally {
+      setIsRetryingWalletClient(false);
+    }
+  }, [isConnected, connector, address, publicClient]);
+
+  // Fallback: Try to get wallet client from connector if useWalletClient returns null
+  useEffect(() => {
+    const getWalletClientFromConnector = async () => {
+      if (isConnected && !walletClient && address) {
+        // Try method 1: Get from connector
+        if (connector) {
+          try {
+            console.log("🔄 Attempting to get wallet client from connector...");
+            const client = await (connector as any).getWalletClient?.();
+            if (client) {
+              console.log("✅ Successfully retrieved wallet client from connector");
+              setFallbackWalletClient(client);
+              return;
+            }
+          } catch (error) {
+            console.log("⚠️ Connector method failed:", error);
+          }
+        }
+
+        // Try method 2: Create directly from window.ethereum
+        if (typeof window !== "undefined" && (window as any).ethereum && publicClient?.chain) {
+          try {
+            console.log("🔄 Attempting to create wallet client from window.ethereum...");
+            const provider = (window as any).ethereum;
+            const client = createWalletClient({
+              account: address as `0x${string}`,
+              chain: publicClient.chain,
+              transport: custom(provider),
+            });
+            console.log("✅ Successfully created wallet client from window.ethereum");
+            setFallbackWalletClient(client);
+            return;
+          } catch (error) {
+            console.log("⚠️ Direct creation method failed:", error);
+          }
+        }
+
+        console.log("❌ All methods failed to get wallet client");
+        setFallbackWalletClient(undefined);
+      } else if (!isConnected) {
+        setFallbackWalletClient(undefined);
+      }
+    };
+
+    getWalletClientFromConnector();
+  }, [isConnected, walletClient, connector, address, publicClient]);
+
+  // Use walletClient if available, otherwise use fallback
+  const effectiveWalletClient = walletClient || fallbackWalletClient;
 
   // Debug: Monitor connection state
   useEffect(() => {
@@ -106,12 +304,16 @@ export default function SwapPage() {
     console.log("  Is Connected:", isConnected ? "✅" : "❌");
     console.log("  Is Connecting:", isConnecting ? "⏳" : "✅");
     console.log("  Public Client:", publicClient ? "✅" : "❌");
-    console.log("  Wallet Client:", walletClient ? "✅" : "❌");
-  }, [address, isConnected, isConnecting, publicClient, walletClient]);
+    console.log("  Wallet Client (hook):", walletClient ? "✅" : "❌");
+    console.log("  Wallet Client (fallback):", fallbackWalletClient ? "✅" : "❌");
+    console.log("  Effective Wallet Client:", effectiveWalletClient ? "✅" : "❌");
+  }, [address, isConnected, isConnecting, publicClient, walletClient, fallbackWalletClient, effectiveWalletClient]);
 
   const [amountIn, setAmountIn] = useState<string>("");
   const [amountOutValue, setAmountOutValue] = useState<string>("");
   const [activeField, setActiveField] = useState<"in" | "out">("in");
+  const [showDetails, setShowDetails] = useState(false);
+  const [slippageBps, setSlippageBps] = useState(50); // 0.5% default
   const [isChartOpen, setIsChartOpen] = useState(false);
   const [chartPhase, setChartPhase] = useState<"closed" | "opening" | "open" | "closing">("closed");
   const [isChartMaximized, setIsChartMaximized] = useState(false);
@@ -121,7 +323,13 @@ export default function SwapPage() {
   const overlayPointerIdRef = useRef<number | null>(null);
   const overlayDragLastRef = useRef<{ x: number; y: number } | null>(null);
   const [isDraggingChart, setIsDraggingChart] = useState(false);
-  // Token list (add ~10 entries; only sWETH/sUSDC are active on local)
+  const [isSwapDetailsOpen, setIsSwapDetailsOpen] = useState(false);
+  const [swapDetailsPhase, setSwapDetailsPhase] = useState<"closed" | "opening" | "open" | "closing">("closed");
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [swapDetailsOffset, setSwapDetailsOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingSwapDetails, setIsDraggingSwapDetails] = useState(false);
+  const swapDetailsDragLastRef = useRef<{ x: number; y: number } | null>(null);
+  // Token list - 20 most popular tokens (sWETH and sUSDC are the only ones available for swaps on localhost)
   const tokens: Token[] = [
     {
       symbol: env.asset0Symbol,
@@ -139,12 +347,19 @@ export default function SwapPage() {
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
     },
-    // Only include other tokens if we're not on localhost (they don't exist on Hardhat)
-    ...(process.env.NEXT_PUBLIC_RPC_URL?.includes("localhost") || process.env.NEXT_PUBLIC_RPC_URL?.includes("127.0.0.1") ? [] : [
+    // Popular tokens for chart viewing (swaps only work with sWETH/sUSDC)
+    {
+      symbol: "USDT",
+      name: "Tether USD",
+      address: "0x0000000000000000000000000000000000000001",
+      decimals: 6,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png",
+    },
     {
       symbol: "DAI",
       name: "Dai Stablecoin",
-      address: "0x0000000000000000000000000000000000000003",
+      address: "0x0000000000000000000000000000000000000002",
       decimals: 18,
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EedeAC495271d0F/logo.png",
@@ -152,7 +367,7 @@ export default function SwapPage() {
     {
       symbol: "WBTC",
       name: "Wrapped Bitcoin",
-      address: "0x0000000000000000000000000000000000000004",
+      address: "0x0000000000000000000000000000000000000003",
       decimals: 8,
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png",
@@ -160,7 +375,7 @@ export default function SwapPage() {
     {
       symbol: "LINK",
       name: "Chainlink",
-      address: "0x0000000000000000000000000000000000000005",
+      address: "0x0000000000000000000000000000000000000004",
       decimals: 18,
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x514910771AF9Ca656af840dff83E8264EcF986CA/logo.png",
@@ -168,10 +383,18 @@ export default function SwapPage() {
     {
       symbol: "UNI",
       name: "Uniswap",
-      address: "0x0000000000000000000000000000000000000006",
+      address: "0x0000000000000000000000000000000000000005",
       decimals: 18,
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984/logo.png",
+    },
+    {
+      symbol: "AAVE",
+      name: "Aave",
+      address: "0x0000000000000000000000000000000000000006",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x7Fc66500c84A76Ad7E9c93437bFc5Ac33E2DDaE9/logo.png",
     },
     {
       symbol: "MKR",
@@ -182,30 +405,109 @@ export default function SwapPage() {
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2/logo.png",
     },
     {
-      symbol: "AAVE",
-      name: "Aave",
+      symbol: "CRV",
+      name: "Curve DAO Token",
       address: "0x0000000000000000000000000000000000000008",
       decimals: 18,
       icon:
-        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x7Fc66500c84A76Ad7E9c93437bFc5Ac33E2DDaE9/logo.png",
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xD533a949740bb3306d119CC777fa900bA034cd52/logo.png",
+    },
+    {
+      symbol: "SNX",
+      name: "Synthetix Network",
+      address: "0x0000000000000000000000000000000000000009",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F/logo.png",
     },
     {
       symbol: "COMP",
       name: "Compound",
-      address: "0x0000000000000000000000000000000000000009",
+      address: "0x000000000000000000000000000000000000000a",
       decimals: 18,
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xc00e94Cb662C3520282E6f5717214004A7f26888/logo.png",
     },
     {
+      symbol: "MATIC",
+      name: "Polygon",
+      address: "0x000000000000000000000000000000000000000b",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0/logo.png",
+    },
+    {
       symbol: "ARB",
       name: "Arbitrum",
-      address: "0x000000000000000000000000000000000000000a",
+      address: "0x000000000000000000000000000000000000000c",
       decimals: 18,
       icon:
         "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png",
     },
-    ]),
+    {
+      symbol: "OP",
+      name: "Optimism",
+      address: "0x000000000000000000000000000000000000000d",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png",
+    },
+    {
+      symbol: "PEPE",
+      name: "Pepe",
+      address: "0x000000000000000000000000000000000000000e",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6982508145454Ce325dDbE47a25d4ec3d2311933/logo.png",
+    },
+    {
+      symbol: "SHIB",
+      name: "Shiba Inu",
+      address: "0x000000000000000000000000000000000000000f",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE/logo.png",
+    },
+    {
+      symbol: "FLOKI",
+      name: "FLOKI",
+      address: "0x0000000000000000000000000000000000000010",
+      decimals: 9,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E/logo.png",
+    },
+    {
+      symbol: "LDO",
+      name: "Lido DAO",
+      address: "0x0000000000000000000000000000000000000011",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x5A98FcBEA516068068C8D0CbF90A7C2C3c8A8B59/logo.png",
+    },
+    {
+      symbol: "STETH",
+      name: "Lido Staked Ether",
+      address: "0x0000000000000000000000000000000000000012",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84/logo.png",
+    },
+    {
+      symbol: "ENS",
+      name: "Ethereum Name Service",
+      address: "0x0000000000000000000000000000000000000013",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72/logo.png",
+    },
+    {
+      symbol: "GMX",
+      name: "GMX",
+      address: "0x0000000000000000000000000000000000000014",
+      decimals: 18,
+      icon:
+        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a/logo.png",
+    },
   ];
 
   const defaultA = tokens[0];
@@ -225,6 +527,8 @@ export default function SwapPage() {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const swapTitleRef = useRef<HTMLDivElement | null>(null);
   const swapCardRef = useRef<HTMLDivElement | null>(null); // Full swap card reference
+  const fixedSectionRef = useRef<HTMLDivElement | null>(null); // Fixed section wrapper reference
+  const dynamicSectionRef = useRef<HTMLDivElement | null>(null); // Dynamic section reference
   const [cardRect, setCardRect] = useState<DOMRect | null>(null);
   const [swapTitleRect, setSwapTitleRect] = useState<DOMRect | null>(null);
   const [swapCardRect, setSwapCardRect] = useState<DOMRect | null>(null);
@@ -234,6 +538,7 @@ export default function SwapPage() {
   const [isQuoting, setIsQuoting] = useState(false);
   const [txStatus, setTxStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [swapDetails, setSwapDetails] = useState<{ amountIn: string; amountOut: string; tokenIn: string; tokenOut: string } | null>(null);
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [allowanceError, setAllowanceError] = useState<string | null>(null);
@@ -284,10 +589,16 @@ export default function SwapPage() {
 
   const amountOutSymbol = direction === "a-to-b" ? tokenB.symbol : tokenA.symbol;
   const amountInSymbol = direction === "a-to-b" ? tokenA.symbol : tokenB.symbol;
-  const zeroForOne = direction === "a-to-b"; // swap from tokenA to tokenB
+  
+  // Determine which token is being paid (input token)
+  const inputToken = direction === "a-to-b" ? tokenA.address : tokenB.address;
+  
+  // zeroForOne flag: true if paying asset0 (swap asset0 -> asset1), false if paying asset1 (swap asset1 -> asset0)
+  // Pools are direction-agnostic - the flag determines swap direction
+  const zeroForOne = inputToken.toLowerCase() === env.asset0.toLowerCase();
+  
   const inputDecimals = direction === "a-to-b" ? tokenA.decimals : tokenB.decimals;
   const outputDecimals = direction === "a-to-b" ? tokenB.decimals : tokenA.decimals;
-  const inputToken = direction === "a-to-b" ? tokenA.address : tokenB.address;
   const isNativeInput = inputToken === "0x0000000000000000000000000000000000000000";
   const configReady = Boolean(env.poolManagerAddress && env.quoterAddress && env.poolMarkings);
   const requiresApproval = !isNativeInput && Boolean(env.poolManagerAddress);
@@ -360,19 +671,105 @@ export default function SwapPage() {
     }, 600); // 400ms * 1.5 = 600ms
   };
 
+  const handleOpenSwapDetails = () => {
+    setSwapDetailsPhase("closed");
+    setIsSwapDetailsOpen(true);
+    requestAnimationFrame(() => {
+      setSwapDetailsPhase("opening");
+      setTimeout(() => {
+        setSwapDetailsPhase("open");
+      }, 520);
+    });
+  };
+
+  const handleCloseSwapDetails = () => {
+    setSwapDetailsPhase("closing");
+    setTimeout(() => {
+      setIsSwapDetailsOpen(false);
+      setSwapDetailsPhase("closed");
+      setSwapDetailsOffset({ x: 0, y: 0 });
+    }, 600);
+  };
+
+  const handleSwapDetailsPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    swapDetailsDragLastRef.current = { x: event.clientX, y: event.clientY };
+    setIsDraggingSwapDetails(true);
+  }, []);
+
   useEffect(() => {
-    setAmountIn("");
-    setAmountOutValue("");
-    setActiveField("in");
-    setQuote(null);
-    setQuoteError(null);
-    setTxStatus("idle");
-    setTxHash(null);
-    setAllowance(null);
-    setAllowanceError(null);
-    setIsApproving(false);
-    setIsFetchingAllowance(false);
-  }, [direction, tokenA, tokenB]);
+    if (!isDraggingSwapDetails) return;
+
+    const handleMove = (event: PointerEvent) => {
+      if (swapDetailsDragLastRef.current) {
+        const deltaX = event.clientX - swapDetailsDragLastRef.current.x;
+        const deltaY = event.clientY - swapDetailsDragLastRef.current.y;
+        swapDetailsDragLastRef.current = { x: event.clientX, y: event.clientY };
+        setSwapDetailsOffset(prev => ({
+          x: prev.x + deltaX,
+          y: prev.y + deltaY,
+        }));
+      }
+    };
+
+    const handleUp = () => {
+      swapDetailsDragLastRef.current = null;
+      setIsDraggingSwapDetails(false);
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [isDraggingSwapDetails]);
+
+  useEffect(() => {
+    // When direction changes, swap the amounts instead of clearing them
+    if (amountIn && amountOutValue) {
+      const tempIn = amountIn;
+      const tempOut = amountOutValue;
+      // Swap amounts synchronously to prevent layout shifts
+      setAmountIn(tempOut);
+      setAmountOutValue(tempIn);
+      setActiveField("in");
+      // Clear quote to force recalculation with new direction
+      setQuote(null);
+      setQuoteError(null);
+      setTxStatus("idle");
+      setTxHash(null);
+      setAllowance(null);
+      setAllowanceError(null);
+      setIsApproving(false);
+      setIsFetchingAllowance(false);
+    } else {
+      // Only clear if there are no amounts
+      setAmountIn("");
+      setAmountOutValue("");
+      setActiveField("in");
+      setQuote(null);
+      setQuoteError(null);
+      setTxStatus("idle");
+      setTxHash(null);
+      setAllowance(null);
+      setAllowanceError(null);
+      setIsApproving(false);
+      setIsFetchingAllowance(false);
+    }
+  }, [direction]);
+  
+  // Separate effect for token changes (without swapping amounts)
+  useEffect(() => {
+    if (tokenA || tokenB) {
+      // Only clear quote, don't clear amounts when tokens change
+      setQuote(null);
+      setQuoteError(null);
+    }
+  }, [tokenA, tokenB]);
 
   useEffect(() => {
     const updateRect = () => {
@@ -418,6 +815,17 @@ export default function SwapPage() {
     };
   }, [isChartOpen]);
 
+  // Prevent body scroll when swap details popup is open
+  useEffect(() => {
+    if (!isSwapDetailsOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isSwapDetailsOpen]);
+
   // Forward quote: amountIn -> amountOut
   useEffect(() => {
     if (activeField !== "in") {
@@ -448,6 +856,23 @@ export default function SwapPage() {
       }
 
       const quoterAddress = env.quoterAddress as `0x${string}`;
+      
+      // Verify quoter contract exists before calling
+      try {
+        const code = await publicClient.getBytecode({ address: quoterAddress });
+        if (!code || code === "0x") {
+          console.error("❌ Quoter contract does not exist at address:", quoterAddress);
+          setQuoteError(`Quoter contract not found at ${quoterAddress.substring(0, 10)}.... Ensure contracts are deployed.`);
+          setIsQuoting(false);
+          return;
+        }
+        console.log("✅ Quoter contract verified at:", quoterAddress);
+      } catch (checkError) {
+        console.error("❌ Failed to verify quoter contract:", checkError);
+        setQuoteError("Failed to verify quoter contract. Check network connection.");
+        setIsQuoting(false);
+        return;
+      }
 
       const normalizedIn = amountIn.endsWith(".")
         ? amountIn.slice(0, -1)
@@ -477,8 +902,12 @@ export default function SwapPage() {
       console.log("Direction:", direction === "a-to-b" ? `${tokenA.symbol} → ${tokenB.symbol}` : `${tokenB.symbol} → ${tokenA.symbol}`);
       console.log("Amount In:", normalizedIn, amountInSymbol);
       console.log("Amount In (BigInt):", amountInBigInt.toString());
-      console.log("Zero for One:", zeroForOne);
+      console.log("Input Token Address:", inputToken);
+      console.log("Pool Asset0:", env.asset0Symbol, `(${env.asset0})`);
+      console.log("Pool Asset1:", env.asset1Symbol, `(${env.asset1})`);
+      console.log("Zero for One:", zeroForOne, `(${zeroForOne ? "asset0->asset1" : "asset1->asset0"})`);
       console.log("Quoter Address:", quoterAddress);
+      console.log("📌 IMPORTANT: Using pool's fixed assets (asset0, asset1) with zeroForOne flag to determine direction");
 
       setIsQuoting(true);
       setQuoteError(null);
@@ -494,15 +923,17 @@ export default function SwapPage() {
         const quoteStartTime = Date.now();
         
         // Log the exact parameters being sent
+        // IMPORTANT: Always use env.asset0 and env.asset1 for the pool - these are fixed
+        // zeroForOne determines the direction: true = asset0->asset1, false = asset1->asset0
         const quoteParams = {
-          asset0: tokenA.address,
-          asset1: tokenB.address,
+          asset0: env.asset0, // Always use pool's asset0
+          asset1: env.asset1, // Always use pool's asset1
           quoter: quoterAddress,
           amount: amountInBigInt,
           asset0Balance: 0n,
           asset1Balance: 0n,
           bucketID: 0,
-          zeroForOne,
+          zeroForOne, // Determines direction: true = asset0->asset1, false = asset1->asset0
           functionFlags: 0,
         };
         
@@ -553,6 +984,24 @@ export default function SwapPage() {
           console.log("✅ Quoter call succeeded! Result:", result.toString());
         } catch (rpcError: any) {
           console.error("Raw RPC call failed:", rpcError);
+          console.error("Error message:", rpcError?.message || rpcError?.toString());
+          console.error("Error code:", rpcError?.code);
+          console.error("Error data:", rpcError?.data);
+          
+          // Check if it's a contract not found error
+          const errorMsg = rpcError?.message || rpcError?.toString() || "";
+          if (errorMsg.includes("no code") || errorMsg.includes("contract") || errorMsg.includes("execution reverted")) {
+            // Try to verify contract exists
+            try {
+              const code = await publicClient.getBytecode({ address: quoterAddress });
+              if (!code || code === "0x") {
+                throw new Error(`Quoter contract does not exist at ${quoterAddress}. Deploy contracts first.`);
+              }
+            } catch (verifyError) {
+              throw new Error(`Quoter contract verification failed: ${verifyError}`);
+            }
+          }
+          
           // If raw RPC fails, try the regular call as fallback
           const callResult = await publicClient.call({
             to: quoterAddress,
@@ -585,6 +1034,19 @@ export default function SwapPage() {
 
         const formattedOut = formatUnits(result, outputDecimals);
         const trimmedOut = trimTrailingZeros(formattedOut);
+        
+        // Validate the formatted output is reasonable
+        const outNum = Number(trimmedOut);
+        if (!Number.isFinite(outNum) || outNum < 0) {
+          console.error("Invalid quote result:", trimmedOut, "from raw:", result.toString());
+          throw new Error("Invalid quote result");
+        }
+        
+        // Check for suspiciously large numbers (likely a decimal/formatting issue)
+        if (outNum > 1e15) {
+          console.error("Suspiciously large quote result:", trimmedOut, "from raw:", result.toString(), "decimals:", outputDecimals);
+          throw new Error("Quote result seems incorrect - value too large");
+        }
 
         console.log("\n✅ Quote Result:");
         console.log("  Raw Amount Out (BigInt):", result.toString());
@@ -611,16 +1073,38 @@ export default function SwapPage() {
           console.error("Zero for one:", zeroForOne);
           
           const errorMessage = error?.message || error?.toString() || "Unknown error";
+          const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
+          const isLocalhost = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
           let userFriendlyError = "Unable to fetch quote.";
           
+          console.error("Full error object:", JSON.stringify(error, null, 2));
+          console.error("Error message:", errorMessage);
+          console.error("Quoter address being called:", quoterAddress);
+          
           if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
-            userFriendlyError = "Quote reverted. Check quoter contract.";
+            userFriendlyError = "Quote reverted. Check quoter contract and parameters.";
+          } else if (errorMessage.includes("no code") || errorMessage.includes("contract does not exist")) {
+            userFriendlyError = `Quoter contract not found at ${quoterAddress.substring(0, 10)}.... Ensure contracts are deployed. Run: npm run deploy:local`;
           } else if (errorMessage.includes("contract") || errorMessage.includes("no data")) {
-            userFriendlyError = "Quoter contract not found. Check quoter address.";
+            // More specific check - verify if contract actually exists
+            try {
+              const code = await publicClient.getBytecode({ address: quoterAddress });
+              if (!code || code === "0x") {
+                userFriendlyError = `Quoter contract does not exist at ${quoterAddress}. Deploy contracts: npm run deploy:local`;
+              } else {
+                userFriendlyError = `Quote call failed: ${errorMessage.substring(0, 150)}`;
+              }
+            } catch (verifyError) {
+              userFriendlyError = `Failed to verify contract: ${errorMessage.substring(0, 150)}`;
+            }
           } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
-            userFriendlyError = "Network error. Check RPC connection.";
+            if (isLocalhost) {
+              userFriendlyError = "Network error. Is Hardhat node running? Start with: npx hardhat node";
+            } else {
+              userFriendlyError = "Network error. Check RPC connection.";
+            }
           } else {
-            userFriendlyError = `Quote failed: ${errorMessage.substring(0, 100)}`;
+            userFriendlyError = `Quote failed: ${errorMessage.substring(0, 150)}`;
           }
           
           setQuoteError(userFriendlyError);
@@ -701,8 +1185,8 @@ export default function SwapPage() {
           functionName: "quote",
           args: [
             {
-              asset0: tokenA.address,
-              asset1: tokenB.address,
+              asset0: env.asset0, // Always use pool's asset0
+              asset1: env.asset1, // Always use pool's asset1
               quoter: quoterAddress,
               amount,
               asset0Balance: 0n,
@@ -909,14 +1393,21 @@ export default function SwapPage() {
         }
       } catch (error: any) {
         console.error("Failed to fetch allowance after retries", error);
+        console.error("Token address:", inputToken);
+        console.error("RPC URL:", process.env.NEXT_PUBLIC_RPC_URL || "default public RPC");
         const errorMessage = error?.message || error?.toString() || "Unknown error";
         const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
+        const isLocalhost = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
         
         // Provide more helpful error messages
         if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
           setAllowanceError("Token contract error. Check token address.");
         } else if (errorMessage.includes("network") || errorMessage.includes("fetch") || errorMessage.includes("timeout")) {
-          setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
+          if (isLocalhost) {
+            setAllowanceError("Network error. Is Hardhat node running? Start with: npx hardhat node");
+          } else {
+            setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
+          }
         } else if (
           errorMessage.includes("Cannot decode zero data") ||
           errorMessage.includes("zero data") ||
@@ -930,9 +1421,13 @@ export default function SwapPage() {
           if (isPlaceholderAddress) {
             setAllowanceError("This token doesn't exist on localhost. Only sWETH and sUSDC are available.");
           } else if (isLocalhostAddress && rpcUrl.includes("sepolia")) {
-            setAllowanceError("Contract not found. These addresses are for localhost. Deploy to Sepolia or use localhost RPC.");
+            setAllowanceError(`Contract not found. Token ${inputToken.substring(0, 10)}... is a localhost address. Switch to localhost RPC or deploy to Sepolia.`);
+          } else if (isLocalhostAddress && isLocalhost) {
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Ensure Hardhat node is running and contracts are deployed.`);
+          } else if (!isLocalhost && !rpcUrl.includes("sepolia")) {
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not exist on this network. Check token address and network match.`);
           } else {
-            setAllowanceError("Contract not found at this address. The token contract may not be deployed or doesn't exist on this network.");
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not be deployed or doesn't exist on ${isLocalhost ? "localhost" : "this network"}.`);
           }
         } else {
           setAllowanceError(`Unable to fetch allowance: ${errorMessage.substring(0, 50)}`);
@@ -973,13 +1468,13 @@ export default function SwapPage() {
       (tokenA.address === env.asset1 && tokenB.address === env.asset0);
     
     console.log("Pre-flight checks:");
-    console.log("  Wallet Client:", walletClient ? "✅" : "❌");
+    console.log("  Wallet Client:", effectiveWalletClient ? "✅" : "❌");
     console.log("  Public Client:", publicClient ? "✅" : "❌");
     console.log("  Pool Manager:", env.poolManagerAddress || "❌ NOT SET");
     console.log("  Pool Markings:", env.poolMarkings || "❌ NOT SET");
     console.log("  Pair Supported:", supportsPair ? "✅" : "❌");
     
-    if (!walletClient || !publicClient || !env.poolManagerAddress || !env.poolMarkings || !supportsPair) {
+    if (!effectiveWalletClient || !publicClient || !env.poolManagerAddress || !env.poolMarkings || !supportsPair) {
       console.log("❌ Swap aborted: Configuration incomplete");
       setQuoteError("Swap configuration is incomplete. Check environment variables.");
       return;
@@ -1007,13 +1502,15 @@ export default function SwapPage() {
       const minAmountOut = quote.rawAmountOut - (quote.rawAmountOut * BigInt(DEFAULT_SLIPPAGE_BPS)) / 10_000n;
 
       console.log("\n📝 Swap Parameters:");
-      console.log("  Token A:", tokenA.symbol, `(${tokenA.address})`);
-      console.log("  Token B:", tokenB.symbol, `(${tokenB.address})`);
+      console.log("  Input Token:", amountInSymbol, `(${inputToken})`);
+      console.log("  Output Token:", amountOutSymbol);
+      console.log("  Pool Asset0:", env.asset0Symbol, `(${env.asset0})`);
+      console.log("  Pool Asset1:", env.asset1Symbol, `(${env.asset1})`);
       console.log("  Quoter:", env.quoterAddress);
       console.log("  Pool Markings:", env.poolMarkings);
       console.log("  Amount In:", formatUnits(parsedAmountIn, inputDecimals), amountInSymbol);
       console.log("  Amount In (Raw):", parsedAmountIn.toString());
-      console.log("  Zero For One:", zeroForOne);
+      console.log("  Zero For One:", zeroForOne, `(${zeroForOne ? "asset0->asset1" : "asset1->asset0"})`);
       console.log("  Expected Out:", quote.amountOut, amountOutSymbol);
       console.log("  Expected Out (Raw):", quote.rawAmountOut.toString());
       console.log("  Min Amount Out:", formatUnits(minAmountOut, outputDecimals), amountOutSymbol);
@@ -1023,17 +1520,82 @@ export default function SwapPage() {
       console.log("\n⏳ Sending transaction...");
       const txStartTime = Date.now();
 
-      const result = await walletClient.writeContract({
+      // Simulate the transaction first to catch revert reasons
+      if (publicClient) {
+        try {
+          console.log("🔍 Simulating transaction...");
+          await publicClient.simulateContract({
+            address: env.poolManagerAddress,
+            abi: poolManagerAbi,
+            functionName: "swap",
+            args: [
+              env.asset0,
+              env.asset1,
+              env.quoterAddress,
+              env.poolMarkings as `0x${string}`,
+              parsedAmountIn,
+              zeroForOne,
+              minAmountOut,
+            ],
+            account: address,
+          });
+          console.log("✅ Simulation successful");
+        } catch (simError: any) {
+          console.log("❌ Simulation failed:", simError);
+          
+          // Try to decode the error
+          let decodedError: any = null;
+          if (simError?.data || simError?.cause?.data) {
+            const errorData = simError?.data || simError?.cause?.data;
+            try {
+              decodedError = decodeErrorResult({
+                abi: poolManagerAbi,
+                data: errorData as `0x${string}`,
+              });
+              console.log("Decoded error:", decodedError);
+            } catch (decodeErr) {
+              console.log("Could not decode error:", decodeErr);
+            }
+          }
+          
+          if (decodedError) {
+            if (decodedError.errorName === "PoolManager__InsufficientAsset1") {
+              const [required, available] = decodedError.args as [bigint, bigint];
+              throw new Error(`Insufficient liquidity: Pool has ${formatUnits(available, outputDecimals)} ${amountOutSymbol}, but swap requires ${formatUnits(required, outputDecimals)} ${amountOutSymbol}. Try a smaller amount.`);
+            } else if (decodedError.errorName === "PoolManager__InsufficientAsset0") {
+              const [required, available] = decodedError.args as [bigint, bigint];
+              throw new Error(`Insufficient liquidity: Pool has ${formatUnits(available, inputDecimals)} ${amountInSymbol}, but swap requires ${formatUnits(required, inputDecimals)} ${amountInSymbol}. Try a smaller amount.`);
+            } else if (decodedError.errorName === "PoolManager__InsufficientOutput") {
+              const [minOut, actual] = decodedError.args as [bigint, bigint];
+              throw new Error(`Slippage exceeded: Expected at least ${formatUnits(minOut, outputDecimals)} ${amountOutSymbol}, but would receive ${formatUnits(actual, outputDecimals)} ${amountOutSymbol}. Try increasing slippage tolerance.`);
+            } else if (decodedError.errorName === "PoolManager__InvalidQuote") {
+              throw new Error("Invalid quote returned from quoter. The quoter may not support this swap.");
+            } else {
+              throw new Error(`Transaction would revert: ${decodedError.errorName || "Unknown error"}`);
+            }
+          }
+          
+          if (simError?.shortMessage) {
+            throw new Error(`Transaction would revert: ${simError.shortMessage}`);
+          }
+          if (simError?.message) {
+            throw new Error(`Transaction would revert: ${simError.message}`);
+          }
+          throw simError;
+        }
+      }
+
+      const result = await effectiveWalletClient.writeContract({
         address: env.poolManagerAddress,
         abi: poolManagerAbi,
         functionName: "swap",
         args: [
-          tokenA.address,
-          tokenB.address,
+          env.asset0, // Always use pool's asset0
+          env.asset1, // Always use pool's asset1
           env.quoterAddress,
           env.poolMarkings as `0x${string}`,
           parsedAmountIn,
-          zeroForOne,
+          zeroForOne, // Determines direction: true = asset0->asset1, false = asset1->asset0
           minAmountOut,
         ],
         value: 0n,
@@ -1044,23 +1606,68 @@ export default function SwapPage() {
       console.log("\n✅ SWAP TRANSACTION SUCCESS!");
       console.log("  Transaction Hash:", result);
       console.log("  Time to Submit:", txDuration + "ms");
-      console.log("  Explorer:", `${process.env.NEXT_PUBLIC_EXPLORER_URL || "https://sepolia.etherscan.io"}/tx/${result}`);
+      const explorerUrl = process.env.NEXT_PUBLIC_EXPLORER_URL || "";
+      const isLocalhost = !explorerUrl || explorerUrl.includes("localhost") || explorerUrl.includes("127.0.0.1");
+      if (!isLocalhost) {
+        console.log("  Explorer:", `${explorerUrl}/tx/${result}`);
+      } else {
+        console.log("  Note: Localhost transaction - no block explorer available");
+      }
 
       setTxHash(result);
       setTxStatus("success");
-    } catch (error) {
+      setSwapDetails({
+        amountIn: formatUnits(parsedAmountIn, inputDecimals),
+        amountOut: quote.amountOut,
+        tokenIn: amountInSymbol,
+        tokenOut: amountOutSymbol,
+      });
+      // Open swap details popup automatically
+      handleOpenSwapDetails();
+    } catch (error: any) {
       console.log("\n❌ SWAP TRANSACTION FAILED!");
       console.error("Error details:", error);
       
+      let errorMessage = "Swap transaction failed. ";
+      
       if (error && typeof error === 'object') {
         console.log("Error type:", error.constructor?.name);
-        if ('message' in error) console.log("Message:", error.message);
-        if ('code' in error) console.log("Code:", error.code);
-        if ('data' in error) console.log("Data:", error.data);
+        if ('message' in error) {
+          console.log("Message:", error.message);
+          errorMessage += error.message;
+        }
+        if ('shortMessage' in error) {
+          console.log("Short message:", error.shortMessage);
+          errorMessage = error.shortMessage || errorMessage;
+        }
+        if ('code' in error) {
+          console.log("Code:", error.code);
+        }
+        if ('cause' in error && error.cause) {
+          console.log("Cause:", error.cause);
+          if (typeof error.cause === 'object' && 'message' in error.cause) {
+            errorMessage += ` (${error.cause.message})`;
+          }
+        }
+        if ('data' in error) {
+          console.log("Error data:", error.data);
+          if (typeof error.data === 'object' && 'message' in error.data) {
+            errorMessage += ` - ${error.data.message}`;
+          }
+        }
+        if ('reason' in error) {
+          console.log("Reason:", error.reason);
+          errorMessage += ` Reason: ${error.reason}`;
+        }
+      }
+      
+      // Check if it's a network/RPC error
+      if (errorMessage.includes("JSON-RPC") || errorMessage.includes("Internal")) {
+        errorMessage = "Transaction reverted. Check console for details. Possible causes: insufficient liquidity, slippage too high, or pool not initialized.";
       }
       
       setTxStatus("error");
-      setQuoteError("Swap transaction failed. Check console for details.");
+      setQuoteError(errorMessage);
     }
   };
 
@@ -1070,12 +1677,24 @@ export default function SwapPage() {
     console.log("╚═══════════════════════════════════════════════════════╝");
     
     console.log("Approval checks:");
-    console.log("  Wallet Client:", walletClient ? "✅" : "❌");
+    console.log("  Wallet Client:", effectiveWalletClient ? "✅" : "❌");
     console.log("  Pool Manager:", env.poolManagerAddress || "❌ NOT SET");
     console.log("  Is Native Input:", isNativeInput ? "✅ (no approval needed)" : "❌");
     
-    if (!walletClient || !env.poolManagerAddress || isNativeInput) {
-      console.log("❌ Approval aborted: Pre-conditions not met");
+    if (!effectiveWalletClient) {
+      console.log("❌ Approval aborted: Wallet client not available");
+      setAllowanceError("Wallet client not available. Please reconnect your wallet.");
+      return;
+    }
+    
+    if (!env.poolManagerAddress) {
+      console.log("❌ Approval aborted: Pool manager address not set");
+      setAllowanceError("Pool manager address not configured.");
+      return;
+    }
+    
+    if (isNativeInput) {
+      console.log("❌ Approval aborted: Native input doesn't require approval");
       return;
     }
 
@@ -1086,13 +1705,27 @@ export default function SwapPage() {
       console.log("  Amount:", "Unlimited (maxUint256)");
       console.log("  Current Allowance:", allowance?.toString() || "unknown");
       
+      // Pre-flight check: Verify contract exists
+      if (publicClient) {
+        try {
+          const code = await publicClient.getBytecode({ address: inputToken });
+          if (!code || code === "0x") {
+            setAllowanceError(`Token contract not found at ${inputToken}. Is Hardhat node running and contracts deployed?`);
+            return;
+          }
+          console.log("✅ Token contract verified at:", inputToken);
+        } catch (checkError) {
+          console.log("⚠️ Could not verify contract:", checkError);
+        }
+      }
+      
       setIsApproving(true);
       setAllowanceError(null);
       
       console.log("\n⏳ Sending approval transaction...");
       const approvalStartTime = Date.now();
       
-      const result = await walletClient.writeContract({
+      const result = await effectiveWalletClient.writeContract({
         address: inputToken,
         abi: erc20Abi,
         functionName: "approve",
@@ -1107,17 +1740,42 @@ export default function SwapPage() {
       console.log("  New Allowance:", maxUint256.toString());
       
       setAllowance(maxUint256);
-    } catch (error) {
+    } catch (error: any) {
       console.log("\n❌ APPROVAL TRANSACTION FAILED!");
       console.error("Error details:", error);
       
+      let errorMessage = "Approval failed. ";
+      
       if (error && typeof error === 'object') {
         console.log("Error type:", error.constructor?.name);
-        if ('message' in error) console.log("Message:", error.message);
-        if ('code' in error) console.log("Code:", error.code);
+        if ('message' in error) {
+          console.log("Message:", error.message);
+          errorMessage += error.message;
+        }
+        if ('code' in error) {
+          console.log("Code:", error.code);
+        }
+        if ('shortMessage' in error) {
+          console.log("Short message:", error.shortMessage);
+          errorMessage = error.shortMessage || errorMessage;
+        }
+        if ('cause' in error && error.cause) {
+          console.log("Cause:", error.cause);
+          if (typeof error.cause === 'object' && 'message' in error.cause) {
+            errorMessage += ` (${error.cause.message})`;
+          }
+        }
+        if ('data' in error) {
+          console.log("Error data:", error.data);
+        }
       }
       
-      setAllowanceError("Approval failed. Check console for details.");
+      // Check if it's a network/RPC error
+      if (errorMessage.includes("JSON-RPC") || errorMessage.includes("Internal") || errorMessage.includes("network")) {
+        errorMessage = "Network error. Is Hardhat node running? Start with: MAINNET_RPC=\"\" npx hardhat node";
+      }
+      
+      setAllowanceError(errorMessage);
     } finally {
       setIsApproving(false);
     }
@@ -1831,6 +2489,7 @@ export default function SwapPage() {
       return () => window.removeEventListener("resize", check);
     }, []);
 
+
     const animateDuration = 260;
     const [phase, setPhase] = useState<"closed" | "opening" | "open" | "closing">("closed");
 
@@ -2017,6 +2676,8 @@ export default function SwapPage() {
                       onSelect(t);
                       closeDropdown();
                     }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
                     className={`flex w-full items-center gap-3 rounded-full border border-transparent px-3 py-2 text-left transition-all ${
                       selected.address === t.address
                         ? "bg-white/10 hover:border-white/30"
@@ -2096,12 +2757,13 @@ export default function SwapPage() {
                 <GlowingCardWrapper phase={phase}>
                   <div
                     ref={dropdownRef}
-                    className={`pointer-events-auto relative overflow-hidden rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] transition-all ${
+                    className={`pointer-events-auto relative overflow-hidden rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] transition-all flex flex-col ${
                       isOpen ? "opacity-100" : "pointer-events-none opacity-0"
                     }`}
                     style={{
                       width: `${selectorSize.width}px`,
                       height: `${selectorSize.height}px`,
+                      maxHeight: `${selectorSize.height}px`,
                       backgroundColor: "rgb(12, 14, 22)",
                       backdropFilter: "blur(40px) saturate(180%)",
                       WebkitBackdropFilter: "blur(40px) saturate(180%)",
@@ -2114,7 +2776,7 @@ export default function SwapPage() {
                   >
                   {/* Header with drag and buttons - fully transparent for glow */}
                   <div
-                    className={`flex h-12 items-center justify-between px-6 relative ${
+                    className={`flex h-12 flex-shrink-0 items-center justify-between px-6 relative ${
                       isDragging ? "cursor-grabbing" : "cursor-grab"
                     }`}
                     onPointerDown={handleDragStart}
@@ -2164,7 +2826,7 @@ export default function SwapPage() {
                   </div>
                   
                   {/* Content area */}
-                  <div className="flex h-full flex-col gap-4 p-6" style={{ height: "calc(100% - 48px)" }}>
+                  <div className="flex flex-col gap-4 p-6" style={{ height: "calc(100% - 48px)" }}>
                     <input
                       type="text"
                       value={searchTerm}
@@ -2245,33 +2907,7 @@ export default function SwapPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header matching main website */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/70 backdrop-blur-2xl backdrop-saturate-[180%]">
-        <div className="mx-auto flex h-11 max-w-[980px] items-center justify-between px-6">
-          <a href="/" className="flex items-center">
-            <img
-              src="/stoix full white.png"
-              alt="Stoix"
-              className="h-6 w-auto"
-            />
-          </a>
-          <nav className="hidden items-center gap-8 text-xs font-normal text-white/80 md:flex">
-            <a href="/swap" className="text-white">Swap</a>
-            <a href="/liquidity" className="transition-colors hover:text-white">Liquidity</a>
-            <a href="/pools" className="transition-colors hover:text-white">Pools</a>
-            <a href="/positions" className="transition-colors hover:text-white">Positions</a>
-            <a href="/analytics" className="transition-colors hover:text-white">Analytics</a>
-          </nav>
-          <div className="flex items-center gap-6">
-            <a
-              href="/"
-              className="rounded-full bg-[#007AFF] px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-[#0066CC]"
-            >
-              Back to Protocol
-            </a>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Simple blur test rectangle */}
       {(isChartOpen || chartPhase === "closing") && (() => {
@@ -2428,113 +3064,227 @@ export default function SwapPage() {
         );
       })()}
 
-      {/* Main swap interface */}
-      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4">
-        <div 
-          className="w-full max-w-md"
-          style={{
-            transform: `translate(${swapCardOffset.x}px, ${swapCardOffset.y}px)`,
-            transition: isDraggingSwapCard ? "none" : "transform 0.3s ease",
-          }}
-        >
-          {/* Wrapper for glow effect */}
-          <div className="relative">
-            {/* Animated glow shadow underneath card - left to right */}
+      {/* Swap Details Popup - Liquid Glass */}
+      {(isSwapDetailsOpen || swapDetailsPhase === "closing") && swapDetails && (() => {
+        const isActive = swapDetailsPhase === "opening" || swapDetailsPhase === "open";
+        
+        const overlayStyle: CSSProperties = {
+          opacity: isActive ? 1 : 0,
+          transform: `scale(${isActive ? 1 : 0.3})`,
+          transformOrigin: "center center",
+          transition: `opacity 0.52s cubic-bezier(0.16, 1, 0.3, 1), transform 0.52s cubic-bezier(0.16, 1, 0.3, 1)`,
+          willChange: "transform, opacity",
+          pointerEvents: isActive ? "auto" : "none",
+        };
+
+        return createPortal(
+          <div 
+            className="fixed inset-0 z-30 flex items-center justify-center"
+            style={{
+              backgroundColor: "transparent",
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleCloseSwapDetails();
+              }
+            }}
+          >
             <div 
-              className="absolute -inset-[2px] rounded-[22px]"
+              className="pointer-events-auto relative" 
               style={{
-                background: "linear-gradient(90deg, #9333ea, #a855f7, #d946ef, #ec4899, #f472b6, #06b6d4, #3b82f6, #6366f1, #8b5cf6, #9333ea)",
-                backgroundSize: "200% 100%",
-                animation: "glowShift 8s linear infinite",
-                filter: "blur(12px)",
-                opacity: 0.45,
-                zIndex: 0,
-              }}
-            />
-            
-            {/* Unified swap card with glassmorphic styling - auto height */}
-            <div 
-              ref={swapCardRef}
-              className="rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] overflow-visible flex flex-col relative"
-              style={{
-                backgroundColor: "rgb(12, 14, 22)",
-                backdropFilter: "blur(40px) saturate(180%)",
-                WebkitBackdropFilter: "blur(40px) saturate(180%)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
-                zIndex: 1,
+                opacity: overlayStyle.opacity,
+                transform: `translate(${swapDetailsOffset.x}px, ${swapDetailsOffset.y}px) scale(${isActive ? 1 : 0.3})`,
+                transformOrigin: "center center",
+                transition: isDraggingSwapDetails ? "none" : overlayStyle.transition,
+                willChange: overlayStyle.willChange,
+                pointerEvents: overlayStyle.pointerEvents,
               }}
             >
-            {/* Draggable Header with title - full width, fully transparent for glow */}
-            <div 
-              ref={swapTitleRef}
-              className={`pt-6 pb-4 px-6 flex items-center justify-center relative ${
-                isDraggingSwapCard ? "cursor-grabbing" : "cursor-grab"
-              }`}
-              onPointerDown={handleSwapCardDragStart}
-            >
-              {/* Transparent overlay to let glow through */}
-              <div 
-                className="absolute inset-0" 
-                style={{ 
-                  backgroundColor: "rgba(12, 14, 22, 0)",
-                  backdropFilter: "none"
+              {/* Shadow wrapper - shadow only visible around edges */}
+              <div
+                className="absolute"
+                style={{
+                  width: "600px",
+                  maxWidth: "90vw",
+                  height: "70vh",
+                  minHeight: "500px",
+                  borderRadius: "28px",
+                  boxShadow: "0 100px 250px -20px rgba(0, 0, 0, 1), 0 50px 120px -5px rgba(0, 0, 0, 0.8)",
+                  pointerEvents: "none",
+                  zIndex: -1,
                 }}
               />
-              {/* Border that respects padding */}
-              <div className="absolute bottom-0 left-6 right-6 h-px bg-white/10" />
-              <h1
-                className="text-3xl font-semibold relative z-10"
+              <div
+                className="relative flex flex-col overflow-hidden rounded-[28px] border border-white/15"
                 style={{
-                  background: "linear-gradient(90deg, #9333ea, #a855f7, #d946ef, #ec4899, #f472b6, #06b6d4, #3b82f6, #6366f1, #8b5cf6, #9333ea)",
-                  backgroundSize: "200% 100%",
-                  animation: "glowShift 8s linear infinite",
-                  WebkitBackgroundClip: "text",
-                  backgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  filter: "drop-shadow(0 0 8px rgba(147, 51, 234, 0.6)) drop-shadow(0 0 16px rgba(236, 72, 153, 0.4))",
+                  width: "600px",
+                  maxWidth: "90vw",
+                  height: "70vh",
+                  minHeight: "500px",
+                  backgroundColor: "rgba(12, 14, 22, 0.7)",
+                  backdropFilter: "blur(40px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(40px) saturate(180%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
+                  animation: swapDetailsPhase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : swapDetailsPhase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
                 }}
+                onClick={(event) => event.stopPropagation()}
               >
-                Swap tokens
-              </h1>
-            </div>
-            
-            {/* Content area with rate and swap fields */}
-            <div className="flex flex-col flex-1 min-h-0">
-              {/* Rate - centered vertically between title bottom and Display values in */}
-              <div className="flex-1 flex items-center px-6 min-h-[60px]">
-                <div className="text-left text-xs font-medium w-full">
-                  <span 
-                    className="font-medium tracking-wide"
-                    style={{
-                      background: "linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.8) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.8) 70%, rgba(255,255,255,0.5) 100%)",
-                      backgroundSize: "200% 100%",
-                      backgroundClip: "text",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      animation: "shimmer 3s ease-in-out infinite",
+                {/* Header with drag and close button */}
+                <div 
+                  className={`relative z-10 flex h-12 items-center justify-between border-b border-white/10 bg-white/5 px-6 backdrop-blur-xl backdrop-saturate-[180%] ${
+                    isDraggingSwapDetails ? "cursor-grabbing" : "cursor-grab"
+                  }`}
+                  onPointerDown={handleSwapDetailsPointerDown}
+                >
+                  <div className="text-sm font-medium tracking-wide text-white/70">Swap Details</div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCloseSwapDetails();
                     }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57]"
+                    aria-label="Close"
                   >
-                    {spotRateDisplay}
-                  </span>
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-12 pb-8">
+                  {/* Success icon */}
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20">
+                    <svg className="h-10 w-10 text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+
+                  {/* Success message */}
+                  <div className="text-center">
+                    <h2 className="text-2xl font-semibold text-white mb-2">Swap Successful!</h2>
+                    <p className="text-sm text-white/60">Your transaction has been completed</p>
+                  </div>
+
+                  {/* Swap details */}
+                  <div className="w-full space-y-4">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xs text-white/50 mb-2">You Paid</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-lg font-semibold text-white">{swapDetails.amountIn}</div>
+                        <div className="text-sm text-white/70">{swapDetails.tokenIn}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                      <svg className="h-6 w-6 text-white/40" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                      </svg>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xs text-white/50 mb-2">You Received</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-lg font-semibold text-emerald-400">{swapDetails.amountOut}</div>
+                        <div className="text-sm text-white/70">{swapDetails.tokenOut}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction hash */}
+                  {txHash && (() => {
+                    const explorerUrl = process.env.NEXT_PUBLIC_EXPLORER_URL || "";
+                    const isLocalhost = !explorerUrl || explorerUrl.includes("localhost") || explorerUrl.includes("127.0.0.1");
+                    
+                    const handleCopyHash = async () => {
+                      try {
+                        await navigator.clipboard.writeText(txHash);
+                        setCopiedHash(true);
+                        setTimeout(() => setCopiedHash(false), 2000);
+                      } catch (err) {
+                        console.error("Failed to copy hash:", err);
+                      }
+                    };
+                    
+                    return (
+                      <div className="w-full rounded-xl border border-white/10 bg-white/5 p-4 relative">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs text-white/50">Transaction Hash</div>
+                          <button
+                            type="button"
+                            onClick={handleCopyHash}
+                            className="flex items-center justify-center w-6 h-6 rounded text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors"
+                            aria-label="Copy transaction hash"
+                          >
+                            {copiedHash ? (
+                              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 8.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v8.25A2.25 2.25 0 006 16.5h2.25m8.25-8.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0018 20.25h-7.5A2.25 2.25 0 008.25 18v-1.5m8.25-8.25h-6a2.25 2.25 0 00-2.25 2.25v6.75m8.25-8.25v6.75m0 0v-1.5m0 1.5h-8.25m8.25 0H12" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                        {isLocalhost ? (
+                          <code className="text-xs text-white/70 break-all pr-8">{txHash}</code>
+                        ) : (
+                          <a
+                            href={`${explorerUrl}/tx/${txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-emerald-400 underline hover:text-emerald-300 break-all pr-8 block"
+                          >
+                            {txHash}
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
-              
-              {/* Swap card content */}
-              <div className="px-6">
-              <div ref={cardRef}>
-                {!configReady && (
-              <div className="mb-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
-                Swap not configured. Check environment variables.
-              </div>
-            )}
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
 
-            {connectError && (
-              <div className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {connectError.message}
-              </div>
-            )}
+      {/* Main swap interface */}
+      <main className="relative z-10 flex min-h-screen flex-col items-center px-4" style={{ paddingTop: "15vh" }}>
+        {/* Fixed section wrapper - Isolated from dynamic content to prevent centering shifts */}
+        <div ref={fixedSectionRef} className="w-full max-w-md" style={{ position: "relative", flexShrink: 0 }}>
+          {/* Fixed section: Title through You receive card - Position doesn't change */}
+          <div 
+            ref={swapTitleRef}
+            style={{
+              transform: `translate(${swapCardOffset.x}px, ${swapCardOffset.y}px)`,
+              transition: isDraggingSwapCard ? "none" : "transform 0.3s ease",
+            }}
+          >
+            {/* Swap tokens title above card */}
+            <h1 className="text-4xl font-semibold text-white/60 mb-[25px] text-center">
+              Swap tokens
+            </h1>
+            
+            {/* Unified swap card with glassmorphic styling */}
+            <div 
+              ref={swapCardRef}
+              className="rounded-[20px] overflow-visible flex flex-col relative"
+                style={{
+                  backgroundColor: "transparent",
+                  zIndex: 1,
+                }}
+              >
+              {/* Content area with swap fields */}
+              <div className="flex flex-col flex-1 min-h-0">
+                {/* Swap card content */}
+                <div className="px-8">
+                <div ref={cardRef}>
 
-            <div className="mb-4 flex items-center justify-end gap-2 text-xs text-white/50">
+            <div className="mb-4 mt-6 flex items-center justify-end gap-2 text-xs text-white/50">
               <span>Display values in</span>
               {(["USD", "EUR", "GBP"] as const).map((code) => (
                 <button
@@ -2552,261 +3302,463 @@ export default function SwapPage() {
               ))}
             </div>
 
-            <div className="space-y-3">
-                {/* Input */}
-                <div className="rounded-2xl bg-white/5 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm text-white/60">You pay</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <TokenSelector
-                      selected={tokenA}
-                      tokens={tokens}
-                      onSelect={(t) => {
-                        if (t.address === tokenB.address) {
-                          setTokenA(tokenB);
-                          setTokenB(t);
-                          setDirection(direction === "a-to-b" ? "b-to-a" : "a-to-b");
-                        } else {
-                          setTokenA(t);
-                        }
-                      }}
-                      side="left"
-                      cardRect={cardRect}
-                      swapTitleRect={swapTitleRect}
-                      swapCardRect={swapCardRect}
-                    />
-                    <div className="flex-1 text-right">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0.0"
-                        value={formatWithCommas(amountIn)}
-                        onChange={(e) => handleAmountInChange(e.target.value)}
-                        onFocus={() => setActiveField("in")}
-                        className="w-full bg-transparent text-3xl font-medium text-white text-right outline-none placeholder:text-white/30"
-                      />
-                      <div className="mt-1 text-xs text-white/40">
-                        {(() => {
-                          const normalized = amountIn.endsWith(".") ? amountIn.slice(0, -1) : amountIn;
-                          if (!normalized) return "";
-                          const numeric = Number(normalized);
-                          if (!Number.isFinite(numeric) || numeric <= 0) return "";
-                          const fiatValue = numeric * fiatRates[fiatCurrency];
-                          return `≈ ${fiatValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${fiatCurrency}`;
-                        })()}
-                      </div>
+            <div className="relative flex flex-col" style={{ isolation: "auto" }}>
+                {/* Cards container - Fixed position, doesn't shift */}
+                <div className="flex flex-col flex-shrink-0">
+                  {/* You pay card - ALWAYS on top */}
+                  <div className="rounded-2xl bg-transparent border border-white/10 p-4" style={{ minHeight: "120px", height: "120px", position: "relative", zIndex: 1 }}>
+                    <div className="mb-1">
+                      <span className="text-sm text-white/60">You pay</span>
                     </div>
-                  </div>
-                </div>
-
-                {/* Switch button */}
-                <div className="flex justify-center">
-                  <button
-                    onClick={() => setDirection(direction === "a-to-b" ? "b-to-a" : "a-to-b")}
-                    className="rounded-full border border-white/10 bg-black p-2 transition hover:bg-white/5"
-                  >
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Output */}
-                <div className="rounded-2xl bg-white/5 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm text-white/60">You receive</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 text-left relative">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0.0"
-                        value={formatWithCommas(amountOutValue)}
-                        onChange={(e) => handleAmountOutChange(e.target.value)}
-                        onFocus={() => setActiveField("out")}
-                        className="w-full bg-transparent text-3xl font-medium text-white text-left outline-none placeholder:text-white/30"
-                      />
-                      {isQuoting && activeField === "in" && (
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex gap-1">
-                          <div className="w-1 h-3 rounded-full bg-blue-400/60" style={{ animation: "loadingPulse 1s ease-in-out infinite" }} />
-                          <div className="w-1 h-3 rounded-full bg-purple-400/60" style={{ animation: "loadingPulse 1s ease-in-out 0.2s infinite" }} />
-                          <div className="w-1 h-3 rounded-full bg-pink-400/60" style={{ animation: "loadingPulse 1s ease-in-out 0.4s infinite" }} />
-                        </div>
-                      )}
-                      <div className="mt-1 text-xs text-white/40">
-                        {(() => {
-                          const normalized = amountOutValue.endsWith(".") ? amountOutValue.slice(0, -1) : amountOutValue;
-                          if (!normalized) return "";
-                          const numeric = Number(normalized);
-                          if (!Number.isFinite(numeric) || numeric <= 0) return "";
-                          const fiatValue = numeric * fiatRates[fiatCurrency];
-                          return `≈ ${fiatValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${fiatCurrency}`;
-                        })()}
-                      </div>
-                    </div>
-                    <TokenSelector
-                      selected={tokenB}
-                      tokens={tokens}
-                      onSelect={(t) => {
-                        if (t.address === tokenA.address) {
-                          setTokenB(tokenA);
-                          setTokenA(t);
-                          setDirection(direction === "a-to-b" ? "b-to-a" : "a-to-b");
-                        } else {
-                          setTokenB(t);
-                        }
-                      }}
-                      side="right"
-                      cardRect={cardRect}
-                      swapTitleRect={swapTitleRect}
-                      swapCardRect={swapCardRect}
-                    />
-                  </div>
-                </div>
-
-                {/* Info */}
-                {quote && (
-                  <div className="rounded-xl bg-white/5 px-4 py-3 text-sm text-white/60">
-                    <div className="flex justify-between">
-                      <span>Slippage tolerance</span>
-                      <span>0.5%</span>
-                    </div>
-                    <div className="mt-1 flex justify-between">
-                      <span>Rate</span>
-                      <span>
-                        1 {amountInSymbol} ≈ {(() => {
-                          const normalizedIn = amountIn.endsWith(".") ? amountIn.slice(0, -1) : amountIn;
-                          if (!normalizedIn) return "-";
-                          const inNumber = Number(normalizedIn);
-                          const outNumber = Number(quote.amountOut);
-                          if (!Number.isFinite(inNumber) || inNumber === 0 || !Number.isFinite(outNumber)) {
-                            return "-";
+                    <div className="flex items-center gap-3 h-full">
+                      <TokenSelector
+                        selected={direction === "a-to-b" ? tokenA : tokenB}
+                        tokens={tokens}
+                        onSelect={(t) => {
+                          if (direction === "a-to-b") {
+                            if (t.address === tokenB.address) {
+                              setTokenA(tokenB);
+                              setTokenB(t);
+                              setDirection("b-to-a");
+                            } else {
+                              setTokenA(t);
+                            }
+                          } else {
+                            if (t.address === tokenA.address) {
+                              setTokenB(tokenA);
+                              setTokenA(t);
+                              setDirection("a-to-b");
+                            } else {
+                              setTokenB(t);
+                            }
                           }
-                          const rate = outNumber / inNumber;
-                          if (!Number.isFinite(rate)) return "-";
-                          return `${rate.toFixed(6)} ${amountOutSymbol}`;
-                        })()}
-                      </span>
+                        }}
+                        side="left"
+                        cardRect={cardRect}
+                        swapTitleRect={swapTitleRect}
+                        swapCardRect={swapCardRect}
+                      />
+                      <div className="flex-1 text-right flex flex-col justify-center h-full">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.0"
+                          value={formatWithCommas(amountIn)}
+                          onChange={(e) => handleAmountInChange(e.target.value)}
+                          onFocus={() => setActiveField("in")}
+                          className={`w-full bg-transparent font-medium text-white text-right outline-none placeholder:text-white/30 ${
+                            amountIn && Number(amountIn.replace(/,/g, "")) > 1e3 
+                              ? Number(amountIn.replace(/,/g, "")) > 1e6 
+                                ? "text-xl" 
+                                : "text-2xl"
+                              : "text-3xl"
+                          }`}
+                        />
+                        <div className="mt-1 text-xs text-white/40" style={{ minHeight: "16px" }}>
+                          {(() => {
+                            const normalized = amountIn.endsWith(".") ? amountIn.slice(0, -1) : amountIn;
+                            if (!normalized) return "\u00A0";
+                            const numeric = Number(normalized.replace(/,/g, ""));
+                            if (!Number.isFinite(numeric) || numeric <= 0) return "\u00A0";
+                            const fiatValue = numeric * fiatRates[fiatCurrency];
+                            return `≈ ${fiatValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${fiatCurrency}`;
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {quoteError && (
-                  <div className="w-full rounded-full bg-red-500/10 px-4 py-2 text-sm text-red-400">
-                    {quoteError}
-                  </div>
-                )}
-
-                {allowanceError && (
-                  <div className="w-full rounded-full bg-red-500/10 px-4 py-2 text-sm text-red-400">
-                    {allowanceError}
-                  </div>
-                )}
-
-                {/* Approve button */}
-                {!isNativeInput && needsApproval && (
-                  <button
-                    onClick={handleApprove}
-                    disabled={isApproving || isFetchingAllowance || !configReady}
-                    className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
-                  >
-                    {isApproving ? "Approving..." : `Approve ${amountInSymbol}`}
-                  </button>
-                )}
-
-                {/* Consistent spacing before Connect Wallet button */}
-                <div style={{ height: "20px" }} />
-
-                {/* Swap button */}
-                <button
-                  onClick={() => {
-                    if (!isConnected) {
-                      if (connectors[0]) {
-                        connect({ connector: connectors[0] });
-                      }
-                    } else {
-                      handleSwap();
-                    }
-                  }}
-                  disabled={
-                    (isConnected && txStatus === "pending") ||
-                    (isConnected && isQuoting) ||
-                    (isConnected && requiresApproval && needsApproval) ||
-                    (isConnected && !configReady) ||
-                    (isConnected && (!parsedAmountIn || parsedAmountIn === 0n)) ||
-                    isConnecting ||
-                    isConnectPending ||
-                    (!isConnected && !connectors[0])
-                  }
-                  className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
-                >
-                  {!isConnected
-                    ? isConnecting || isConnectPending
-                      ? "Connecting..."
-                      : "Connect Wallet"
-                    : txStatus === "pending"
-                    ? "Swapping..."
-                    : !parsedAmountIn || parsedAmountIn === 0n
-                    ? "Enter amount"
-                    : requiresApproval && needsApproval
-                    ? "Approve first"
-                    : "Swap"}
-                </button>
-
-                {/* Success/Error */}
-                {txStatus === "success" && txHash && (
-                  <div className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
-                    <div className="mb-1 font-medium">Swap successful!</div>
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_EXPLORER_URL || "https://sepolia.etherscan.io"}/tx/${txHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-300 underline hover:text-emerald-200"
+                  {/* Switch button - positioned between cards */}
+                  <div className="flex justify-center -my-4 relative" style={{ zIndex: 20, isolation: "auto" }}>
+                    <button
+                      onClick={() => setDirection(direction === "a-to-b" ? "b-to-a" : "a-to-b")}
+                      className="rounded-lg p-2 transition-all hover:scale-105 relative"
+                      style={{
+                        background: "rgba(255, 255, 255, 0.1)",
+                        backdropFilter: "blur(20px) saturate(180%)",
+                        WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                        border: "1px solid rgba(255, 255, 255, 0.18)",
+                        boxShadow: "0 0 0 7px rgba(0, 0, 0, 0.7), 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)",
+                        position: "relative",
+                      }}
                     >
-                      View transaction
-                    </a>
+                      <svg
+                        className="h-5 w-5 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                        />
+                      </svg>
+                    </button>
                   </div>
-                )}
 
-                {txStatus === "error" && (
-                  <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                    Swap failed. Check console for details.
+                  {/* You receive card - ALWAYS on bottom */}
+                  <div className="rounded-2xl bg-white/5 p-4" style={{ minHeight: "120px", height: "120px" }}>
+                    <div className="mb-1">
+                      <span className="text-sm text-white/60">You receive</span>
+                    </div>
+                    <div className="flex items-center gap-3 h-full">
+                      <div className="flex-1 text-left relative flex flex-col justify-center h-full">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.0"
+                          value={formatWithCommas(amountOutValue)}
+                          onChange={(e) => handleAmountOutChange(e.target.value)}
+                          onFocus={() => setActiveField("out")}
+                          className={`w-full bg-transparent font-medium text-white text-left outline-none placeholder:text-white/30 ${
+                            amountOutValue && Number(amountOutValue.replace(/,/g, "")) > 1e3 
+                              ? Number(amountOutValue.replace(/,/g, "")) > 1e6 
+                                ? "text-xl" 
+                                : "text-2xl"
+                              : "text-3xl"
+                          }`}
+                        />
+                        {isQuoting && activeField === "in" && (
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex gap-1">
+                            <div className="w-1 h-3 rounded-full bg-blue-400/60" style={{ animation: "loadingPulse 1s ease-in-out infinite" }} />
+                            <div className="w-1 h-3 rounded-full bg-purple-400/60" style={{ animation: "loadingPulse 1s ease-in-out 0.2s infinite" }} />
+                            <div className="w-1 h-3 rounded-full bg-pink-400/60" style={{ animation: "loadingPulse 1s ease-in-out 0.4s infinite" }} />
+                          </div>
+                        )}
+                        <div className="mt-1 text-xs text-white/40" style={{ minHeight: "16px" }}>
+                          {(() => {
+                            const normalized = amountOutValue.endsWith(".") ? amountOutValue.slice(0, -1) : amountOutValue;
+                            if (!normalized) return "\u00A0";
+                            const numeric = Number(normalized.replace(/,/g, ""));
+                            if (!Number.isFinite(numeric) || numeric <= 0) return "\u00A0";
+                            const fiatValue = numeric * fiatRates[fiatCurrency];
+                            return `≈ ${fiatValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${fiatCurrency}`;
+                          })()}
+                        </div>
+                      </div>
+                      <TokenSelector
+                        selected={direction === "a-to-b" ? tokenB : tokenA}
+                        tokens={tokens}
+                        onSelect={(t) => {
+                          if (direction === "a-to-b") {
+                            if (t.address === tokenA.address) {
+                              setTokenB(tokenA);
+                              setTokenA(t);
+                              setDirection("b-to-a");
+                            } else {
+                              setTokenB(t);
+                            }
+                          } else {
+                            if (t.address === tokenB.address) {
+                              setTokenA(tokenB);
+                              setTokenB(t);
+                              setDirection("a-to-b");
+                            } else {
+                              setTokenA(t);
+                            }
+                          }
+                        }}
+                        side="right"
+                        cardRect={cardRect}
+                        swapTitleRect={swapTitleRect}
+                        swapCardRect={swapCardRect}
+                      />
+                    </div>
                   </div>
-                )}
-
-                {/* Consistent spacing after Connect Wallet button */}
-                <div style={{ height: "20px" }} />
-            </div>
+                </div>
               </div>
             </div>
-            </div>
-            
+          </div>
+          </div>
+          </div>
+          </div>
+          
+          {/* Dynamic section container - Positioned absolutely relative to fixed section wrapper */}
+          <div 
+            ref={dynamicSectionRef}
+            className="w-full px-8 flex flex-col space-y-4"
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              marginTop: "24px",
+              zIndex: 10,
+            }}
+          >
+            {/* Exchange Rate Display - Always reserves space to prevent flickering */}
+            {(amountIn || amountOutValue) && (
+            <div className="rounded-xl bg-white/5 overflow-hidden" style={{ minHeight: "48px" }}>
+                    <button
+                      onClick={() => quote && amountIn && amountOutValue && setShowDetails(!showDetails)}
+                      disabled={!quote || !amountIn || !amountOutValue}
+                      className="w-full px-4 py-3 flex items-center justify-between text-xs hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-default"
+                    >
+                      <div className="text-xs font-medium flex-1 text-left">
+                        <span 
+                          className="text-white/60 tracking-wide"
+                          style={quote && amountIn && amountOutValue ? {
+                            background: "linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.8) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.8) 70%, rgba(255,255,255,0.5) 100%)",
+                            backgroundSize: "200% 100%",
+                            backgroundClip: "text",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            animation: "shimmer 3s ease-in-out infinite",
+                          } : {}}
+                        >
+                          {(() => {
+                            if (!quote || !amountIn || !amountOutValue) {
+                              return "\u00A0"; // Non-breaking space placeholder
+                            }
+                            
+                            const normalizedIn = amountIn.endsWith(".") ? amountIn.slice(0, -1) : amountIn;
+                            if (!normalizedIn) return "\u00A0";
+                            
+                            // Use amountOutValue from state instead of quote.amountOut to ensure consistency
+                            const normalizedOut = amountOutValue.endsWith(".") ? amountOutValue.slice(0, -1) : amountOutValue;
+                            if (!normalizedOut) return "\u00A0";
+                            
+                            const inNumber = Number(normalizedIn.replace(/,/g, ""));
+                            const outNumber = Number(normalizedOut.replace(/,/g, ""));
+                            
+                            if (!Number.isFinite(inNumber) || inNumber === 0 || !Number.isFinite(outNumber) || outNumber === 0) {
+                              return "\u00A0";
+                            }
+                            
+                            // Determine tokens from cards: You pay is always top, You receive is always bottom
+                            const payToken = direction === "a-to-b" ? tokenA : tokenB;
+                            const receiveToken = direction === "a-to-b" ? tokenB : tokenA;
+                            
+                            // Calculate rate: outNumber / inNumber gives how much receiveToken per 1 payToken
+                            const rate = outNumber / inNumber;
+                            
+                            // Debug logging
+                            console.log("📊 Exchange Rate Calculation:");
+                            console.log("  Direction:", direction);
+                            console.log("  Pay Token:", payToken.symbol, payToken.address);
+                            console.log("  Receive Token:", receiveToken.symbol, receiveToken.address);
+                            console.log("  Amount In:", inNumber, payToken.symbol);
+                            console.log("  Amount Out:", outNumber, receiveToken.symbol);
+                            console.log("  Quote.amountOut:", quote.amountOut);
+                            console.log("  AmountOutValue:", amountOutValue);
+                            console.log("  Calculated Rate:", rate, `${receiveToken.symbol}/${payToken.symbol}`);
+                            
+                            if (!Number.isFinite(rate) || rate <= 0) return "\u00A0";
+                            
+                            // Format rate with proper decimal places
+                            let formattedRate: string;
+                            if (rate < 0.000001) {
+                              formattedRate = rate.toExponential(2);
+                            } else if (rate < 1) {
+                              // For small rates, show up to 9 decimal places to capture 0.000333
+                              formattedRate = trimTrailingZeros(rate.toFixed(9));
+                            } else {
+                              formattedRate = trimTrailingZeros(rate.toFixed(6));
+                            }
+                            return `1 ${payToken.symbol} = ${formattedRate} ${receiveToken.symbol}`;
+                          })()}
+                        </span>
+                      </div>
+                      {quote && amountIn && amountOutValue && (
+                      <svg
+                        className={`h-4 w-4 text-white/60 transition-transform ${showDetails ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                      )}
+                    </button>
+                    {showDetails && quote && amountIn && amountOutValue && (
+                      <div className="px-4 pb-3 space-y-2 border-t border-white/10 pt-3">
+                        <div className="flex justify-between items-center text-sm text-white/60">
+                          <div className="flex items-center gap-1">
+                            <span>Slippage tolerance</span>
+                            <svg className="h-3 w-3 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <span>{(slippageBps / 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm text-white/60">
+                          <div className="flex items-center gap-1">
+                            <span>Minimum received</span>
+                            <svg className="h-3 w-3 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <span>
+                            {(() => {
+                              if (!quote || !amountOutValue) return "-";
+                              const outNum = Number(quote.amountOut.replace(/,/g, ""));
+                              if (!Number.isFinite(outNum)) return "-";
+                              const minAmount = outNum * (1 - slippageBps / 10000);
+                              return `${trimTrailingZeros(minAmount.toFixed(6))} ${amountOutSymbol}`;
+                            })()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm text-white/60">
+                          <div className="flex items-center gap-1">
+                            <span>Price impact</span>
+                            <svg className="h-3 w-3 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <span>—</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm text-white/60">
+                          <div className="flex items-center gap-1">
+                            <span>Network fee</span>
+                            <svg className="h-3 w-3 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <span>—</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  )}
+
+            {/* Error messages */}
+            {quoteError && (
+              <div className="w-full rounded-full bg-red-500/10 px-4 py-2 text-sm text-red-400">
+                {quoteError}
+              </div>
+            )}
+
+            {allowanceError && (
+              <div className="w-full rounded-full bg-red-500/10 px-4 py-2 text-sm text-red-400">
+                {allowanceError}
+              </div>
+            )}
+
+            {/* Error messages */}
+            {!configReady && (
+              <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
+                Swap not configured. Check environment variables.
+              </div>
+            )}
+
+            {connectError && (
+              <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {connectError?.message || "Connection error"}
+              </div>
+            )}
+
             {/* Loading Animation */}
             {isLoadingChartData && (
-              <>
-                <div className="px-6 flex flex-col items-center justify-center gap-3">
-                  <LoadingAnimation />
-                  <p className="text-xs text-white/50 font-medium">Loading chart data...</p>
-                </div>
-                <div className="h-4" />
-              </>
+              <div className="flex flex-col items-center justify-center gap-3 py-4">
+                <LoadingAnimation />
+                <p className="text-xs text-white/50 font-medium">Loading chart data...</p>
+              </div>
             )}
-            
+
+            {/* Network mismatch warning */}
+            {isConnected && !isCorrectChain && (
+              <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 space-y-3">
+                <div>
+                  Wrong network detected. Please switch to <strong>{targetChain.name}</strong> (Chain ID: {targetChain.id}).
+                </div>
+                <button
+                  onClick={() => switchChain({ chainId: targetChain.id })}
+                  disabled={isSwitchingChain}
+                  className="rounded-full border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSwitchingChain ? "Switching..." : `Switch to ${targetChain.name}`}
+                </button>
+              </div>
+            )}
+
+            {/* Approve button */}
+            {!isNativeInput && needsApproval && isConnected && effectiveWalletClient && isCorrectChain && (
+              <button
+                onClick={handleApprove}
+                disabled={isApproving || isFetchingAllowance || !configReady}
+                className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
+              >
+                {isApproving ? "Approving..." : `Approve ${amountInSymbol}`}
+              </button>
+            )}
+
+            {/* Wallet connection error for approval */}
+            {!isNativeInput && needsApproval && isConnected && !effectiveWalletClient && (
+              <div className="rounded-xl bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400 space-y-3">
+                <div>Wallet client not available. Please try reconnecting your wallet.</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={retryGetWalletClient}
+                    disabled={isRetryingWalletClient}
+                    className="rounded-full border border-yellow-500/30 px-3 py-1.5 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isRetryingWalletClient ? "Retrying..." : "Retry Wallet Client"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      disconnect();
+                      setTimeout(() => {
+                        if (connectors[0]) {
+                          connect({ connector: connectors[0] });
+                        }
+                      }, 100);
+                    }}
+                    disabled={isConnecting || isConnectPending}
+                    className="rounded-full border border-yellow-500/30 px-3 py-1.5 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Reconnect Wallet
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Swap/Connect Wallet button */}
+            <button
+              onClick={() => {
+                if (!isConnected) {
+                  if (connectors[0]) {
+                    connect({ connector: connectors[0] });
+                  }
+                } else {
+                  handleSwap();
+                }
+              }}
+              disabled={
+                (isConnected && txStatus === "pending") ||
+                (isConnected && isQuoting) ||
+                (isConnected && requiresApproval && needsApproval) ||
+                (isConnected && !configReady) ||
+                (isConnected && (!parsedAmountIn || parsedAmountIn === 0n)) ||
+                isConnecting ||
+                isConnectPending ||
+                (!isConnected && !connectors[0])
+              }
+              className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
+            >
+              {!isConnected
+                ? isConnecting || isConnectPending
+                  ? "Connecting..."
+                  : "Connect Wallet"
+                : txStatus === "pending"
+                ? "Swapping..."
+                : !parsedAmountIn || parsedAmountIn === 0n
+                ? "Enter amount"
+                : requiresApproval && needsApproval
+                ? "Approve first"
+                : "Swap"}
+            </button>
+
+            {/* Error messages */}
+            {txStatus === "error" && (
+              <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                Swap failed. Check console for details.
+              </div>
+            )}
+
             {/* Action buttons */}
-            <div className="px-6">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={(e) => {
@@ -2844,12 +3796,7 @@ export default function SwapPage() {
                 </svg>
                 Advanced view
               </button>
-              </div>
             </div>
-            
-            {/* Consistent padding at bottom - matches other paddings */}
-            <div className="h-8" />
-          </div>
           </div>
         </div>
       </main>
