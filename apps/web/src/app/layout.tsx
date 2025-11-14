@@ -34,7 +34,7 @@ export default function RootLayout({
       <head>
         <link href="https://fonts.cdnfonts.com/css/anita-semi-square" rel="stylesheet" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} bg-black text-zinc-100 antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} bg-black text-zinc-100 antialiased`} style={{ margin: 0, padding: 0, width: "100vw", overflowX: "hidden" }}>
         <Providers>{children}</Providers>
       </body>
     </html>

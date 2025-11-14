@@ -59,7 +59,7 @@ export function TechnologySection() {
         ].map((item, idx) => (
           <div
             key={item.title}
-            className={`space-y-4 rounded-3xl border border-black/10 bg-white p-10 transition-all duration-1000 ${
+            className={`space-y-4 rounded-3xl border border-black/10 bg-white p-6 md:p-10 transition-all duration-1000 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}
             style={{ transitionDelay: `${item.delay}ms` }}

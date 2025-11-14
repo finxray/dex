@@ -75,11 +75,13 @@ export function Providers({ children }: PropsWithChildren) {
   );
 
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <SwapModalProvider>{children}</SwapModalProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <div style={{ margin: 0, padding: 0, width: "100vw", overflowX: "hidden" }}>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <SwapModalProvider>{children}</SwapModalProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    </div>
   );
 }
 

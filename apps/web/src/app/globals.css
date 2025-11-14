@@ -18,12 +18,34 @@
   --font-anita: 'Anita Semi-square', sans-serif;
 }
 
+html {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  position: relative;
+  left: 0;
+  right: 0;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
 body {
-  background-color: var(--background);
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  overflow-x: hidden !important;
+  max-width: 100vw !important;
   color: var(--foreground);
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   letter-spacing: -0.01em;
+  position: relative;
+  left: 0;
+  right: 0;
 }
 
 /* Anita Semi-square font class */

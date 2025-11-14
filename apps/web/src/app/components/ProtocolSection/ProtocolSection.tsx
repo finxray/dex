@@ -96,7 +96,7 @@ export function ProtocolSection() {
         ].map((feature, idx) => (
           <div
             key={feature.title}
-            className={`space-y-4 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-10 transition-all duration-1000 ${
+            className={`space-y-4 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 md:p-10 transition-all duration-1000 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}
             style={{ transitionDelay: `${feature.delay}ms` }}

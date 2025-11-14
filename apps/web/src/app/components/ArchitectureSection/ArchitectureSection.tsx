@@ -53,7 +53,7 @@ const tx = await poolManager.swap(
       ref={sectionRef}
       className="min-h-screen py-32 relative"
     >
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto max-w-6xl px-4 md:px-6">
         <div
           className={`mb-20 text-center transition-all duration-1000 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"

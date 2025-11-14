@@ -16,12 +16,22 @@ export function Header() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const [showBorder, setShowBorder] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isOverWhiteSection, setIsOverWhiteSection] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const [logoPosition, setLogoPosition] = useState({ x: 24, y: 12.424, width: 52.5, height: 19.152 });
   const [headerSize, setHeaderSize] = useState({ width: 980, height: 44 });
 
   const lastScrollYRef = useRef(0);
+
+  // Check if mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
   
   // Menu items for swap page
   const swapNavLinks = [
@@ -64,6 +74,17 @@ export function Header() {
       // Show border when scrolled more than 100px
       setShowBorder(currentY > 100);
 
+      // Check if header is over white section (mobile only)
+      // White section typically starts around 2000-2500px from top, but we'll detect it dynamically
+      if (isMobile) {
+        const whiteSectionElement = document.querySelector('.bg-white');
+        if (whiteSectionElement) {
+          const whiteSectionTop = whiteSectionElement.getBoundingClientRect().top + window.scrollY;
+          const headerBottom = currentY + (headerRef.current?.offsetHeight || (isMobile ? 55.2 : 44));
+          setIsOverWhiteSection(headerBottom >= whiteSectionTop - 100); // 100px threshold
+        }
+      }
+
       lastScrollYRef.current = currentY;
     };
 
@@ -71,7 +92,7 @@ export function Header() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isMobile]);
 
   const handleNavClick = () => setIsMenuOpen(false);
   const toggleMenu = () => setIsMenuOpen((prev) => !prev);
@@ -106,9 +127,12 @@ export function Header() {
       if (logoRef.current && headerRef.current) {
         const logoRect = logoRef.current.getBoundingClientRect();
         const headerRect = headerRef.current.getBoundingClientRect();
-        const logoImg = logoRef.current.querySelector('img');
-        const logoWidth = logoImg ? logoImg.offsetWidth : 52.5;
-        const logoHeight = logoImg ? logoImg.offsetHeight : 19.152;
+        // Find the visible logo image (mobile: first img, desktop: second img)
+        const isMobile = window.innerWidth < 768;
+        const logoImgs = logoRef.current.querySelectorAll('img');
+        const logoImg = isMobile ? logoImgs[0] : (logoImgs[1] || logoImgs[0]);
+        const logoWidth = logoImg && logoImg.offsetWidth > 0 ? logoImg.offsetWidth : 52.5;
+        const logoHeight = logoImg && logoImg.offsetHeight > 0 ? logoImg.offsetHeight : 19.152;
         
         // Calculate position relative to header
         const relativeX = logoRect.left - headerRect.left;
@@ -137,10 +161,20 @@ export function Header() {
     <>
       <header
         ref={headerRef}
-        className={`fixed inset-x-0 top-0 z-50 backdrop-blur-2xl backdrop-saturate-[180%] transition-transform duration-300 ${
+        className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-2xl backdrop-saturate-[180%] transition-transform duration-300 w-full ${
           isHeaderHidden ? "-translate-y-full" : "translate-y-0"
-        } ${showBorder ? "border-b border-white/10" : ""}`}
-        style={showBorder ? { borderBottomWidth: "0.5px" } : {}}
+        } ${showBorder ? "md:border-b" : ""}`}
+        style={{
+          backgroundColor: isMobile 
+            ? "rgba(0, 0, 0, 0.2)" 
+            : "rgba(0, 0, 0, 0.4)",
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          borderBottomWidth: showBorder && !isMobile ? "0.5px" : "0",
+          borderBottomStyle: showBorder && !isMobile ? "solid" : "none",
+          borderBottomColor: showBorder && !isMobile ? "rgba(255, 255, 255, 0.1)" : "transparent",
+          width: "100vw",
+        }}
         onMouseLeave={handleMenuLeave}
       >
         {/* SVG mask definition */}
@@ -164,9 +198,9 @@ export function Header() {
             </mask>
           </defs>
         </svg>
-        {/* Shimmer effect positioned at logo location - between logo and toolbar */}
+        {/* Shimmer effect positioned at logo location - between logo and toolbar - hidden on mobile */}
         <div
-          className="absolute overflow-hidden"
+          className="hidden md:block absolute overflow-hidden"
           style={{
             left: `${logoPosition.x}px`,
             top: `${logoPosition.y}px`,
@@ -193,9 +227,9 @@ export function Header() {
             }}
           />
         </div>
-        {/* Toolbar background with mask cutout */}
+        {/* Toolbar background with mask cutout - only on desktop */}
         <div
-          className="absolute inset-0"
+          className="hidden md:block absolute inset-0"
           style={{
             backgroundColor: "rgba(0, 0, 0, 1)",
             mask: "url(#toolbarCutoutMask)",
@@ -206,7 +240,7 @@ export function Header() {
             zIndex: 0,
           }}
         />
-        <div className="mx-auto flex h-11 max-w-[980px] items-center justify-between px-6 relative z-10">
+        <div className="mx-auto flex h-[55.2px] md:h-11 max-w-[980px] items-center justify-between px-4 md:px-6 relative z-10 w-full">
           <div ref={logoRef}>
             <Link
               href="/"
@@ -214,24 +248,23 @@ export function Header() {
               aria-label="Stoix home"
               onClick={handleNavClick}
             >
+            {/* Logo - visible on mobile, hidden on desktop (desktop uses mask cutout) - 25% bigger on mobile */}
+            <img
+              src="/stoix full white smaller.svg"
+              alt="Stoix"
+              className="h-[23.94px] w-auto relative z-10 block md:hidden"
+              style={{ 
+                height: "23.94px",
+                filter: isMobile && isOverWhiteSection ? "invert(1)" : "none",
+                transition: "filter 0.3s ease"
+              }}
+            />
             {/* Desktop logo - hidden so green background shows through cutout */}
-            <span className="hidden md:block relative inline-block h-[19.152px]">
-              <img
-                src="/stoix full white smaller.svg"
-                alt="Stoix"
-                className="h-[19.152px] w-auto relative z-10"
-                style={{ display: "block", opacity: 0 }}
-              />
-            </span>
-            {/* Mobile logo - hidden so green background shows through cutout */}
-            <span className="block md:hidden relative inline-block h-[22.8px]">
-              <img
-                src="/stoix helmet white.png"
-                alt="Stoix helmet"
-                className="h-[22.8px] w-auto relative z-10"
-                style={{ display: "block", opacity: 0 }}
-              />
-            </span>
+            <img
+              src="/stoix full white smaller.svg"
+              alt="Stoix"
+              className="h-[19.152px] w-auto relative z-10 hidden md:block opacity-0"
+            />
           </Link>
           </div>
         <nav className="hidden items-center gap-8 text-xs font-normal text-white/80 md:flex flex-1 justify-center">
@@ -251,35 +284,116 @@ export function Header() {
             </div>
           ))}
         </nav>
-        <div className="flex items-center gap-6 flex-shrink-0">
+        <div className="flex items-center gap-3 md:gap-6 flex-shrink-0">
           {isConnected ? (
-            <div className="hidden items-center gap-3 md:flex flex-shrink-0">
-              <span className="text-xs text-white/60 whitespace-nowrap">
-                {address?.slice(0, 6)}...{address?.slice(-4)}
-              </span>
-              <button
-                onClick={() => disconnect()}
-                className="rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white whitespace-nowrap"
-              >
-                Disconnect
-              </button>
-            </div>
+            <>
+              <div className="hidden items-center gap-3 md:flex flex-shrink-0">
+                <span className="text-xs text-white/60 whitespace-nowrap">
+                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                </span>
+                <button
+                  onClick={() => disconnect()}
+                  className="rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white whitespace-nowrap"
+                >
+                  Disconnect
+                </button>
+              </div>
+              <div className="flex items-center gap-2 md:hidden">
+                <span 
+                  className="text-xs whitespace-nowrap"
+                  style={{
+                    color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.6)" : "rgba(255, 255, 255, 0.6)",
+                    transition: "color 0.3s ease"
+                  }}
+                >
+                  {address?.slice(0, 4)}...{address?.slice(-3)}
+                </span>
+                <button
+                  onClick={() => disconnect()}
+                  className="rounded-full px-2 py-1 text-xs font-normal transition-all whitespace-nowrap"
+                  style={{
+                    border: isMobile && isOverWhiteSection ? "1px solid rgba(0, 0, 0, 0.2)" : "1px solid rgba(255, 255, 255, 0.2)",
+                    color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
+                    transition: "all 0.3s ease"
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isMobile || !isOverWhiteSection) {
+                      e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.3)";
+                      e.currentTarget.style.color = "#ffffff";
+                    } else {
+                      e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
+                      e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.3)";
+                      e.currentTarget.style.color = "#000000";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "";
+                    e.currentTarget.style.borderColor = "";
+                    e.currentTarget.style.color = "";
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
+            </>
           ) : (
-            <button
-              onClick={() => {
-                try {
-                  if (hasConnector && connectors[0]) {
-                    connect({ connector: connectors[0] });
+            <>
+              <button
+                onClick={() => {
+                  try {
+                    if (hasConnector && connectors[0]) {
+                      connect({ connector: connectors[0] });
+                    }
+                  } catch (error) {
+                    console.error("Failed to connect wallet:", error);
                   }
-                } catch (error) {
-                  console.error("Failed to connect wallet:", error);
-                }
-              }}
-              disabled={isConnectPending || !hasConnector}
-              className="hidden rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed md:flex items-center justify-center whitespace-nowrap"
-            >
-              {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
-            </button>
+                }}
+                disabled={isConnectPending || !hasConnector}
+                className="hidden rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed md:flex items-center justify-center whitespace-nowrap"
+              >
+                {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
+              </button>
+              <button
+                onClick={() => {
+                  try {
+                    if (hasConnector && connectors[0]) {
+                      connect({ connector: connectors[0] });
+                    }
+                  } catch (error) {
+                    console.error("Failed to connect wallet:", error);
+                  }
+                }}
+                disabled={isConnectPending || !hasConnector}
+                className="md:hidden rounded-full px-3 py-2 text-xs font-normal transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center whitespace-nowrap touch-manipulation"
+                style={{ 
+                  minHeight: "36px",
+                  paddingTop: "8px",
+                  paddingBottom: "8px",
+                  border: isMobile && isOverWhiteSection ? "1px solid rgba(0, 0, 0, 0.2)" : "1px solid rgba(255, 255, 255, 0.2)",
+                  color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  if (!isMobile || !isOverWhiteSection) {
+                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.3)";
+                    e.currentTarget.style.color = "#ffffff";
+                  } else {
+                    e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
+                    e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.3)";
+                    e.currentTarget.style.color = "#000000";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "";
+                  e.currentTarget.style.borderColor = "";
+                  e.currentTarget.style.color = "";
+                }}
+              >
+                {isConnectPending ? "Connecting..." : connectError ? "No Wallet" : "Connect"}
+              </button>
+            </>
           )}
           <Link
             href={isSwapPage ? "/" : "/swap"}
@@ -292,27 +406,44 @@ export function Header() {
             aria-label="Toggle navigation"
             aria-expanded={isMenuOpen}
             onClick={toggleMenu}
-            className="group flex h-11 w-11 items-center justify-center text-white/80 transition-colors hover:text-white md:hidden"
+            className="group flex h-12 w-12 items-center justify-center transition-colors md:hidden touch-manipulation relative"
+            style={{ 
+              minWidth: "48px", 
+              minHeight: "48px",
+              color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
+              transition: "color 0.3s ease"
+            }}
+            onMouseEnter={(e) => {
+              if (!isMobile || !isOverWhiteSection) {
+                e.currentTarget.style.color = "#ffffff";
+              } else {
+                e.currentTarget.style.color = "#000000";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "";
+            }}
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              viewBox="0 0 16 16"
-            >
-              {isMenuOpen ? (
-                <>
-                  <line x1="3" y1="3" x2="13" y2="13" />
-                  <line x1="13" y1="3" x2="3" y2="13" />
-                </>
-              ) : (
-                <>
-                  <line x1="2" y1="6" x2="14" y2="6" className="transition-transform duration-200" />
-                  <line x1="3" y1="10" x2="14" y2="10" className="transition-transform duration-200 group-hover:translate-x-[-1px]" />
-                </>
-              )}
-            </svg>
+            <div className="relative w-6 h-4 flex flex-col justify-center items-center">
+              <span
+                className="block h-0.5 w-full bg-current transition-all duration-300 ease-in-out absolute"
+                style={{
+                  transform: isMenuOpen 
+                    ? "rotate(45deg) translateY(0)" 
+                    : "rotate(0deg) translateY(-4px)",
+                  transformOrigin: "center",
+                }}
+              />
+              <span
+                className="block h-0.5 w-full bg-current transition-all duration-300 ease-in-out absolute"
+                style={{
+                  transform: isMenuOpen 
+                    ? "rotate(-45deg) translateY(0)" 
+                    : "rotate(0deg) translateY(4px)",
+                  transformOrigin: "center",
+                }}
+              />
+            </div>
           </button>
         </div>
       </div>
@@ -351,14 +482,15 @@ export function Header() {
 
       {/* Mobile Menu */}
       {isMenuOpen ? (
-        <div className="border-t border-white/10 bg-black/95 px-6 py-4 md:hidden max-h-[calc(100vh-44px)] overflow-y-auto overscroll-contain">
-          <nav className="flex flex-col gap-6 text-sm text-white">
+        <div className="border-t border-white/10 bg-black/95 px-4 py-4 md:hidden max-h-[calc(100vh-44px)] overflow-y-auto overscroll-contain">
+          <nav className="flex flex-col gap-4 text-base text-white">
             {currentNavLinks.map((item) => (
-              <div key={item.label} className="space-y-4">
+              <div key={item.label} className="space-y-3">
                 <Link
                   href={item.href}
-                  className="inline-flex items-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                  className="inline-flex items-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
                   onClick={handleNavClick}
+                  style={{ minHeight: "48px" }}
                 >
                   {item.label}
                 </Link>
@@ -374,8 +506,9 @@ export function Header() {
                             <li key={subItem.title}>
                               <Link
                                 href={subItem.href}
-                                className="inline-flex items-center rounded-full px-3 py-1 text-xs font-normal text-white/75 transition-all hover:bg-white/5 hover:text-white hover:ring-1 hover:ring-inset hover:ring-white/25"
+                                className="inline-flex items-center rounded-full px-4 py-2 text-sm font-normal text-white/75 transition-all hover:bg-white/5 hover:text-white hover:ring-1 hover:ring-inset hover:ring-white/25 touch-manipulation min-h-[44px]"
                                 onClick={handleNavClick}
+                                style={{ minHeight: "44px" }}
                               >
                                 {subItem.title}
                               </Link>
@@ -399,7 +532,8 @@ export function Header() {
                       disconnect();
                       handleNavClick();
                     }}
-                    className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                    className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                    style={{ minHeight: "48px" }}
                   >
                     Disconnect
                   </button>
@@ -417,7 +551,8 @@ export function Header() {
                     handleNavClick();
                   }}
                   disabled={isConnectPending || !hasConnector}
-                  className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
+                  style={{ minHeight: "48px" }}
                 >
                   {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
                 </button>
@@ -425,7 +560,8 @@ export function Header() {
               <Link
                 href={isSwapPage ? "/" : "/swap"}
                 onClick={handleNavClick}
-                className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                style={{ minHeight: "48px" }}
               >
                 {isSwapPage ? "About Protocol" : "Launch App"}
               </Link>

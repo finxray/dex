@@ -29,7 +29,6 @@ import { poolManagerAbi } from "../../lib/abi/poolManager";
 import { quoterAbi } from "../../lib/abi/quoter";
 import { erc20Abi } from "../../lib/abi/erc20";
 import LightweightChart from "./components/LightweightChart";
-import { GlowingCardWrapper } from "./components/GlowingCardWrapper";
 import { Header } from "../components/Header/Header";
 
 
@@ -544,6 +543,18 @@ export default function SwapPage() {
   const [allowanceError, setAllowanceError] = useState<string | null>(null);
   const [isFetchingAllowance, setIsFetchingAllowance] = useState(false);
   const [fiatCurrency, setFiatCurrency] = useState<"USD" | "EUR" | "GBP">("USD");
+  const [orderType, setOrderType] = useState<"Swap" | "Limit" | "Buy" | "Sell">("Swap");
+  const swapButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [orderButtonWidth, setOrderButtonWidth] = useState<number | null>(null);
+  
+  // Measure Swap button width and apply to other order type buttons
+  useEffect(() => {
+    if (swapButtonRef.current) {
+      const width = swapButtonRef.current.offsetWidth;
+      setOrderButtonWidth(width);
+    }
+  }, [orderType]);
+  
   const [isLoadingChartData, setIsLoadingChartData] = useState(false);
   const [latestPriceChange, setLatestPriceChange] = useState<"up" | "down" | "same" | null>(null);
   const [showPulse, setShowPulse] = useState(false);
@@ -1586,6 +1597,7 @@ export default function SwapPage() {
       }
 
       const result = await effectiveWalletClient.writeContract({
+        account: address!,
         address: env.poolManagerAddress,
         abi: poolManagerAbi,
         functionName: "swap",
@@ -1599,6 +1611,7 @@ export default function SwapPage() {
           minAmountOut,
         ],
         value: 0n,
+        chain: null,
       });
 
       const txDuration = Date.now() - txStartTime;
@@ -1726,10 +1739,12 @@ export default function SwapPage() {
       const approvalStartTime = Date.now();
       
       const result = await effectiveWalletClient.writeContract({
+        account: address!,
         address: inputToken,
         abi: erc20Abi,
         functionName: "approve",
         args: [env.poolManagerAddress, maxUint256],
+        chain: null,
       });
       
       const approvalDuration = Date.now() - approvalStartTime;
@@ -1986,9 +2001,11 @@ export default function SwapPage() {
         const coins: Record<string, string> = {
           ETH: "ethereum",
           WETH: "ethereum",
+          SWETH: "ethereum", // Staked WETH maps to Ethereum
           BTC: "bitcoin",
           WBTC: "wrapped-bitcoin",
           USDC: "usd-coin",
+          SUSDC: "usd-coin", // Staked USDC maps to USDC
           DAI: "dai",
           USDT: "tether",
           LINK: "chainlink",
@@ -2017,19 +2034,26 @@ export default function SwapPage() {
         const days = 7;
         const vs_currency = "usd";
         
-        const urlA = `https://api.coingecko.com/api/v3/coins/${coinA}/market_chart?vs_currency=${vs_currency}&days=${days}`;
-        const urlB = `https://api.coingecko.com/api/v3/coins/${coinB}/market_chart?vs_currency=${vs_currency}&days=${days}`;
+        // Use Next.js API route to avoid CORS issues
+        const urlA = `/api/coingecko/market-chart?id=${coinA}&vs_currency=${vs_currency}&days=${days}`;
+        const urlB = `/api/coingecko/market-chart?id=${coinB}&vs_currency=${vs_currency}&days=${days}`;
         
-        console.log("\n🌐 API Endpoints:");
+        console.log("\n🌐 API Endpoints (via Next.js proxy):");
         console.log("  A:", urlA);
         console.log("  B:", urlB);
         
-        console.log("\n⏳ Fetching from CoinGecko...");
+        console.log("\n⏳ Fetching from CoinGecko via API proxy...");
         const fetchStartTime = Date.now();
         
         const [responseA, responseB] = await Promise.all([
-          fetch(urlA),
-          fetch(urlB)
+          fetch(urlA).catch(err => {
+            console.error("❌ Fetch error for coinA:", err);
+            throw new Error(`Failed to fetch ${coinA}: ${err.message}`);
+          }),
+          fetch(urlB).catch(err => {
+            console.error("❌ Fetch error for coinB:", err);
+            throw new Error(`Failed to fetch ${coinB}: ${err.message}`);
+          })
         ]);
         
         const fetchDuration = Date.now() - fetchStartTime;
@@ -2038,8 +2062,20 @@ export default function SwapPage() {
         console.log("  A:", responseA.status, responseA.statusText);
         console.log("  B:", responseB.status, responseB.statusText);
         
-        const dataA = await responseA.json();
-        const dataB = await responseB.json();
+        if (!responseA.ok || !responseB.ok) {
+          const errorTextA = await responseA.text().catch(() => "Unable to read error");
+          const errorTextB = await responseB.text().catch(() => "Unable to read error");
+          throw new Error(`API error: ${responseA.status}/${responseB.status} - ${errorTextA.substring(0, 100)} / ${errorTextB.substring(0, 100)}`);
+        }
+        
+        const dataA = await responseA.json().catch(err => {
+          console.error("❌ JSON parse error for coinA:", err);
+          throw new Error(`Failed to parse response for ${coinA}: ${err.message}`);
+        });
+        const dataB = await responseB.json().catch(err => {
+          console.error("❌ JSON parse error for coinB:", err);
+          throw new Error(`Failed to parse response for ${coinB}: ${err.message}`);
+        });
         
         console.log("\n📦 Raw API Response:");
         console.log("Data A keys:", Object.keys(dataA));
@@ -2107,10 +2143,14 @@ export default function SwapPage() {
           generateSyntheticData();
         }
       } catch (error) {
-        console.error("❌ Failed to fetch real price data:");
-        console.error(error);
+        console.error("❌ Failed to fetch real price data:", error);
         console.log("⚠️  Falling back to synthetic data");
-        generateSyntheticData();
+        try {
+          generateSyntheticData();
+        } catch (fallbackError) {
+          console.error("❌ Failed to generate synthetic data:", fallbackError);
+          setIsLoadingChartData(false);
+        }
       }
     };
     
@@ -2157,8 +2197,13 @@ export default function SwapPage() {
     console.log("  chartData.length:", chartData.length);
     console.log("  Will start updates:", isChartOpen && chartData.length > 0);
     
-    if (!isChartOpen || chartData.length === 0) {
-      console.log("❌ Live updates NOT starting - chart closed or no data");
+    if (!isChartOpen) {
+      console.log("❌ Live updates NOT starting - chart closed");
+      return;
+    }
+    
+    if (chartData.length === 0) {
+      console.log("⏳ Live updates waiting for initial chart data to load...");
       return;
     }
 
@@ -2169,9 +2214,11 @@ export default function SwapPage() {
     const coins: Record<string, string> = {
       ETH: "ethereum",
       WETH: "ethereum",
+      SWETH: "ethereum", // Staked WETH maps to Ethereum
       BTC: "bitcoin",
       WBTC: "wrapped-bitcoin",
       USDC: "usd-coin",
+      SUSDC: "usd-coin", // Staked USDC maps to USDC
       DAI: "dai",
       USDT: "tether",
       LINK: "chainlink",
@@ -2187,6 +2234,8 @@ export default function SwapPage() {
     
     if (!coinA || !coinB) {
       console.log("⚠️  Pair not supported for live updates, skipping");
+      console.log("  Symbol A:", symbolA, "→", coinA || "NOT FOUND");
+      console.log("  Symbol B:", symbolB, "→", coinB || "NOT FOUND");
       return;
     }
 
@@ -2204,35 +2253,46 @@ export default function SwapPage() {
         return;
       }
       
+      if (!coinA || !coinB) {
+        console.log("❌ Coin mapping not available for live updates");
+        return;
+      }
+      
       try {
         const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
         updateCounter++;
         
-        // Fetch current prices from CoinGecko
-        // Using simple price endpoint (faster than market_chart for current price)
-        const urlA = `https://api.coingecko.com/api/v3/simple/price?ids=${coinA}&vs_currencies=usd`;
-        const urlB = `https://api.coingecko.com/api/v3/simple/price?ids=${coinB}&vs_currencies=usd`;
+        // Fetch current prices from CoinGecko via Next.js API route (avoids CORS and rate limiting)
+        // Combine both coins into a single API call for efficiency
+        const combinedIds = `${coinA},${coinB}`;
+        const url = `/api/coingecko/price?ids=${combinedIds}`;
         
-        console.log("🌐 Fetching latest prices from CoinGecko...");
+        console.log("🌐 Fetching latest prices from CoinGecko via API proxy...");
+        console.log("  Combined URL:", url);
         const fetchStartTime = Date.now();
         
-        const [responseA, responseB] = await Promise.all([
-          fetch(urlA),
-          fetch(urlB)
-        ]);
+        let response: Response;
+        
+        try {
+          response = await fetch(url);
+        } catch (err: any) {
+          console.error("❌ Fetch error:", err);
+          throw new Error(`Failed to fetch prices: ${err?.message || "Network error"}`);
+        }
         
         const fetchDuration = Date.now() - fetchStartTime;
         console.log(`✅ Fetch completed in ${fetchDuration}ms`);
+        console.log("📡 Response Status:", response.status, response.statusText);
         
-        if (!responseA.ok || !responseB.ok) {
-          throw new Error(`API error: ${responseA.status} / ${responseB.status}`);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "Unable to read error");
+          throw new Error(`API error: ${response.status} - ${errorText.substring(0, 100)}`);
         }
         
-        const dataA = await responseA.json();
-        const dataB = await responseB.json();
+        const data = await response.json();
         
-        const priceA = dataA[coinA]?.usd;
-        const priceB = dataB[coinB]?.usd;
+        const priceA = data[coinA]?.usd;
+        const priceB = data[coinB]?.usd;
         
         if (!priceA || !priceB || priceB === 0) {
           throw new Error("Invalid price data received");
@@ -2325,21 +2385,21 @@ export default function SwapPage() {
     console.log("⏰ Fetching first real-time update IMMEDIATELY");
     fetchLatestPrice();
 
-    // Then fetch every 30 seconds (to respect CoinGecko rate limits)
-    console.log("⏰ Setting up interval to fetch real prices every 30 seconds");
+    // Then fetch every 60 seconds (reduced frequency due to server-side caching)
+    // The API route has a 10-second cache, so we can poll less frequently
+    console.log("⏰ Setting up interval to fetch real prices every 60 seconds");
     let callCount = 0;
     const interval = setInterval(() => {
       callCount++;
       console.log(`\n⏰⏰⏰ INTERVAL FIRED - Call #${callCount} at ${new Date().toLocaleTimeString()}`);
       fetchLatestPrice();
-    }, 30000); // 30 seconds
+    }, 60000); // 60 seconds (reduced frequency due to server-side caching)
 
     return () => {
       console.log("🛑 Cleaning up interval - effect is re-running");
       clearInterval(interval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isChartOpen, tokenA.symbol, tokenB.symbol]);
+  }, [isChartOpen, chartData.length, tokenA.symbol, tokenB.symbol]);
 
   const chartPairLabel = useMemo(() => `${tokenA.symbol} / ${tokenB.symbol}`, [tokenA.symbol, tokenB.symbol]);
 
@@ -2474,6 +2534,9 @@ export default function SwapPage() {
     const [shouldRender, setShouldRender] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const isScrollingRef = useRef(false);
+    const scrollPositionRef = useRef<{ top: number; timestamp: number } | null>(null);
+    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizingSelector, setIsResizingSelector] = useState(false);
   const [resizeEdgeSelector, setResizeEdgeSelector] = useState<string | null>(null);
@@ -2508,10 +2571,11 @@ export default function SwapPage() {
       setShouldRender(true);
       setPhase("closed");
       setSelectorOffset({ x: 0, y: 0 });
-      // Match full swap card height
-      const matchHeight = swapCardRect?.height || 600;
-      setSelectorSize({ width: 360, height: matchHeight });
-      console.log("🪙 Token selector height set to match swap card:", matchHeight);
+      // Set height to 70vh for both cards
+      const viewportHeight = window.innerHeight;
+      const height70vh = viewportHeight * 0.7;
+      setSelectorSize({ width: 360, height: height70vh });
+      console.log("🪙 Token selector height set to 70vh:", height70vh);
       requestAnimationFrame(() => {
         setPhase("opening");
         setIsOpen(true);
@@ -2625,17 +2689,55 @@ export default function SwapPage() {
     }, [isDragging, isResizingSelector, resizeEdgeSelector]);
 
     const closeDropdown = () => {
+      // Don't close if we're currently scrolling
+      if (isScrollingRef.current) {
+        return;
+      }
+      
+      // Clear any pending scroll timeouts
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+      
       setPhase("closing");
       setIsOpen(false);
       setTimeout(() => {
         setShouldRender(false);
         setPhase("closed");
         setSearchTerm("");
+        // Reset scroll tracking
+        isScrollingRef.current = false;
+        scrollPositionRef.current = null;
       }, animateDuration);
     };
 
+    // Prevent body scroll when card is open
+    useEffect(() => {
+      if (isOpen && isDesktop) {
+        // Save current scroll position
+        const scrollY = window.scrollY;
+        // Prevent scrolling
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.width = '100%';
+        document.body.style.overflow = 'hidden';
+        
+        return () => {
+          // Restore scrolling
+          document.body.style.position = '';
+          document.body.style.top = '';
+          document.body.style.width = '';
+          document.body.style.overflow = '';
+          // Restore scroll position
+          window.scrollTo(0, scrollY);
+        };
+      }
+    }, [isOpen, isDesktop]);
+
+
     const renderList = (tokenSet: Token[]) => (
-      <div className="relative h-full overflow-hidden">
+      <div className="relative w-full h-full" style={{ minHeight: 0 }}>
         <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2">
           <span
             className={`h-0.5 rounded-full bg-white/40 transition-all duration-[${animateDuration}ms] ease-out ${
@@ -2660,13 +2762,27 @@ export default function SwapPage() {
           />
         </div>
         <div
-          className={`relative origin-center transition-all duration-[${animateDuration}ms] ease-out ${
+          className={`relative origin-center transition-all duration-[${animateDuration}ms] ease-out w-full h-full ${
             phase === "opening" || phase === "open"
               ? "scale-y-100 opacity-100"
               : "scale-y-0 opacity-0"
           }`}
+          style={{ minHeight: 0 }}
         >
-          <ul className="max-h-full overflow-y-auto">
+          <ul 
+            className="w-full h-full overflow-y-auto"
+            style={{ 
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              maxHeight: "100%"
+            }}
+            onWheel={(e) => {
+              e.stopPropagation();
+            }}
+            onScroll={(e) => {
+              e.stopPropagation();
+            }}
+          >
             {tokenSet.length ? (
               tokenSet.map((t) => (
                 <li key={t.address}>
@@ -2678,11 +2794,12 @@ export default function SwapPage() {
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onWheel={(e) => e.stopPropagation()}
-                    className={`flex w-full items-center gap-3 rounded-full border border-transparent px-3 py-2 text-left transition-all ${
+                    className={`flex w-full items-center gap-3 rounded-full border border-transparent px-3 md:px-3 py-2 md:py-2 text-left transition-all touch-manipulation min-h-[48px] md:min-h-0 ${
                       selected.address === t.address
                         ? "bg-white/10 hover:border-white/30"
                         : "hover:border-white/30 hover:bg-white/5"
                     }`}
+                    style={{ minHeight: "48px" }}
                   >
                     {t.icon ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -2717,8 +2834,18 @@ export default function SwapPage() {
       <div className="relative">
         <button
           type="button"
-          onClick={() => (isOpen ? closeDropdown() : openDropdown())}
-          className="flex items-center gap-2 rounded-full bg-white/10 pl-4 pr-3 py-2 text-sm text-white hover:bg-white/15 w-fit"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Don't toggle if we're currently scrolling
+            if (isScrollingRef.current) {
+              return;
+            }
+            if (!isOpen) {
+              openDropdown();
+            }
+          }}
+          className="flex items-center gap-2 rounded-full bg-white/10 pl-3 md:pl-4 pr-2 md:pr-3 py-2 md:py-2 text-sm md:text-sm text-white hover:bg-white/15 w-fit touch-manipulation min-h-[48px] md:min-h-0"
+          style={{ minHeight: "48px" }}
         >
           {selected.icon ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -2751,109 +2878,299 @@ export default function SwapPage() {
                     ? Math.max(16, cardRect.left - 65 - selectorSize.width)
                     : Math.min(window.innerWidth - 16 - selectorSize.width, cardRect.right + 65),
                   transform: `translate(0, 0) translate(${selectorOffset.x}px, ${selectorOffset.y}px)`,
+                  height: "70vh",
                 }}
               >
-                {/* Wrapper for glow effect */}
-                <GlowingCardWrapper phase={phase}>
-                  <div
-                    ref={dropdownRef}
-                    className={`pointer-events-auto relative overflow-hidden rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] transition-all flex flex-col ${
-                      isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-                    }`}
-                    style={{
-                      width: `${selectorSize.width}px`,
-                      height: `${selectorSize.height}px`,
-                      maxHeight: `${selectorSize.height}px`,
-                      backgroundColor: "rgb(12, 14, 22)",
-                      backdropFilter: "blur(40px) saturate(180%)",
-                      WebkitBackdropFilter: "blur(40px) saturate(180%)",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
-                      transition: isResizingSelector ? "none" : "opacity 0.3s ease",
-                      animation: phase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : phase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
-                      zIndex: 0,
-                      position: "relative",
-                    }}
-                  >
-                  {/* Header with drag and buttons - fully transparent for glow */}
-                  <div
-                    className={`flex h-12 flex-shrink-0 items-center justify-between px-6 relative ${
-                      isDragging ? "cursor-grabbing" : "cursor-grab"
-                    }`}
-                    onPointerDown={handleDragStart}
-                  >
-                    {/* Transparent overlay to let glow through */}
-                    <div 
-                      className="absolute inset-0" 
-                      style={{ 
-                        backgroundColor: "rgba(12, 14, 22, 0)",
-                        backdropFilter: "none"
-                      }}
-                    />
-                    {/* Border that respects padding */}
-                    <div className="absolute bottom-0 left-6 right-6 h-px bg-white/10" />
-                    <span 
-                      className="text-sm font-semibold tracking-wide relative z-10"
-                      style={{
-                        background: "linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)",
-                        backgroundSize: "200% 100%",
-                        animation: "glowShift 8s linear infinite",
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        filter: "drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(99, 102, 241, 0.4))",
-                      }}
-                    >
-                      Select a token
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeDropdown();
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57] relative z-10"
-                      style={{ 
-                        lineHeight: "0",
-                        paddingBottom: "2px"
-                      }}
-                      aria-label="Close token selector"
-                    >
-                      <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                  {/* Content area */}
-                  <div className="flex flex-col gap-4 p-6" style={{ height: "calc(100% - 48px)" }}>
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(event) => setSearchTerm(event.target.value)}
-                      placeholder="Search token"
-                      autoFocus
-                      className="w-full rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-                    />
-                    <div className="flex-1 overflow-hidden">
-                      {renderList(tokensToDisplay)}
+                {/* Token selector card - no glow effect */}
+                <div
+                  ref={dropdownRef}
+                  className={`pointer-events-auto relative overflow-hidden rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] transition-all flex flex-col ${
+                    isOpen ? "opacity-100" : "pointer-events-none opacity-0"
+                  }`}
+                  style={{
+                    width: `${selectorSize.width}px`,
+                    height: "70vh",
+                    maxHeight: "70vh",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(40px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(40px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
+                    transition: isResizingSelector ? "none" : "opacity 0.3s ease",
+                    animation: phase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : phase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
+                    zIndex: 0,
+                    position: "relative",
+                  }}
+                  onWheel={(e) => {
+                    // Check if scroll is happening inside the scrollable area
+                    const scrollableArea = e.currentTarget.querySelector('.overflow-y-auto') as HTMLElement;
+                    if (scrollableArea && scrollableArea.contains(e.target as Node)) {
+                      // Scroll is happening inside the scrollable area - mark as scrolling
+                      isScrollingRef.current = true;
+                      e.stopPropagation();
+                      
+                      // Clear any existing timeout
+                      if (scrollTimeoutRef.current) {
+                        clearTimeout(scrollTimeoutRef.current);
+                      }
+                      
+                      // Reset scrolling flag after scroll ends
+                      scrollTimeoutRef.current = setTimeout(() => {
+                        isScrollingRef.current = false;
+                      }, 150);
+                    }
+                  }}
+                  onTouchMove={(e) => {
+                    // Mark scrolling for touch moves
+                    isScrollingRef.current = true;
+                    e.stopPropagation();
+                    
+                    // Clear any existing timeout
+                    if (scrollTimeoutRef.current) {
+                      clearTimeout(scrollTimeoutRef.current);
+                    }
+                    
+                    // Reset scrolling flag after touch ends
+                    scrollTimeoutRef.current = setTimeout(() => {
+                      isScrollingRef.current = false;
+                    }, 150);
+                  }}
+                  onScroll={(e) => {
+                    // Mark scrolling
+                    isScrollingRef.current = true;
+                    e.stopPropagation();
+                    
+                    // Clear any existing timeout
+                    if (scrollTimeoutRef.current) {
+                      clearTimeout(scrollTimeoutRef.current);
+                    }
+                    
+                    // Reset scrolling flag after scroll ends
+                    scrollTimeoutRef.current = setTimeout(() => {
+                      isScrollingRef.current = false;
+                    }, 150);
+                  }}
+                  onTouchStart={(e) => {
+                    // Mark scrolling on touch start
+                    isScrollingRef.current = true;
+                    e.stopPropagation();
+                    
+                    // Clear any existing timeout
+                    if (scrollTimeoutRef.current) {
+                      clearTimeout(scrollTimeoutRef.current);
+                    }
+                  }}
+                  onTouchEnd={(e) => {
+                    // Reset scrolling flag after touch ends
+                    e.stopPropagation();
+                    if (scrollTimeoutRef.current) {
+                      clearTimeout(scrollTimeoutRef.current);
+                    }
+                    scrollTimeoutRef.current = setTimeout(() => {
+                      isScrollingRef.current = false;
+                    }, 150);
+                  }}
+                  onMouseDown={(e) => {
+                    // Prevent mouse down during active scrolling
+                    if (isScrollingRef.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                  onClick={(e) => {
+                    // Prevent clicks during scrolling
+                    if (isScrollingRef.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    // Prevent clicks from bubbling
+                    e.stopPropagation();
+                  }}
+                >
+                      {/* Header with drag and buttons - fully transparent for glow */}
+                      <div
+                        className={`flex h-12 flex-shrink-0 items-center justify-between px-6 relative ${
+                          isDragging ? "cursor-grabbing" : "cursor-grab"
+                        }`}
+                        onPointerDown={handleDragStart}
+                      >
+                        {/* Transparent overlay to let glow through */}
+                        <div 
+                          className="absolute inset-0" 
+                          style={{ 
+                            backgroundColor: "rgba(12, 14, 22, 0)",
+                            backdropFilter: "none"
+                          }}
+                        />
+                        {/* Border that respects padding */}
+                        <div className="absolute bottom-0 left-6 right-6 h-px bg-white/10" />
+                        <span 
+                          className="text-sm font-semibold tracking-wide relative z-10"
+                          style={{
+                            background: "linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)",
+                            backgroundSize: "200% 100%",
+                            animation: "glowShift 8s linear infinite",
+                            WebkitBackgroundClip: "text",
+                            backgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            filter: "drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(99, 102, 241, 0.4))",
+                          }}
+                        >
+                          Select a token
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeDropdown();
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57] relative z-10"
+                          style={{ 
+                            lineHeight: "0",
+                            paddingBottom: "2px"
+                          }}
+                          aria-label="Close token selector"
+                        >
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Content area */}
+                      <div className="flex flex-col gap-4 p-6" style={{ height: "calc(100% - 48px)", overflow: "hidden", display: "flex" }}>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(event) => setSearchTerm(event.target.value)}
+                          placeholder="Search token"
+                          className="w-full flex-shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+                        />
+                        <div 
+                          className="flex-1 min-h-0 overflow-y-auto"
+                          style={{ 
+                            overflowY: "auto",
+                            WebkitOverflowScrolling: "touch",
+                            maxHeight: "100%"
+                          }}
+                          onWheel={(e) => {
+                            // Mark scrolling immediately
+                            isScrollingRef.current = true;
+                            // Stop wheel events from propagating
+                            e.stopPropagation();
+                            // Clear any existing timeout
+                            if (scrollTimeoutRef.current) {
+                              clearTimeout(scrollTimeoutRef.current);
+                            }
+                            // Reset scrolling flag after scroll ends (Uniswap-style: 150ms after last scroll)
+                            scrollTimeoutRef.current = setTimeout(() => {
+                              isScrollingRef.current = false;
+                            }, 150);
+                          }}
+                          onScroll={(e) => {
+                            const target = e.currentTarget;
+                            const currentScrollTop = target.scrollTop;
+                            const now = Date.now();
+                            
+                            // Track scroll position changes (Uniswap approach)
+                            if (scrollPositionRef.current) {
+                              const scrollDelta = Math.abs(currentScrollTop - scrollPositionRef.current.top);
+                              // If scroll position changed significantly, user is actively scrolling
+                              if (scrollDelta > 1) {
+                                isScrollingRef.current = true;
+                              }
+                            }
+                            
+                            scrollPositionRef.current = {
+                              top: currentScrollTop,
+                              timestamp: now
+                            };
+                            
+                            // Stop scroll events from propagating
+                            e.stopPropagation();
+                            
+                            // Clear any existing timeout
+                            if (scrollTimeoutRef.current) {
+                              clearTimeout(scrollTimeoutRef.current);
+                            }
+                            
+                            // Reset scrolling flag after scroll ends (150ms after last scroll event)
+                            scrollTimeoutRef.current = setTimeout(() => {
+                              isScrollingRef.current = false;
+                              scrollPositionRef.current = null;
+                            }, 150);
+                          }}
+                          onTouchMove={(e) => {
+                            // Mark scrolling immediately for touch
+                            isScrollingRef.current = true;
+                            e.stopPropagation();
+                            
+                            // Clear any existing timeout
+                            if (scrollTimeoutRef.current) {
+                              clearTimeout(scrollTimeoutRef.current);
+                            }
+                            
+                            // Reset scrolling flag after touch ends
+                            scrollTimeoutRef.current = setTimeout(() => {
+                              isScrollingRef.current = false;
+                            }, 150);
+                          }}
+                          onTouchStart={(e) => {
+                            // Mark scrolling on touch start
+                            isScrollingRef.current = true;
+                            e.stopPropagation();
+                            
+                            // Clear any existing timeout
+                            if (scrollTimeoutRef.current) {
+                              clearTimeout(scrollTimeoutRef.current);
+                            }
+                          }}
+                          onTouchEnd={(e) => {
+                            // Reset scrolling flag after touch ends
+                            e.stopPropagation();
+                            if (scrollTimeoutRef.current) {
+                              clearTimeout(scrollTimeoutRef.current);
+                            }
+                            scrollTimeoutRef.current = setTimeout(() => {
+                              isScrollingRef.current = false;
+                            }, 150);
+                          }}
+                          onMouseDown={(e) => {
+                            // Prevent mouse down during active scrolling
+                            if (isScrollingRef.current) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
+                          onClick={(e) => {
+                            // Prevent clicks during scrolling
+                            if (isScrollingRef.current) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              return;
+                            }
+                            // Prevent clicks from bubbling
+                            e.stopPropagation();
+                          }}
+                        >
+                          {renderList(tokensToDisplay)}
+                        </div>
+                      </div>
+                      
+                      {/* Resize handles */}
+                      <>
+                        <div className="absolute top-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('top', e)} />
+                        <div className="absolute bottom-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('bottom', e)} />
+                        <div className="absolute top-4 bottom-4 left-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('left', e)} />
+                        <div className="absolute top-4 bottom-4 right-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('right', e)} />
+                        <div className="absolute top-0 left-0 h-4 w-4 cursor-nwse-resize z-50 rounded-tl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-left', e)} />
+                        <div className="absolute top-0 right-0 h-4 w-4 cursor-nesw-resize z-50 rounded-tr-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-right', e)} />
+                        <div className="absolute bottom-0 left-0 h-4 w-4 cursor-nesw-resize z-50 rounded-bl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-left', e)} />
+                        <div className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize z-50 rounded-br-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-right', e)} />
+                      </>
                     </div>
-                  </div>
-                  
-                  {/* Resize handles */}
-                  <>
-                    <div className="absolute top-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('top', e)} />
-                    <div className="absolute bottom-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('bottom', e)} />
-                    <div className="absolute top-4 bottom-4 left-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('left', e)} />
-                    <div className="absolute top-4 bottom-4 right-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('right', e)} />
-                    <div className="absolute top-0 left-0 h-4 w-4 cursor-nwse-resize z-50 rounded-tl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-left', e)} />
-                    <div className="absolute top-0 right-0 h-4 w-4 cursor-nesw-resize z-50 rounded-tr-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-right', e)} />
-                    <div className="absolute bottom-0 left-0 h-4 w-4 cursor-nesw-resize z-50 rounded-bl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-left', e)} />
-                    <div className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize z-50 rounded-br-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-right', e)} />
-                  </>
-                </div>
-                </GlowingCardWrapper>
-            </div>,
+              </div>,
             document.body
           )
           :
@@ -2874,7 +3191,13 @@ export default function SwapPage() {
                     </span>
                     <button
                       type="button"
-                      onClick={closeDropdown}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Only close if not scrolling
+                        if (!isScrollingRef.current) {
+                          closeDropdown();
+                        }
+                      }}
                       className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-3xl text-white/70 transition hover:bg-white/10 hover:text-white"
                       style={{ 
                         top: "-2px",
@@ -2891,7 +3214,6 @@ export default function SwapPage() {
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="Search token"
-                    autoFocus
                     className="mb-5 w-full rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
                   />
                   <div className="max-h-[60vh] overflow-hidden">
@@ -2906,10 +3228,12 @@ export default function SwapPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen text-white" style={{ width: "100vw", overflowX: "hidden", margin: 0, padding: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0, backgroundColor: "transparent" }}>
       <Header />
 
-      {/* Simple blur test rectangle */}
+      {/* Global container with no padding - sections stack on each other */}
+      <div className="relative" style={{ padding: 0, width: "100vw", margin: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0 }}>
+        {/* Simple blur test rectangle */}
       {(isChartOpen || chartPhase === "closing") && (() => {
         console.log("🎨 Rendering Chart Overlay:");
         console.log("  Chart data available:", chartData.length, "points");
@@ -2929,18 +3253,14 @@ export default function SwapPage() {
               transform,
             }}
           >
-            <GlowingCardWrapper 
-              phase={chartPhase}
-              glowGradient="linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)"
-            >
-              <div
-                className="pointer-events-auto relative rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]"
+            <div
+              className="pointer-events-auto relative rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]"
                 style={{
                   width: chartSize.width > 0 ? `${chartSize.width}px` : (isChartMaximized ? "80vw" : "92vw"),
                   maxWidth: chartSize.width > 0 ? "none" : (isChartMaximized ? "none" : "1100px"),
                   height: chartSize.height > 0 ? `${chartSize.height}px` : (isChartMaximized ? "90vh" : "77vh"),
                   maxHeight: chartSize.height > 0 ? "none" : (isChartMaximized ? "none" : "840px"),
-                  backgroundColor: "rgb(12, 14, 22)",
+                  backgroundColor: "rgba(12, 14, 22, 0.6)",
                   backdropFilter: "blur(40px) saturate(180%)",
                   WebkitBackdropFilter: "blur(40px) saturate(180%)",
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
@@ -3059,7 +3379,6 @@ export default function SwapPage() {
                   )}
                 </div>
               </div>
-            </GlowingCardWrapper>
           </div>
         );
       })()}
@@ -3252,10 +3571,10 @@ export default function SwapPage() {
         );
       })()}
 
-      {/* Main swap interface */}
-      <main className="relative z-10 flex min-h-screen flex-col items-center px-4" style={{ paddingTop: "15vh" }}>
+      {/* Main swap interface - section with its own padding */}
+      <main className="relative z-10 flex min-h-screen flex-col" style={{ paddingTop: "15vh", width: "100vw", margin: 0, paddingLeft: 0, paddingRight: 0, paddingBottom: 0 }}>
         {/* Fixed section wrapper - Isolated from dynamic content to prevent centering shifts */}
-        <div ref={fixedSectionRef} className="w-full max-w-md" style={{ position: "relative", flexShrink: 0 }}>
+        <div ref={fixedSectionRef} className="w-full max-w-md md:max-w-[524px] mx-auto px-4 md:px-4" style={{ position: "relative", flexShrink: 0 }}>
           {/* Fixed section: Title through You receive card - Position doesn't change */}
           <div 
             ref={swapTitleRef}
@@ -3281,32 +3600,38 @@ export default function SwapPage() {
               {/* Content area with swap fields */}
               <div className="flex flex-col flex-1 min-h-0">
                 {/* Swap card content */}
-                <div className="px-8">
+                <div className="px-2 md:px-4">
                 <div ref={cardRef}>
 
-            <div className="mb-4 mt-6 flex items-center justify-end gap-2 text-xs text-white/50">
-              <span>Display values in</span>
-              {(["USD", "EUR", "GBP"] as const).map((code) => (
+            <div className="mb-4 mt-6 md:mb-[11.2px] md:mt-[16.8px] flex items-center justify-between gap-4 text-xs text-white/60">
+              <span className="text-left pl-4 md:pl-4" style={{ fontSize: "0.75rem" }}>Order type</span>
+              <div className="flex items-center gap-[11.2px]">
+              {(["Swap", "Limit", "Buy", "Sell"] as const).map((type) => (
                 <button
-                  key={code}
-                  onClick={() => setFiatCurrency(code)}
-                  className={`rounded-full border px-2 py-1 transition ${
-                    fiatCurrency === code
-                      ? "border-white/40 bg-white/15 text-white"
-                      : "border-white/15 text-white/60 hover:border-white/25 hover:text-white"
+                  key={type}
+                  ref={type === "Swap" ? swapButtonRef : undefined}
+                  onClick={() => setOrderType(type)}
+                  className={`order-type-button rounded-full border border-white/20 px-3 py-2 md:px-3 md:py-1 text-xs font-normal transition-all touch-manipulation flex items-center justify-center whitespace-nowrap ${
+                    orderType === type
+                      ? "bg-white/15 text-white hover:bg-white/10 hover:border-white/30 md:border-white/40"
+                      : "text-white/80 hover:bg-white/10 hover:border-white/30 hover:text-white md:border-white/20"
                   }`}
                   type="button"
+                  style={{ 
+                    ...(orderButtonWidth && type !== "Swap" ? { width: `${orderButtonWidth}px`, minWidth: `${orderButtonWidth}px` } : {})
+                  }}
                 >
-                  {code}
+                  {type}
                 </button>
               ))}
+              </div>
             </div>
 
             <div className="relative flex flex-col" style={{ isolation: "auto" }}>
                 {/* Cards container - Fixed position, doesn't shift */}
                 <div className="flex flex-col flex-shrink-0">
                   {/* You pay card - ALWAYS on top */}
-                  <div className="rounded-2xl bg-transparent border border-white/10 p-4" style={{ minHeight: "120px", height: "120px", position: "relative", zIndex: 1 }}>
+                  <div className="rounded-2xl bg-transparent border border-white/10 p-4 md:p-4 mb-[10px]" style={{ minHeight: "120px", height: "auto", position: "relative", zIndex: 1 }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You pay</span>
                     </div>
@@ -3369,21 +3694,28 @@ export default function SwapPage() {
                   </div>
 
                   {/* Switch button - positioned between cards */}
-                  <div className="flex justify-center -my-4 relative" style={{ zIndex: 20, isolation: "auto" }}>
+                  <div className="flex justify-center relative" style={{ zIndex: 20, isolation: "auto", height: "0px" }}>
                     <button
                       onClick={() => setDirection(direction === "a-to-b" ? "b-to-a" : "a-to-b")}
-                      className="rounded-lg p-2 transition-all hover:scale-105 relative"
-                      style={{
-                        background: "rgba(255, 255, 255, 0.1)",
-                        backdropFilter: "blur(20px) saturate(180%)",
-                        WebkitBackdropFilter: "blur(20px) saturate(180%)",
-                        border: "1px solid rgba(255, 255, 255, 0.18)",
-                        boxShadow: "0 0 0 7px rgba(0, 0, 0, 0.7), 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)",
-                        position: "relative",
-                      }}
-                    >
-                      <svg
-                        className="h-5 w-5 text-white"
+                    className="rounded-xl transition-all hover:scale-105 relative touch-manipulation flex items-center justify-center"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      backdropFilter: "blur(20px) saturate(180%)",
+                      WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                      border: "1px solid rgba(255, 255, 255, 0.18)",
+                      boxShadow: "0 0 0 7px rgba(0, 0, 0, 0.7), 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)",
+                      position: "relative",
+                      width: "48px",
+                      height: "48px",
+                      minWidth: "48px",
+                      minHeight: "48px",
+                      borderRadius: "18px",
+                      padding: 0,
+                      marginTop: "-29px"
+                    }}
+                  >
+                    <svg
+                      className="h-5 w-5 md:h-5 md:w-5 text-white"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -3399,7 +3731,12 @@ export default function SwapPage() {
                   </div>
 
                   {/* You receive card - ALWAYS on bottom */}
-                  <div className="rounded-2xl bg-white/5 p-4" style={{ minHeight: "120px", height: "120px" }}>
+                  <div className="rounded-2xl bg-white/5 p-4 md:p-4" style={{ 
+                    minHeight: "120px", 
+                    height: "auto",
+                    position: "relative",
+                    zIndex: 1,
+                  }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You receive</span>
                     </div>
@@ -3468,33 +3805,34 @@ export default function SwapPage() {
                     </div>
                   </div>
                 </div>
+                </div>
+              </div>
               </div>
             </div>
           </div>
-          </div>
-          </div>
-          </div>
-          
-          {/* Dynamic section container - Positioned absolutely relative to fixed section wrapper */}
-          <div 
-            ref={dynamicSectionRef}
-            className="w-full px-8 flex flex-col space-y-4"
-            style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              right: 0,
-              marginTop: "24px",
-              zIndex: 10,
-            }}
-          >
+        </div>
+        
+        {/* Dynamic section container - Positioned absolutely relative to fixed section wrapper */}
+        <div
+          ref={dynamicSectionRef}
+          className="w-full max-w-md md:max-w-[524px] mx-auto px-2 md:px-4 flex flex-col"
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: "24px",
+            zIndex: 10,
+          }}
+        >
             {/* Exchange Rate Display - Always reserves space to prevent flickering */}
             {(amountIn || amountOutValue) && (
             <div className="rounded-xl bg-white/5 overflow-hidden" style={{ minHeight: "48px" }}>
                     <button
                       onClick={() => quote && amountIn && amountOutValue && setShowDetails(!showDetails)}
                       disabled={!quote || !amountIn || !amountOutValue}
-                      className="w-full px-4 py-3 flex items-center justify-between text-xs hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-default"
+                      className="w-full px-4 py-3 md:py-3 flex items-center justify-between text-xs md:text-xs hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-default touch-manipulation min-h-[48px] md:min-h-0"
+                      style={{ minHeight: "48px" }}
                     >
                       <div className="text-xs font-medium flex-1 text-left">
                         <span 
@@ -3666,7 +4004,8 @@ export default function SwapPage() {
                 <button
                   onClick={() => switchChain({ chainId: targetChain.id })}
                   disabled={isSwitchingChain}
-                  className="rounded-full border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-full border border-red-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
+                  style={{ minHeight: "48px" }}
                 >
                   {isSwitchingChain ? "Switching..." : `Switch to ${targetChain.name}`}
                 </button>
@@ -3678,7 +4017,8 @@ export default function SwapPage() {
               <button
                 onClick={handleApprove}
                 disabled={isApproving || isFetchingAllowance || !configReady}
-                className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
+                className="rounded-full border border-white/20 px-3 md:px-3 py-2 md:py-2 text-sm md:text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
+                style={{ minHeight: "48px" }}
               >
                 {isApproving ? "Approving..." : `Approve ${amountInSymbol}`}
               </button>
@@ -3692,7 +4032,8 @@ export default function SwapPage() {
                   <button
                     onClick={retryGetWalletClient}
                     disabled={isRetryingWalletClient}
-                    className="rounded-full border border-yellow-500/30 px-3 py-1.5 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-full border border-yellow-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
+                    style={{ minHeight: "48px" }}
                   >
                     {isRetryingWalletClient ? "Retrying..." : "Retry Wallet Client"}
                   </button>
@@ -3706,7 +4047,8 @@ export default function SwapPage() {
                       }, 100);
                     }}
                     disabled={isConnecting || isConnectPending}
-                    className="rounded-full border border-yellow-500/30 px-3 py-1.5 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-full border border-yellow-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
+                    style={{ minHeight: "48px" }}
                   >
                     Reconnect Wallet
                   </button>
@@ -3714,51 +4056,54 @@ export default function SwapPage() {
               </div>
             )}
 
-            {/* Swap/Connect Wallet button */}
-            <button
-              onClick={() => {
-                if (!isConnected) {
-                  if (connectors[0]) {
-                    connect({ connector: connectors[0] });
+            {/* Buttons container with padding matching cards */}
+            <div className="px-2 md:px-4 pb-4">
+              {/* Swap/Connect Wallet button */}
+              <button
+                onClick={() => {
+                  if (!isConnected) {
+                    if (connectors[0]) {
+                      connect({ connector: connectors[0] });
+                    }
+                  } else {
+                    handleSwap();
                   }
-                } else {
-                  handleSwap();
+                }}
+                disabled={
+                  (isConnected && txStatus === "pending") ||
+                  (isConnected && isQuoting) ||
+                  (isConnected && requiresApproval && needsApproval) ||
+                  (isConnected && !configReady) ||
+                  (isConnected && (!parsedAmountIn || parsedAmountIn === 0n)) ||
+                  isConnecting ||
+                  isConnectPending ||
+                  (!isConnected && !connectors[0])
                 }
-              }}
-              disabled={
-                (isConnected && txStatus === "pending") ||
-                (isConnected && isQuoting) ||
-                (isConnected && requiresApproval && needsApproval) ||
-                (isConnected && !configReady) ||
-                (isConnected && (!parsedAmountIn || parsedAmountIn === 0n)) ||
-                isConnecting ||
-                isConnectPending ||
-                (!isConnected && !connectors[0])
-              }
-              className="rounded-full border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full"
-            >
-              {!isConnected
-                ? isConnecting || isConnectPending
-                  ? "Connecting..."
-                  : "Connect Wallet"
-                : txStatus === "pending"
-                ? "Swapping..."
-                : !parsedAmountIn || parsedAmountIn === 0n
-                ? "Enter amount"
-                : requiresApproval && needsApproval
-                ? "Approve first"
-                : "Swap"}
-            </button>
+                className="rounded-full border border-white/20 px-4 md:px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
+                style={{ minHeight: "48px", height: "48px" }}
+              >
+                {!isConnected
+                  ? isConnecting || isConnectPending
+                    ? "Connecting..."
+                    : "Connect Wallet"
+                  : txStatus === "pending"
+                  ? "Swapping..."
+                  : !parsedAmountIn || parsedAmountIn === 0n
+                  ? "Enter amount"
+                  : requiresApproval && needsApproval
+                  ? "Approve first"
+                  : "Swap"}
+              </button>
 
-            {/* Error messages */}
-            {txStatus === "error" && (
-              <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                Swap failed. Check console for details.
-              </div>
-            )}
+              {/* Error messages */}
+              {txStatus === "error" && (
+                <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 mt-4">
+                  Swap failed. Check console for details.
+                </div>
+              )}
 
-            {/* Action buttons */}
-            <div className="flex items-center gap-3">
+              {/* Action buttons */}
+              <div className="flex items-center gap-3 w-full mt-4">
               <button
                 type="button"
                 onClick={(e) => {
@@ -3770,7 +4115,8 @@ export default function SwapPage() {
                   e.stopPropagation();
                 }}
                 disabled={isLoadingChartData}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
+                style={{ minHeight: "48px", height: "48px" }}
               >
                 <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
@@ -3788,7 +4134,8 @@ export default function SwapPage() {
                 onMouseDown={(e) => {
                   e.stopPropagation();
                 }}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white touch-manipulation min-h-[48px] md:min-h-0"
+                style={{ minHeight: "48px", height: "48px" }}
               >
                 <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
@@ -3796,6 +4143,7 @@ export default function SwapPage() {
                 </svg>
                 Advanced view
               </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3919,7 +4267,27 @@ export default function SwapPage() {
         .animate-chart-appear {
           animation: chart-appear 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+        
+        /* Mobile: Order type buttons match toolbar Connect button style */
+        @media (max-width: 767px) {
+          .order-type-button {
+            min-height: 36px !important;
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            color: rgba(255, 255, 255, 0.8) !important;
+          }
+        }
+        
+        /* Desktop: Override button padding to match toolbar buttons (px-3 py-1) */
+        @media (min-width: 768px) {
+          .order-type-button {
+            padding-top: 4px !important;
+            padding-bottom: 4px !important;
+          }
+        }
       `}</style>
+      </div>
     </div>
   );
 }

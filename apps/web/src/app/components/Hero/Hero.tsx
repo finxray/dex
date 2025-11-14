@@ -49,13 +49,15 @@ export function Hero() {
       >
         <a
           href="#architecture"
-          className="px-8 py-3 bg-[#007AFF] hover:bg-[#0066CC] rounded-full font-normal text-[17px] text-white transition-all"
+          className="px-8 py-3 md:py-3 bg-[#007AFF] hover:bg-[#0066CC] rounded-full font-normal text-[17px] text-white transition-all touch-manipulation min-h-[48px] md:min-h-0 flex items-center justify-center"
+          style={{ minHeight: "48px" }}
         >
           Explore Architecture
         </a>
         <a
           href="#code"
-          className="px-8 py-3 border border-white/30 hover:bg-white/10 hover:border-white/40 rounded-full font-normal text-[17px] text-white transition-all"
+          className="px-8 py-3 md:py-3 border border-white/30 hover:bg-white/10 hover:border-white/40 rounded-full font-normal text-[17px] text-white transition-all touch-manipulation min-h-[48px] md:min-h-0 flex items-center justify-center"
+          style={{ minHeight: "48px" }}
         >
           View Code Examples
         </a>

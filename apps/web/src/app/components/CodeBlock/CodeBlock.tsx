@@ -179,7 +179,7 @@ export function CodeBlock({ code, language = "typescript", title, typingDemo = f
 
         {/* Code content */}
         <div className="relative bg-black/20">
-          <pre className="p-6 font-mono text-[13px] leading-relaxed overflow-hidden" style={{ minHeight: '180px', maxHeight: '300px' }}>
+          <pre className="p-4 md:p-6 font-mono text-[13px] leading-relaxed overflow-hidden" style={{ minHeight: '180px', maxHeight: '300px' }}>
             <code>
               {highlightedCode}
               {typingDemo && !isTypingComplete && (
