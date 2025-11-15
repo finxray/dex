@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type PointerEvent as ReactPointerEvent, type MutableRefObject } from "react";
 import { createPortal } from "react-dom";
 import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors, useChainId, useSwitchChain } from "wagmi";
 import { sepolia } from "wagmi/chains";
@@ -532,6 +532,8 @@ export default function SwapPage() {
   const [swapTitleRect, setSwapTitleRect] = useState<DOMRect | null>(null);
   const [swapCardRect, setSwapCardRect] = useState<DOMRect | null>(null);
   const [chartData, setChartData] = useState<AreaData[]>([]);
+  const chartDataRef = useRef<AreaData[]>([]);
+  const hasInitialChartData = chartData.length > 0;
   const [quote, setQuote] = useState<QuoteState | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [isQuoting, setIsQuoting] = useState(false);
@@ -555,6 +557,10 @@ export default function SwapPage() {
     }
   }, [orderType]);
   
+  useEffect(() => {
+    chartDataRef.current = chartData;
+  }, [chartData]);
+
   const [isLoadingChartData, setIsLoadingChartData] = useState(false);
   const [latestPriceChange, setLatestPriceChange] = useState<"up" | "down" | "same" | null>(null);
   const [showPulse, setShowPulse] = useState(false);
@@ -1797,6 +1803,10 @@ export default function SwapPage() {
   };
 
   const handleOverlayPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    // Disable dragging on mobile
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return;
+    }
     event.preventDefault();
     overlayPointerIdRef.current = event.pointerId;
     overlayDragLastRef.current = { x: event.clientX, y: event.clientY };
@@ -2194,15 +2204,15 @@ export default function SwapPage() {
     console.log("║  🔴 LIVE PRICE UPDATE EFFECT TRIGGERED                ║");
     console.log("╚════════════════════════════════════════════════════════╝");
     console.log("  isChartOpen:", isChartOpen);
-    console.log("  chartData.length:", chartData.length);
-    console.log("  Will start updates:", isChartOpen && chartData.length > 0);
+    console.log("  chartData points:", chartDataRef.current.length);
+    console.log("  Will start updates:", isChartOpen && hasInitialChartData);
     
     if (!isChartOpen) {
       console.log("❌ Live updates NOT starting - chart closed");
       return;
     }
     
-    if (chartData.length === 0) {
+    if (!hasInitialChartData) {
       console.log("⏳ Live updates waiting for initial chart data to load...");
       return;
     }
@@ -2239,16 +2249,17 @@ export default function SwapPage() {
       return;
     }
 
-    console.log("✅ Starting REAL-TIME updates from CoinGecko API every 30 seconds!");
+    console.log("✅ Starting REAL-TIME updates from CoinGecko API every 60 seconds!");
     console.log("   Pair:", `${symbolA}/${symbolB}`);
     console.log("   Note: CoinGecko free tier has rate limits (10-50 calls/minute)");
+    console.log("   Using 60s interval + 60s cache to stay within limits");
 
     let updateCounter = 0;
 
     const fetchLatestPrice = async () => {
       console.log(`\n🚀 === REAL-TIME PRICE UPDATE #${updateCounter + 1} ===`);
       
-      if (chartData.length === 0) {
+      if (chartDataRef.current.length === 0) {
         console.log("❌ No previous data to update from");
         return;
       }
@@ -2286,6 +2297,14 @@ export default function SwapPage() {
         
         if (!response.ok) {
           const errorText = await response.text().catch(() => "Unable to read error");
+          
+          // Handle rate limit errors gracefully
+          if (response.status === 429) {
+            console.warn("⚠️ Rate limit exceeded (429). Skipping this update, will retry on next interval.");
+            console.log("   The API route will use cached data if available.");
+            return; // Skip this update, don't throw error
+          }
+          
           throw new Error(`API error: ${response.status} - ${errorText.substring(0, 100)}`);
         }
         
@@ -2300,7 +2319,7 @@ export default function SwapPage() {
         
         // Calculate cross-rate: TokenA/TokenB = priceA/USD / priceB/USD
         const newValue = Number((priceA / priceB).toFixed(6));
-        const lastPoint = chartData[chartData.length - 1];
+        const lastPoint = chartDataRef.current[chartDataRef.current.length - 1];
         
         // Determine direction
         let direction: "up" | "down" | "same";
@@ -2334,18 +2353,18 @@ export default function SwapPage() {
           try {
             chartSeriesRef.current.series.update(newPoint);
             console.log("  ✅ Point added smoothly to chart via update()!");
-            
-            // Update local state WITHOUT triggering re-render (for reference only)
-            chartData.push(newPoint);
           } catch (error) {
             console.error("  ❌ Error updating series:", error);
-            // Fallback to state update
-            setChartData(prev => [...prev, newPoint]);
           }
         } else {
           console.log("  ⚠️ Series ref not ready, using setChartData (will refresh chart)");
-          setChartData(prev => [...prev, newPoint]);
         }
+
+        setChartData(prev => {
+          const next = [...prev, newPoint];
+          chartDataRef.current = next;
+          return next;
+        });
         
         // Update counters
         const currentTime = new Date();
@@ -2399,7 +2418,7 @@ export default function SwapPage() {
       console.log("🛑 Cleaning up interval - effect is re-running");
       clearInterval(interval);
     };
-  }, [isChartOpen, chartData.length, tokenA.symbol, tokenB.symbol]);
+  }, [isChartOpen, hasInitialChartData, tokenA.symbol, tokenB.symbol]);
 
   const chartPairLabel = useMemo(() => `${tokenA.symbol} / ${tokenB.symbol}`, [tokenA.symbol, tokenB.symbol]);
 
@@ -2528,15 +2547,120 @@ export default function SwapPage() {
     }
   }, [chartData]);
 
+  // Simple test card component - exact same as Analytics page, positioned next to swap card
+  function TestScrollCard({ isLimitSelected, onClose, cardRect }: { isLimitSelected: boolean; onClose: () => void; cardRect: DOMRect | null }) {
+    const testItems = Array.from({ length: 50 }, (_, i) => `Test Item ${i + 1} - This is a scrollable item for testing purposes`);
+
+    if (!isLimitSelected || !cardRect) {
+      return null;
+    }
+
+    return (
+      <div 
+        className="fixed"
+        style={{ 
+          zIndex: 99999,
+          top: `${cardRect.top}px`,
+          left: `${cardRect.right + 20}px`,
+        }}
+      >
+        <div 
+          className="bg-gray-900 border border-white/20 rounded-lg shadow-2xl" 
+          style={{ 
+            width: "400px", 
+            height: "600px", 
+            display: "flex", 
+            flexDirection: "column",
+          }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
+            <h2 className="text-lg font-semibold text-white">Test Scroll Card</h2>
+            <button
+              onClick={onClose}
+              className="text-white/70 hover:text-white transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Scrollable Content */}
+          <div 
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              overflowX: "hidden",
+              padding: "16px",
+              minHeight: 0,
+            }}
+          >
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {testItems.map((item, index) => (
+                <li 
+                  key={index}
+                  style={{
+                    padding: "12px",
+                    marginBottom: "8px",
+                    backgroundColor: "rgba(255,255,255,0.05)",
+                    borderRadius: "8px",
+                    color: "white",
+                  }}
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function TokenSelector({ selected, tokens, onSelect, side = "left", cardRect, swapTitleRect, swapCardRect }: { selected: Token; tokens: Token[]; onSelect: (t: Token) => void; side?: "left" | "right"; cardRect: DOMRect | null; swapTitleRect?: DOMRect | null; swapCardRect?: DOMRect | null }) {
+    type PointerTracker = {
+      pointerId: number;
+      x: number;
+      y: number;
+      time: number;
+      moved: boolean;
+      endedAt?: number;
+    };
+
+    const POINTER_MOVE_THRESHOLD = 6;
+    const LONG_PRESS_THRESHOLD = 220;
     const [isDesktop, setIsDesktop] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [shouldRender, setShouldRender] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    
+    // TEMPORARY: Wrap setters to prevent closing during scroll testing
+    const setIsOpenSafe = (value: boolean) => {
+      if (value === false) {
+        console.log("🚫 BLOCKED setIsOpen(false) - card should stay open for testing");
+        console.trace("Call stack:");
+        return;
+      }
+      console.log("✅ setIsOpen(true) allowed");
+      setIsOpen(value);
+    };
+    
+    const setShouldRenderSafe = (value: boolean) => {
+      if (value === false) {
+        console.log("🚫 BLOCKED setShouldRender(false) - card should stay rendered for testing");
+        console.trace("Call stack:");
+        return;
+      }
+      console.log("✅ setShouldRender(true) allowed");
+      setShouldRender(value);
+    };
     const dropdownRef = useRef<HTMLDivElement>(null);
     const isScrollingRef = useRef(false);
     const scrollPositionRef = useRef<{ top: number; timestamp: number } | null>(null);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const buttonPointerDownRef = useRef<PointerTracker | null>(null);
+    const tokenPointerDownRef = useRef<PointerTracker | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizingSelector, setIsResizingSelector] = useState(false);
   const [resizeEdgeSelector, setResizeEdgeSelector] = useState<string | null>(null);
@@ -2545,8 +2669,13 @@ export default function SwapPage() {
     const dragLastRef = useRef<{ x: number; y: number } | null>(null);
     const resizeSelectorStartRef = useRef<{ x: number; y: number; width: number; height: number; offsetX: number; offsetY: number } | null>(null);
 
+    const [isMobile, setIsMobile] = useState(false);
+
     useEffect(() => {
-      const check = () => setIsDesktop(window.innerWidth >= 1024);
+      const check = () => {
+        setIsDesktop(window.innerWidth >= 1024);
+        setIsMobile(window.innerWidth < 768);
+      };
       check();
       window.addEventListener("resize", check);
       return () => window.removeEventListener("resize", check);
@@ -2555,6 +2684,27 @@ export default function SwapPage() {
 
     const animateDuration = 260;
     const [phase, setPhase] = useState<"closed" | "opening" | "open" | "closing">("closed");
+    
+    // DEBUG: Log state changes
+    useEffect(() => {
+      console.log("🔍 TokenSelector state changed:", { isOpen, shouldRender, phase });
+    }, [isOpen, shouldRender, phase]);
+    
+    // TEMPORARY: Wrap setPhase to prevent closing during scroll testing
+    const setPhaseSafe = (value: "closed" | "opening" | "open" | "closing") => {
+      if (value === "closing") {
+        console.log("🚫 BLOCKED setPhase('closing') - card should stay open for testing");
+        console.trace("Call stack:");
+        return;
+      }
+      if (value === "closed" && phase === "open") {
+        console.log("🚫 BLOCKED setPhase('closed') while card is open - card should stay open for testing");
+        console.trace("Call stack:");
+        return;
+      }
+      console.log(`✅ setPhase('${value}') allowed`);
+      setPhase(value);
+    };
 
     const filteredTokens = useMemo(() => {
       const query = searchTerm.trim().toLowerCase();
@@ -2568,8 +2718,8 @@ export default function SwapPage() {
 
     const openDropdown = () => {
       setSearchTerm("");
-      setShouldRender(true);
-      setPhase("closed");
+      setShouldRenderSafe(true);
+      setPhaseSafe("closed");
       setSelectorOffset({ x: 0, y: 0 });
       // Set height to 70vh for both cards
       const viewportHeight = window.innerHeight;
@@ -2577,11 +2727,11 @@ export default function SwapPage() {
       setSelectorSize({ width: 360, height: height70vh });
       console.log("🪙 Token selector height set to 70vh:", height70vh);
       requestAnimationFrame(() => {
-        setPhase("opening");
-        setIsOpen(true);
+        setPhaseSafe("opening");
+        setIsOpenSafe(true);
         // After card opening animation completes (0.52s), set phase to "open" to show glow
         setTimeout(() => {
-          setPhase("open");
+          setPhaseSafe("open");
         }, 520);
       });
     };
@@ -2689,6 +2839,12 @@ export default function SwapPage() {
     }, [isDragging, isResizingSelector, resizeEdgeSelector]);
 
     const closeDropdown = () => {
+      // TEMPORARILY DISABLED FOR SCROLL TESTING - card will not close
+      console.log("🔒 closeDropdown called but disabled for testing");
+      console.trace("Call stack:");
+      return;
+      
+      /* DISABLED CODE - Re-enable after scroll testing
       // Don't close if we're currently scrolling
       if (isScrollingRef.current) {
         return;
@@ -2701,18 +2857,19 @@ export default function SwapPage() {
       }
       
       setPhase("closing");
-      setIsOpen(false);
+      setIsOpenSafe(false);
       setTimeout(() => {
-        setShouldRender(false);
+        setShouldRenderSafe(false);
         setPhase("closed");
         setSearchTerm("");
         // Reset scroll tracking
         isScrollingRef.current = false;
         scrollPositionRef.current = null;
       }, animateDuration);
+      */
     };
 
-    // Prevent body scroll when card is open
+    // Prevent body scroll when card is open and listen for scroll events
     useEffect(() => {
       if (isOpen && isDesktop) {
         // Save current scroll position
@@ -2723,6 +2880,48 @@ export default function SwapPage() {
         document.body.style.width = '100%';
         document.body.style.overflow = 'hidden';
         
+        // Listen for scroll events anywhere to mark scrolling state
+        const handleScroll = (e: Event) => {
+          // IMPORTANT: If scroll is happening inside the dropdown card, allow it and don't mark as scrolling
+          if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) {
+            console.log("🔒 Scroll event INSIDE card - allowing scroll, NOT marking as scrolling");
+            // Don't mark as scrolling - let the card's internal scroll work
+            return;
+          }
+          // Only mark as scrolling if it's OUTSIDE the dropdown card
+          console.log("🔒 Scroll event OUTSIDE card - marking as scrolling");
+          isScrollingRef.current = true;
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+          }
+          scrollTimeoutRef.current = setTimeout(() => {
+            isScrollingRef.current = false;
+          }, 300);
+        };
+        
+        // Listen for wheel events (scroll) anywhere
+        const handleWheel = (e: WheelEvent) => {
+          // IMPORTANT: If scroll is happening inside the dropdown card, allow it and don't mark as scrolling
+          // This prevents the card from closing when scrolling inside it
+          if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) {
+            console.log("🔒 Wheel event INSIDE card - allowing scroll, NOT marking as scrolling");
+            // Don't mark as scrolling - let the card's internal scroll work
+            return;
+          }
+          // Only mark as scrolling if it's OUTSIDE the dropdown card
+          console.log("🔒 Wheel event OUTSIDE card - marking as scrolling");
+          isScrollingRef.current = true;
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+          }
+          scrollTimeoutRef.current = setTimeout(() => {
+            isScrollingRef.current = false;
+          }, 300);
+        };
+        
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('wheel', handleWheel, true);
+        
         return () => {
           // Restore scrolling
           document.body.style.position = '';
@@ -2731,10 +2930,77 @@ export default function SwapPage() {
           document.body.style.overflow = '';
           // Restore scroll position
           window.scrollTo(0, scrollY);
+          // Remove scroll listeners
+          window.removeEventListener('scroll', handleScroll, true);
+          window.removeEventListener('wheel', handleWheel, true);
         };
       }
     }, [isOpen, isDesktop]);
 
+
+    const markScrolling = useCallback((delay = 250) => {
+      isScrollingRef.current = true;
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+        scrollPositionRef.current = null;
+      }, delay);
+    }, []);
+
+    useEffect(() => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      const maybeUpdateTracker = (trackerRef: MutableRefObject<PointerTracker | null>, event: PointerEvent) => {
+        const tracker = trackerRef.current;
+        if (!tracker || tracker.pointerId !== event.pointerId || tracker.moved) {
+          return;
+        }
+
+        const deltaX = Math.abs(event.clientX - tracker.x);
+        const deltaY = Math.abs(event.clientY - tracker.y);
+        if (deltaX > POINTER_MOVE_THRESHOLD || deltaY > POINTER_MOVE_THRESHOLD) {
+          tracker.moved = true;
+          markScrolling();
+        }
+      };
+
+      const handlePointerMove = (event: PointerEvent) => {
+        maybeUpdateTracker(buttonPointerDownRef, event);
+        maybeUpdateTracker(tokenPointerDownRef, event);
+      };
+
+      const handlePointerUp = (event: PointerEvent) => {
+        if (buttonPointerDownRef.current?.pointerId === event.pointerId) {
+          buttonPointerDownRef.current.endedAt = Date.now();
+        }
+        if (tokenPointerDownRef.current?.pointerId === event.pointerId) {
+          tokenPointerDownRef.current.endedAt = Date.now();
+        }
+      };
+
+      const handlePointerCancel = (event: PointerEvent) => {
+        if (buttonPointerDownRef.current?.pointerId === event.pointerId) {
+          buttonPointerDownRef.current = null;
+        }
+        if (tokenPointerDownRef.current?.pointerId === event.pointerId) {
+          tokenPointerDownRef.current = null;
+        }
+      };
+
+      window.addEventListener("pointermove", handlePointerMove, true);
+      window.addEventListener("pointerup", handlePointerUp, true);
+      window.addEventListener("pointercancel", handlePointerCancel, true);
+
+      return () => {
+        window.removeEventListener("pointermove", handlePointerMove, true);
+        window.removeEventListener("pointerup", handlePointerUp, true);
+        window.removeEventListener("pointercancel", handlePointerCancel, true);
+      };
+    }, [markScrolling]);
 
     const renderList = (tokenSet: Token[]) => (
       <div className="relative w-full h-full" style={{ minHeight: 0 }}>
@@ -2777,9 +3043,21 @@ export default function SwapPage() {
               maxHeight: "100%"
             }}
             onWheel={(e) => {
+              markScrolling();
               e.stopPropagation();
             }}
             onScroll={(e) => {
+              markScrolling();
+              e.stopPropagation();
+            }}
+            onTouchMove={(e) => {
+              markScrolling();
+              e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
               e.stopPropagation();
             }}
           >
@@ -2788,12 +3066,71 @@ export default function SwapPage() {
                 <li key={t.address}>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(event) => {
+                      // TEMPORARILY DISABLED FOR SCROLL TESTING
+                      console.log("🔒 Token button onClick called but disabled for testing");
+                      event.preventDefault();
+                      event.stopPropagation();
+                      return;
+                      
+                      /* DISABLED CODE - Re-enable after scroll testing
+                      if (isScrollingRef.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        tokenPointerDownRef.current = null;
+                        return;
+                      }
+
+                      const pointerInfo = tokenPointerDownRef.current;
+                      if (pointerInfo) {
+                        if (pointerInfo.moved) {
+                          tokenPointerDownRef.current = null;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          return;
+                        }
+
+                        const duration = (pointerInfo.endedAt ?? Date.now()) - pointerInfo.time;
+                        if (duration > LONG_PRESS_THRESHOLD) {
+                          tokenPointerDownRef.current = null;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          return;
+                        }
+                      }
+
+                      tokenPointerDownRef.current = null;
+
                       onSelect(t);
                       closeDropdown();
+                      */
                     }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onWheel={(e) => e.stopPropagation()}
+                    onPointerDown={(event) => {
+                      tokenPointerDownRef.current = {
+                        pointerId: event.pointerId,
+                        x: event.clientX,
+                        y: event.clientY,
+                        time: Date.now(),
+                        moved: false,
+                      };
+                      event.stopPropagation();
+                    }}
+                    onPointerMove={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onPointerUp={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onPointerCancel={(event) => {
+                      if (tokenPointerDownRef.current?.pointerId === event.pointerId) {
+                        tokenPointerDownRef.current = null;
+                      }
+                      event.stopPropagation();
+                    }}
+                    onWheel={(e) => {
+                      markScrolling();
+                      e.stopPropagation();
+                    }}
                     className={`flex w-full items-center gap-3 rounded-full border border-transparent px-3 md:px-3 py-2 md:py-2 text-left transition-all touch-manipulation min-h-[48px] md:min-h-0 ${
                       selected.address === t.address
                         ? "bg-white/10 hover:border-white/30"
@@ -2836,13 +3173,71 @@ export default function SwapPage() {
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            // Don't toggle if we're currently scrolling
+            
             if (isScrollingRef.current) {
+              e.preventDefault();
               return;
             }
+            
+            const pointerInfo = buttonPointerDownRef.current;
+            if (pointerInfo) {
+              if (pointerInfo.moved) {
+                buttonPointerDownRef.current = null;
+                e.preventDefault();
+                return;
+              }
+              const duration = (pointerInfo.endedAt ?? Date.now()) - pointerInfo.time;
+              if (duration > LONG_PRESS_THRESHOLD) {
+                buttonPointerDownRef.current = null;
+                e.preventDefault();
+                return;
+              }
+            }
+            
+            buttonPointerDownRef.current = null;
+            
             if (!isOpen) {
               openDropdown();
             }
+          }}
+          onPointerDown={(e) => {
+            buttonPointerDownRef.current = {
+              pointerId: e.pointerId,
+              x: e.clientX,
+              y: e.clientY,
+              time: Date.now(),
+              moved: false,
+            };
+            e.stopPropagation();
+          }}
+          onPointerMove={(e) => {
+            e.stopPropagation();
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+          }}
+          onPointerCancel={(e) => {
+            if (buttonPointerDownRef.current?.pointerId === e.pointerId) {
+              buttonPointerDownRef.current = null;
+            }
+            e.stopPropagation();
+          }}
+          onWheel={(e) => {
+            markScrolling();
+            e.stopPropagation();
+          }}
+          onTouchMove={(e) => {
+            markScrolling();
+            if (buttonPointerDownRef.current) {
+              buttonPointerDownRef.current.moved = true;
+            }
+            e.stopPropagation();
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+          }}
+          onTouchEnd={(e) => {
+            e.stopPropagation();
           }}
           className="flex items-center gap-2 rounded-full bg-white/10 pl-3 md:pl-4 pr-2 md:pr-3 py-2 md:py-2 text-sm md:text-sm text-white hover:bg-white/15 w-fit touch-manipulation min-h-[48px] md:min-h-0"
           style={{ minHeight: "48px" }}
@@ -2904,9 +3299,11 @@ export default function SwapPage() {
                     // Check if scroll is happening inside the scrollable area
                     const scrollableArea = e.currentTarget.querySelector('.overflow-y-auto') as HTMLElement;
                     if (scrollableArea && scrollableArea.contains(e.target as Node)) {
-                      // Scroll is happening inside the scrollable area - mark as scrolling
+                      // Scroll is happening inside the scrollable area
+                      // IMPORTANT: DON'T stop propagation - let the scrollable area handle the scroll!
+                      console.log("🔒 Card onWheel - scroll INSIDE scrollable area, allowing scroll to work");
+                      // Just mark as scrolling but don't prevent the scroll
                       isScrollingRef.current = true;
-                      e.stopPropagation();
                       
                       // Clear any existing timeout
                       if (scrollTimeoutRef.current) {
@@ -2916,12 +3313,19 @@ export default function SwapPage() {
                       // Reset scrolling flag after scroll ends
                       scrollTimeoutRef.current = setTimeout(() => {
                         isScrollingRef.current = false;
-                      }, 150);
+                      }, 500);
+                      // DON'T call e.stopPropagation() - let the event reach the scrollable div!
+                      return;
                     }
+                    // If scroll is NOT in scrollable area, stop it
+                    console.log("🔒 Card onWheel - scroll OUTSIDE scrollable area, preventing");
+                    e.stopPropagation();
                   }}
                   onTouchMove={(e) => {
                     // Mark scrolling for touch moves
+                    console.log("🔒 Card onTouchMove - marking as scrolling");
                     isScrollingRef.current = true;
+                    e.preventDefault(); // Prevent default touch behavior
                     e.stopPropagation();
                     
                     // Clear any existing timeout
@@ -2929,10 +3333,11 @@ export default function SwapPage() {
                       clearTimeout(scrollTimeoutRef.current);
                     }
                     
-                    // Reset scrolling flag after touch ends
+                    // Reset scrolling flag after touch ends - INCREASED DELAY to prevent click conversion
                     scrollTimeoutRef.current = setTimeout(() => {
+                      console.log("🔒 Resetting isScrollingRef to false after touch move");
                       isScrollingRef.current = false;
-                    }, 150);
+                    }, 500); // Increased from 150ms to 500ms
                   }}
                   onScroll={(e) => {
                     // Mark scrolling
@@ -2951,7 +3356,9 @@ export default function SwapPage() {
                   }}
                   onTouchStart={(e) => {
                     // Mark scrolling on touch start
+                    console.log("🔒 Card onTouchStart - marking as scrolling");
                     isScrollingRef.current = true;
+                    e.preventDefault(); // Prevent default touch behavior
                     e.stopPropagation();
                     
                     // Clear any existing timeout
@@ -2960,14 +3367,18 @@ export default function SwapPage() {
                     }
                   }}
                   onTouchEnd={(e) => {
-                    // Reset scrolling flag after touch ends
+                    // Reset scrolling flag after touch ends - INCREASED DELAY to prevent click conversion
+                    console.log("🔒 Card onTouchEnd - keeping isScrollingRef true for longer");
+                    e.preventDefault(); // Prevent default touch behavior
                     e.stopPropagation();
                     if (scrollTimeoutRef.current) {
                       clearTimeout(scrollTimeoutRef.current);
                     }
+                    // Increase timeout to 500ms to prevent touch-to-click conversion
                     scrollTimeoutRef.current = setTimeout(() => {
+                      console.log("🔒 Resetting isScrollingRef to false after touch end");
                       isScrollingRef.current = false;
-                    }, 150);
+                    }, 500); // Increased from 150ms to 500ms
                   }}
                   onMouseDown={(e) => {
                     // Prevent mouse down during active scrolling
@@ -2977,6 +3388,14 @@ export default function SwapPage() {
                     }
                   }}
                   onClick={(e) => {
+                    // TEMPORARILY DISABLED FOR SCROLL TESTING
+                    console.log("🔒 Card container onClick called - BLOCKED for testing");
+                    console.log("  isScrollingRef.current:", isScrollingRef.current);
+                    console.trace("Call stack:");
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                    
                     // Prevent clicks during scrolling
                     if (isScrollingRef.current) {
                       e.preventDefault();
@@ -3056,17 +3475,18 @@ export default function SwapPage() {
                           }}
                           onWheel={(e) => {
                             // Mark scrolling immediately
+                            console.log("🔒 Scrollable area onWheel - allowing scroll to work");
                             isScrollingRef.current = true;
-                            // Stop wheel events from propagating
-                            e.stopPropagation();
+                            // DON'T stop propagation - we want the scroll to work!
+                            // DON'T prevent default - we want native scrolling!
                             // Clear any existing timeout
                             if (scrollTimeoutRef.current) {
                               clearTimeout(scrollTimeoutRef.current);
                             }
-                            // Reset scrolling flag after scroll ends (Uniswap-style: 150ms after last scroll)
+                            // Reset scrolling flag after scroll ends (increased delay)
                             scrollTimeoutRef.current = setTimeout(() => {
                               isScrollingRef.current = false;
-                            }, 150);
+                            }, 500);
                           }}
                           onScroll={(e) => {
                             const target = e.currentTarget;
@@ -3103,7 +3523,9 @@ export default function SwapPage() {
                           }}
                           onTouchMove={(e) => {
                             // Mark scrolling immediately for touch
+                            console.log("🔒 Scrollable area onTouchMove - marking as scrolling");
                             isScrollingRef.current = true;
+                            e.preventDefault(); // Prevent default touch behavior
                             e.stopPropagation();
                             
                             // Clear any existing timeout
@@ -3111,14 +3533,17 @@ export default function SwapPage() {
                               clearTimeout(scrollTimeoutRef.current);
                             }
                             
-                            // Reset scrolling flag after touch ends
+                            // Reset scrolling flag after touch ends - INCREASED DELAY
                             scrollTimeoutRef.current = setTimeout(() => {
+                              console.log("🔒 Resetting isScrollingRef to false after scrollable touch move");
                               isScrollingRef.current = false;
-                            }, 150);
+                            }, 500); // Increased from 150ms to 500ms
                           }}
                           onTouchStart={(e) => {
                             // Mark scrolling on touch start
+                            console.log("🔒 Scrollable area onTouchStart - marking as scrolling");
                             isScrollingRef.current = true;
+                            e.preventDefault(); // Prevent default touch behavior
                             e.stopPropagation();
                             
                             // Clear any existing timeout
@@ -3127,14 +3552,17 @@ export default function SwapPage() {
                             }
                           }}
                           onTouchEnd={(e) => {
-                            // Reset scrolling flag after touch ends
+                            // Reset scrolling flag after touch ends - INCREASED DELAY
+                            console.log("🔒 Scrollable area onTouchEnd - keeping isScrollingRef true for longer");
+                            e.preventDefault(); // Prevent default touch behavior
                             e.stopPropagation();
                             if (scrollTimeoutRef.current) {
                               clearTimeout(scrollTimeoutRef.current);
                             }
                             scrollTimeoutRef.current = setTimeout(() => {
+                              console.log("🔒 Resetting isScrollingRef to false after scrollable touch end");
                               isScrollingRef.current = false;
-                            }, 150);
+                            }, 500); // Increased from 150ms to 500ms
                           }}
                           onMouseDown={(e) => {
                             // Prevent mouse down during active scrolling
@@ -3144,6 +3572,14 @@ export default function SwapPage() {
                             }
                           }}
                           onClick={(e) => {
+                            // TEMPORARILY DISABLED FOR SCROLL TESTING
+                            console.log("🔒 Scrollable area onClick called - BLOCKED for testing");
+                            console.log("  isScrollingRef.current:", isScrollingRef.current);
+                            console.trace("Call stack:");
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                            
                             // Prevent clicks during scrolling
                             if (isScrollingRef.current) {
                               e.preventDefault();
@@ -3239,14 +3675,19 @@ export default function SwapPage() {
         console.log("  Chart data available:", chartData.length, "points");
         console.log("  Token pair:", tokenA.symbol, "/", tokenB.symbol);
         
+        const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
         const offsetX = overlayOffset?.x ?? 0;
         const offsetY = overlayOffset?.y ?? 0;
-        const transform = isChartMaximized
+        // On mobile, shift down by half header height (~24px) to prevent top cutoff
+        const mobileHeaderOffset = isMobileView ? 24 : 0;
+        const transform = isMobileView
+          ? `translate(-50%, calc(-50% + ${mobileHeaderOffset}px))`
+          : isChartMaximized
           ? "translate(-50%, -50%)"
           : `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
         return (
           <div
-            className="fixed z-20 pointer-events-none"
+            className={`fixed pointer-events-none ${isMobileView ? 'z-[60]' : 'z-20'}`}
             style={{
               top: "50%",
               left: "50%",
@@ -3254,16 +3695,16 @@ export default function SwapPage() {
             }}
           >
             <div
-              className="pointer-events-auto relative rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]"
+              className={`pointer-events-auto relative flex flex-col ${isMobileView ? '' : 'rounded-[20px] border border-white/15'} shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]`}
                 style={{
-                  width: chartSize.width > 0 ? `${chartSize.width}px` : (isChartMaximized ? "80vw" : "92vw"),
-                  maxWidth: chartSize.width > 0 ? "none" : (isChartMaximized ? "none" : "1100px"),
-                  height: chartSize.height > 0 ? `${chartSize.height}px` : (isChartMaximized ? "90vh" : "77vh"),
-                  maxHeight: chartSize.height > 0 ? "none" : (isChartMaximized ? "none" : "840px"),
-                  backgroundColor: "rgba(12, 14, 22, 0.6)",
-                  backdropFilter: "blur(40px) saturate(180%)",
-                  WebkitBackdropFilter: "blur(40px) saturate(180%)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
+                  width: isMobileView ? "100vw" : (chartSize.width > 0 ? `${chartSize.width}px` : (isChartMaximized ? "80vw" : "92vw")),
+                  maxWidth: isMobileView ? "none" : (chartSize.width > 0 ? "none" : (isChartMaximized ? "none" : "1100px")),
+                  height: isMobileView ? "100vh" : (chartSize.height > 0 ? `${chartSize.height}px` : (isChartMaximized ? "90vh" : "77vh")),
+                  maxHeight: isMobileView ? "none" : (chartSize.height > 0 ? "none" : (isChartMaximized ? "none" : "840px")),
+                  backgroundColor: isMobileView ? "#000000" : "rgba(12, 14, 22, 0.6)",
+                  backdropFilter: isMobileView ? "none" : "blur(40px) saturate(180%)",
+                  WebkitBackdropFilter: isMobileView ? "none" : "blur(40px) saturate(180%)",
+                  boxShadow: isMobileView ? "none" : "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
                   transition: isResizing ? "none" : "width 0.3s ease, height 0.3s ease",
                   animation: chartPhase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : chartPhase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
                   zIndex: 1,
@@ -3272,8 +3713,12 @@ export default function SwapPage() {
               >
                 {/* Header with drag and buttons */}
                 <div
-                  className={`flex h-12 items-center justify-between px-4 border-b border-white/10 ${
-                    isChartMaximized || isDraggingChart ? "cursor-grabbing" : "cursor-grab"
+                  className={`flex items-center justify-between px-4 border-b border-white/10 ${
+                    isMobileView ? "h-[62px]" : "h-12"
+                  } ${
+                    (typeof window !== 'undefined' && window.innerWidth < 768) 
+                      ? "" 
+                      : (isChartMaximized || isDraggingChart ? "cursor-grabbing" : "cursor-grab")
                   }`}
                   onPointerDown={handleOverlayPointerDown}
                 >
@@ -3308,26 +3753,28 @@ export default function SwapPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Maximize button - 20% bigger */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsChartMaximized((prev) => !prev);
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
-                      aria-label={isChartMaximized ? "Restore" : "Maximize"}
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        {isChartMaximized ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l-6 6m0 0l6 6m-6-6h12a2 2 0 002-2V3" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                        )}
-                      </svg>
-                    </button>
-                    {/* Close button - 20% bigger */}
+                    {/* Maximize button - hidden on mobile */}
+                    {!isMobileView && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsChartMaximized((prev) => !prev);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
+                        aria-label={isChartMaximized ? "Restore" : "Maximize"}
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          {isChartMaximized ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l-6 6m0 0l6 6m-6-6h12a2 2 0 002-2V3" />
+                          ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          )}
+                        </svg>
+                      </button>
+                    )}
+                    {/* Close button - bigger on mobile */}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -3335,26 +3782,32 @@ export default function SwapPage() {
                         handleCloseChart();
                       }}
                       onPointerDown={(e) => e.stopPropagation()}
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57]"
+                      className={`flex items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57] ${
+                        isMobileView ? "h-12 w-12" : "h-10 w-10"
+                      }`}
                       aria-label="Close"
                     >
-                      <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <svg className={isMobileView ? "h-8 w-8" : "h-6 w-6"} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
                 </div>
-                {/* Lightweight Chart */}
+                {/* Chart Container - 65vh on mobile, full height on desktop */}
                 <div
                   key={`chart-${tokenA.symbol}-${tokenB.symbol}`}
-                  className="absolute overflow-hidden"
+                  className={isMobileView ? "relative overflow-hidden flex-shrink-0" : "absolute overflow-hidden"}
                   style={{
-                    top: "48px",
-                    left: "0",
-                    right: "0",
-                    bottom: "0",
-                    borderBottomLeftRadius: "20px",
-                    borderBottomRightRadius: "20px",
+                    ...(isMobileView ? {
+                      height: "calc(65vh - 62px)", // 65vh minus header height
+                    } : {
+                      top: "48px",
+                      left: "0",
+                      right: "0",
+                      bottom: "0",
+                      borderBottomLeftRadius: "20px",
+                      borderBottomRightRadius: "20px",
+                    }),
                   }}
                 >
                   {chartData.length > 0 ? (
@@ -3378,6 +3831,24 @@ export default function SwapPage() {
                     </div>
                   )}
                 </div>
+                
+                {/* Info Card - Mobile only, 35vh */}
+                {isMobileView && (
+                  <div
+                    className="relative flex-shrink-0 border-t border-white/10"
+                    style={{
+                      height: "35vh",
+                      backgroundColor: "#000000",
+                    }}
+                  >
+                    <div className="h-full w-full p-4">
+                      {/* Info card content - placeholder for now */}
+                      <div className="h-full w-full rounded-lg border border-white/10 bg-white/5 p-4 flex items-center justify-center">
+                        <p className="text-sm text-white/60">Info card content</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
           </div>
         );
@@ -3574,7 +4045,7 @@ export default function SwapPage() {
       {/* Main swap interface - section with its own padding */}
       <main className="relative z-10 flex min-h-screen flex-col" style={{ paddingTop: "15vh", width: "100vw", margin: 0, paddingLeft: 0, paddingRight: 0, paddingBottom: 0 }}>
         {/* Fixed section wrapper - Isolated from dynamic content to prevent centering shifts */}
-        <div ref={fixedSectionRef} className="w-full max-w-md md:max-w-[524px] mx-auto px-4 md:px-4" style={{ position: "relative", flexShrink: 0 }}>
+        <div ref={fixedSectionRef} className="w-full max-w-md md:max-w-[524px] mx-auto px-2 md:px-4" style={{ position: "relative", flexShrink: 0 }}>
           {/* Fixed section: Title through You receive card - Position doesn't change */}
           <div 
             ref={swapTitleRef}
@@ -3600,11 +4071,11 @@ export default function SwapPage() {
               {/* Content area with swap fields */}
               <div className="flex flex-col flex-1 min-h-0">
                 {/* Swap card content */}
-                <div className="px-2 md:px-4">
+                <div className="px-0 md:px-4">
                 <div ref={cardRef}>
 
             <div className="mb-4 mt-6 md:mb-[11.2px] md:mt-[16.8px] flex items-center justify-between gap-4 text-xs text-white/60">
-              <span className="text-left pl-4 md:pl-4" style={{ fontSize: "0.75rem" }}>Order type</span>
+              <span className="text-left pl-0 md:pl-4" style={{ fontSize: "0.75rem" }}>Order type</span>
               <div className="flex items-center gap-[11.2px]">
               {(["Swap", "Limit", "Buy", "Sell"] as const).map((type) => (
                 <button
@@ -3631,11 +4102,16 @@ export default function SwapPage() {
                 {/* Cards container - Fixed position, doesn't shift */}
                 <div className="flex flex-col flex-shrink-0">
                   {/* You pay card - ALWAYS on top */}
-                  <div className="rounded-2xl bg-transparent border border-white/10 p-4 md:p-4 mb-[10px]" style={{ minHeight: "120px", height: "auto", position: "relative", zIndex: 1 }}>
+                  <div className="rounded-2xl bg-transparent border border-white/10 p-4 md:p-4 mb-[10px]" style={{ minHeight: "120px", height: "auto", position: "relative", zIndex: 1, width: "100%" }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You pay</span>
                     </div>
                     <div className="flex items-center gap-3 h-full">
+                      <TestScrollCard
+                        isLimitSelected={orderType === "Limit"}
+                        onClose={() => setOrderType("Swap")}
+                        cardRect={cardRect}
+                      />
                       <TokenSelector
                         selected={direction === "a-to-b" ? tokenA : tokenB}
                         tokens={tokens}
@@ -3736,6 +4212,7 @@ export default function SwapPage() {
                     height: "auto",
                     position: "relative",
                     zIndex: 1,
+                    width: "100%",
                   }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You receive</span>
@@ -3823,6 +4300,7 @@ export default function SwapPage() {
             transform: "translateX(-50%)",
             marginTop: "24px",
             zIndex: 10,
+            width: "100%",
           }}
         >
             {/* Exchange Rate Display - Always reserves space to prevent flickering */}
@@ -4057,7 +4535,7 @@ export default function SwapPage() {
             )}
 
             {/* Buttons container with padding matching cards */}
-            <div className="px-2 md:px-4 pb-4">
+            <div className="px-0 md:px-4 pb-4">
               {/* Swap/Connect Wallet button */}
               <button
                 onClick={() => {
@@ -4291,4 +4769,5 @@ export default function SwapPage() {
     </div>
   );
 }
+
 

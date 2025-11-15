@@ -21,6 +21,15 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<any>(null);
   const [crosshairData, setCrosshairData] = useState<{ price: number | null; time: number | null; point: { x: number; y: number } | null }>({ price: null, time: null, point: null });
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check if mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Update price line color when permanent dot color changes
   useEffect(() => {
@@ -71,15 +80,29 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
     }
 
     const initChart = () => {
+      // Ensure container has valid dimensions before initializing
       if (container.clientWidth === 0 || container.clientHeight === 0) {
         console.log("  ⏳ Waiting for container dimensions...");
         requestAnimationFrame(initChart);
         return;
       }
 
+      // Additional safety check for mobile devices with device pixel ratio issues
+      const computedStyle = window.getComputedStyle(container);
+      const actualWidth = parseFloat(computedStyle.width) || container.clientWidth;
+      const actualHeight = parseFloat(computedStyle.height) || container.clientHeight;
+      
+      if (actualWidth === 0 || actualHeight === 0 || isNaN(actualWidth) || isNaN(actualHeight)) {
+        console.log("  ⏳ Waiting for valid container dimensions...", { actualWidth, actualHeight });
+        requestAnimationFrame(initChart);
+        return;
+      }
+
       console.log("  ✅ Initializing chart with container:", {
         width: container.clientWidth,
-        height: container.clientHeight
+        height: container.clientHeight,
+        actualWidth,
+        actualHeight
       });
 
       try {
@@ -91,15 +114,24 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
         }
 
         console.log("  🎨 Creating new chart instance");
+        // Use actual computed dimensions to avoid device pixel ratio issues
+        const chartWidth = Math.max(container.clientWidth, actualWidth);
+        const chartHeight = Math.max(container.clientHeight, actualHeight);
+        
         const chart = createChart(container, {
-          width: container.clientWidth,
-          height: container.clientHeight,
+          width: chartWidth,
+          height: chartHeight,
           layout: {
             background: { color: "rgba(0,0,0,0)" },
             textColor: "rgba(255,255,255,0.6)",
           },
           localization: {
-            priceFormatter: (price: number) => price.toFixed(6),
+            priceFormatter: (price: number) => {
+              // Format with 6 decimal places and comma as thousand separator
+              const parts = price.toFixed(6).split('.');
+              parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+              return parts.join('.');
+            },
           },
           grid: {
             vertLines: { 
@@ -134,6 +166,11 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
             rightOffset: 12,
             barSpacing: 6,
             minBarSpacing: 3,
+            // On mobile, show time scale at top instead of bottom
+            ...(typeof window !== 'undefined' && window.innerWidth < 768 ? {
+              fixLeftEdge: false,
+              fixRightEdge: false,
+            } : {}),
           },
           crosshair: {
             vertLine: {
@@ -211,18 +248,43 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
         });
 
         const resizeObserver = new ResizeObserver(() => {
-          if (container.clientWidth > 0 && container.clientHeight > 0) {
-            chart.applyOptions({
-              width: container.clientWidth,
-              height: container.clientHeight,
-            });
+          try {
+            if (container.clientWidth > 0 && container.clientHeight > 0 && chartRef.current) {
+              // Use requestAnimationFrame to ensure DOM is ready before resizing
+              requestAnimationFrame(() => {
+                try {
+                  if (chartRef.current && container.clientWidth > 0 && container.clientHeight > 0) {
+                    chartRef.current.applyOptions({
+                      width: container.clientWidth,
+                      height: container.clientHeight,
+                    });
+                  }
+                } catch (resizeError) {
+                  console.warn("Chart resize error (non-critical):", resizeError);
+                }
+              });
+            }
+          } catch (observerError) {
+            console.warn("ResizeObserver error (non-critical):", observerError);
           }
         });
 
         resizeObserver.observe(container);
 
+        // Update time scale position for mobile after chart is created
+        const updateTimeScalePosition = () => {
+          if (chartRef.current && typeof window !== 'undefined') {
+            const isMobileView = window.innerWidth < 768;
+            // Note: Lightweight Charts doesn't directly support top time scale
+            // We'll handle this via CSS transform
+          }
+        };
+        updateTimeScalePosition();
+        window.addEventListener("resize", updateTimeScalePosition);
+
         return () => {
           console.log("  🧹 Cleanup: removing chart and observer");
+          window.removeEventListener("resize", updateTimeScalePosition);
           resizeObserver.disconnect();
           if (chartRef.current) {
             chartRef.current.remove();
@@ -235,7 +297,7 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
     };
 
     initChart();
-  }, [data]);
+  }, [data, isMobile]);
 
   return (
     <div className="relative h-full w-full lightweight-chart-container">
@@ -313,7 +375,7 @@ export default function LightweightChart({ data, pulseColor, showPulse, permanen
         </>
       )}
       
-      {/* Unified arrow-rectangle shape on Y-axis */}
+      {/* Unified arrow-rectangle shape on Y-axis - visible on all devices */}
       {permanentDotColor && data.length > 0 && chartRef.current && seriesRef.current && (
         <YAxisArrowShape
           chart={chartRef.current} 
@@ -545,6 +607,8 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
   color: string;
 }) {
   const arrowRef = useRef<SVGSVGElement>(null);
+  const horizontalPositionRef = useRef<number | null>(null); // Store fixed horizontal position
+  const containerWidthRef = useRef<number | null>(null); // Store container width to detect changes
 
   useEffect(() => {
     const updatePosition = () => {
@@ -555,16 +619,56 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
         const containerWidth = chart.options().width;
 
         if (coordinate !== null && containerWidth) {
-          // Position the unified shape
-          const shapeX = containerWidth - 84;
-          arrowRef.current.style.left = `${shapeX}px`;
+          // Only recalculate horizontal position if container width changed
+          // This prevents shifting when prices update
+          if (horizontalPositionRef.current === null || containerWidthRef.current !== containerWidth) {
+            // Get the actual chart pane width (container width minus right price scale width)
+            let priceScaleWidth = 0;
+            try {
+              const priceScale = chart.priceScale('right');
+              if (priceScale && typeof priceScale.width === 'function') {
+                priceScaleWidth = priceScale.width() || 0;
+              }
+            } catch (e) {
+              // Price scale not available yet, use default
+              priceScaleWidth = 60; // Default price scale width estimate
+            }
+            
+            const chartPaneWidth = containerWidth - priceScaleWidth;
+            horizontalPositionRef.current = chartPaneWidth; // Store fixed horizontal position
+            containerWidthRef.current = containerWidth; // Store container width
+            
+            // Calculate desired width: from chart pane right edge to chart card right edge (minus 1px margin)
+            const desiredWidth = priceScaleWidth - 1;
+            const currentTotalWidth = 84;
+            const newTotalWidth = currentTotalWidth + desiredWidth;
+            
+            arrowRef.current.style.left = `${chartPaneWidth}px`;
+            arrowRef.current.setAttribute('width', newTotalWidth.toString());
+            
+            // Update the path to extend the rectangle to the new width
+            const rectRightX = newTotalWidth;
+            const pathElement = arrowRef.current.querySelector('#y-axis-arrow-path') as SVGPathElement;
+            if (pathElement) {
+              const pathD = `M 10,0 L 0,11.5 L 10,23 L ${rectRightX - 4},23 Q ${rectRightX},23 ${rectRightX},19 L ${rectRightX},4 Q ${rectRightX},0 ${rectRightX - 4},0 Z`;
+              pathElement.setAttribute('d', pathD);
+            }
+          }
+          
+          // Always update vertical position (this should change with price)
+          // Use the stored horizontal position
+          if (horizontalPositionRef.current !== null) {
+            arrowRef.current.style.left = `${horizontalPositionRef.current}px`;
+          }
           arrowRef.current.style.top = `${coordinate}px`;
           
-          console.log("📐 Unified arrow-rectangle positioned:", {
-            x: shapeX,
-            y: coordinate,
-            color: color
-          });
+          // Update text position to align left in the rectangle (shifted 5px left from original, then 2px right)
+          const textElement = arrowRef.current.querySelector('#y-axis-arrow-text') as SVGTextElement;
+          if (textElement) {
+            const textX = 10; // Left-aligned, shifted 5px left from original (was 15, now 10)
+            textElement.setAttribute('x', textX.toString());
+            textElement.setAttribute('textAnchor', 'start'); // Left align
+          }
         }
       } catch (error) {
         console.error("Error positioning arrow shape:", error);
@@ -593,8 +697,13 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
     };
   }, [chart, series, lastDataPoint, color]);
 
-  // Format price for display
-  const priceText = lastDataPoint.value.toFixed(6);
+  // Format price for display with comma thousand separator
+  const formatPrice = (price: number): string => {
+    const parts = price.toFixed(6).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  };
+  const priceText = formatPrice(lastDataPoint.value);
 
   return (
     <svg
@@ -608,20 +717,23 @@ function YAxisArrowShape({ chart, series, lastDataPoint, color }: {
       }}
     >
       {/* Combined shape: triangle + rectangle with rounded corners only on right side */}
+      {/* Path will be dynamically updated via useEffect to adjust rectangle width */}
       <path
+        id="y-axis-arrow-path"
         d="M 10,0 L 0,11.5 L 10,23 L 80,23 Q 84,23 84,19 L 84,4 Q 84,0 80,0 Z"
         fill={color}
         style={{
           transition: "fill 0.3s ease-in-out",
         }}
       />
-      {/* Price text - centered vertically with equal padding */}
+      {/* Price text - left-aligned, shifted 5px left from original position */}
       <text
-        x="47"
+        id="y-axis-arrow-text"
+        x="10"
         y="15.5"
         fontSize="12"
         fill="rgba(0, 0, 0, 0.9)"
-        textAnchor="middle"
+        textAnchor="start"
         fontFamily="monospace"
         fontWeight="500"
         style={{
@@ -642,6 +754,8 @@ function CrosshairYAxisLabel({ chart, series, price, point }: {
   point: { x: number; y: number };
 }) {
   const labelRef = useRef<SVGSVGElement>(null);
+  const horizontalPositionRef = useRef<number | null>(null); // Store fixed horizontal position
+  const containerWidthRef = useRef<number | null>(null); // Store container width to detect changes
 
   useEffect(() => {
     const updatePosition = () => {
@@ -652,10 +766,56 @@ function CrosshairYAxisLabel({ chart, series, price, point }: {
         const containerWidth = chart.options().width;
 
         if (coordinate !== null && containerWidth) {
-          // Position on the right side
-          const shapeX = containerWidth - 84;
-          labelRef.current.style.left = `${shapeX}px`;
+          // Only recalculate horizontal position if container width changed
+          // This prevents shifting when prices update
+          if (horizontalPositionRef.current === null || containerWidthRef.current !== containerWidth) {
+            // Get the actual chart pane width (container width minus right price scale width)
+            let priceScaleWidth = 0;
+            try {
+              const priceScale = chart.priceScale('right');
+              if (priceScale && typeof priceScale.width === 'function') {
+                priceScaleWidth = priceScale.width() || 0;
+              }
+            } catch (e) {
+              // Price scale not available yet, use default
+              priceScaleWidth = 60; // Default price scale width estimate
+            }
+            
+            const chartPaneWidth = containerWidth - priceScaleWidth;
+            horizontalPositionRef.current = chartPaneWidth; // Store fixed horizontal position
+            containerWidthRef.current = containerWidth; // Store container width
+            
+            // Calculate desired width: from chart pane right edge to chart card right edge (minus 1px margin)
+            const desiredWidth = priceScaleWidth - 1;
+            const currentTotalWidth = 84;
+            const newTotalWidth = currentTotalWidth + desiredWidth;
+            
+            labelRef.current.style.left = `${chartPaneWidth}px`;
+            labelRef.current.setAttribute('width', newTotalWidth.toString());
+            
+            // Update the path to extend the rectangle to the new width
+            const rectRightX = newTotalWidth;
+            const pathElement = labelRef.current.querySelector('path') as SVGPathElement;
+            if (pathElement) {
+              const pathD = `M 10,1.5 L 0,13.0 L 10,24.5 L ${rectRightX - 4},24.5 Q ${rectRightX},24.5 ${rectRightX},20.5 L ${rectRightX},5.5 Q ${rectRightX},1.5 ${rectRightX - 4},1.5 Z`;
+              pathElement.setAttribute('d', pathD);
+            }
+          }
+          
+          // Always update vertical position (this should change with price)
+          // Use the stored horizontal position
+          if (horizontalPositionRef.current !== null) {
+            labelRef.current.style.left = `${horizontalPositionRef.current}px`;
+          }
           labelRef.current.style.top = `${coordinate}px`;
+          
+          // Update text position to align left in the rectangle (shifted 5px left from original, then 2px right)
+          const textElement = labelRef.current.querySelector('text') as SVGTextElement;
+          if (textElement) {
+            const textX = 10; // Left-aligned, shifted 5px left from original (was 15, now 10)
+            textElement.setAttribute('x', textX.toString());
+            textElement.setAttribute('textAnchor', 'start'); // Left align
+          }
         }
       } catch (error) {
         console.error("Error positioning crosshair Y-axis label:", error);
@@ -672,7 +832,13 @@ function CrosshairYAxisLabel({ chart, series, price, point }: {
     return () => resizeObserver.disconnect();
   }, [chart, series, price]);
 
-  const priceText = price.toFixed(6);
+  // Format price for display with comma thousand separator
+  const formatPrice = (price: number): string => {
+    const parts = price.toFixed(6).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  };
+  const priceText = formatPrice(price);
 
   return (
     <svg
@@ -689,17 +855,19 @@ function CrosshairYAxisLabel({ chart, series, price, point }: {
       {/* Triangle: tip at (0,13.0), extends from (10,1.5) to (10,24.5) - symmetric triangle with equal sides and angles, moved down 0.5px */}
       {/* Rectangle: from y=1.5 to y=24.5 (23px tall, moved down 0.5px) - rounded only on right side */}
       {/* Path: Rectangle (y=1.5 to y=24.5), triangle tip at y=13.0 (center between y=1.5 and y=24.5) for equal sides and angles */}
+      {/* Path will be dynamically updated via useEffect to adjust rectangle width */}
       <path
         d="M 10,1.5 L 80,1.5 Q 84,1.5 84,5.5 L 84,20.5 Q 84,24.5 80,24.5 L 10,24.5 L 0,13.0 L 10,1.5 Z"
         fill="#ffffff"
       />
-      {/* Price text - centered vertically in rectangle (moved down 0.5px, so y=16.5 + 0.5 = 17.0) */}
+      {/* Price text - left-aligned, shifted 5px left from original position */}
+      {/* Text x position will be dynamically updated via useEffect */}
       <text
-        x="47"
+        x="10"
         y="17.0"
         fontSize="12"
         fill="rgba(0, 0, 0, 0.9)"
-        textAnchor="middle"
+        textAnchor="start"
         fontFamily="monospace"
         fontWeight="500"
       >
@@ -716,6 +884,14 @@ function CrosshairXAxisLabel({ chart, time, point }: {
   point: { x: number; y: number };
 }) {
   const labelRef = useRef<SVGSVGElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     const updatePosition = () => {
@@ -726,8 +902,8 @@ function CrosshairXAxisLabel({ chart, time, point }: {
         const containerHeight = chart.options().height;
 
         if (timeCoordinate !== null && containerHeight) {
-          // Position at the bottom
-          const shapeY = containerHeight - 23;
+          // On mobile, position at top; on desktop, position at bottom
+          const shapeY = isMobile ? 0 : containerHeight - 23;
           labelRef.current.style.left = `${timeCoordinate}px`;
           labelRef.current.style.top = `${shapeY}px`;
         }
@@ -744,7 +920,7 @@ function CrosshairXAxisLabel({ chart, time, point }: {
     }
 
     return () => resizeObserver.disconnect();
-  }, [chart, time]);
+  }, [chart, time, isMobile]);
 
   // Format date and time for display - include date and month
   const date = new Date(time * 1000);

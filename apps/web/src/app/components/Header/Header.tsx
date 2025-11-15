@@ -12,6 +12,10 @@ export function Header() {
   const pathname = usePathname();
   const isSwapPage = pathname === "/swap";
   
+  // App pages that should show the app toolbar
+  const appPages = ["/swap", "/liquidity", "/pools", "/positions", "/analytics"];
+  const isAppPage = appPages.includes(pathname);
+  
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
@@ -33,8 +37,8 @@ export function Header() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
   
-  // Menu items for swap page
-  const swapNavLinks = [
+  // Menu items for app pages (Swap, Liquidity, Pools, Positions, Analytics)
+  const appNavLinks = [
     { label: "Swap", href: "/swap" },
     { label: "Liquidity", href: "/liquidity" },
     { label: "Pools", href: "/pools" },
@@ -42,8 +46,8 @@ export function Header() {
     { label: "Analytics", href: "/analytics" },
   ];
   
-  // Use swap menu items when on swap page, otherwise use regular navLinks
-  const currentNavLinks = isSwapPage ? swapNavLinks : navLinks;
+  // Use app menu items when on app pages, otherwise use regular navLinks
+  const currentNavLinks = isAppPage ? appNavLinks : navLinks;
 
   const { address, isConnected } = useAccount();
   const connectors = useConnectors();
@@ -58,6 +62,16 @@ export function Header() {
       if (isMenuOpen) {
         setIsHeaderHidden(false);
         lastScrollYRef.current = window.scrollY;
+        return;
+      }
+
+      // Keep header visible on app pages (like Analytics, Swap, etc.)
+      const isHomePage = pathname === "/";
+      if (!isHomePage) {
+        setIsHeaderHidden(false);
+        const currentY = window.scrollY;
+        setShowBorder(currentY > 100);
+        lastScrollYRef.current = currentY;
         return;
       }
 
@@ -92,7 +106,7 @@ export function Header() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [isMenuOpen, isMobile]);
+  }, [isMenuOpen, isMobile, pathname]);
 
   const handleNavClick = () => setIsMenuOpen(false);
   const toggleMenu = () => setIsMenuOpen((prev) => !prev);
