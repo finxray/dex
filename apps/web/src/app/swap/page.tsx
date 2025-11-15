@@ -562,6 +562,7 @@ export default function SwapPage() {
   }, [chartData]);
 
   const [isLoadingChartData, setIsLoadingChartData] = useState(false);
+  const [chartTimeRange, setChartTimeRange] = useState<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL">("1D");
   const [latestPriceChange, setLatestPriceChange] = useState<"up" | "down" | "same" | null>(null);
   const [showPulse, setShowPulse] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
@@ -2039,9 +2040,21 @@ export default function SwapPage() {
           return;
         }
         
-        // Fetch 7 days of data (hourly data automatically returned for 2-90 days)
-        // NOTE: interval=hourly is Enterprise-only, but we get hourly data automatically
-        const days = 7;
+        // Map time range to days for CoinGecko API
+        const timeRangeToDays: Record<string, number> = {
+          "1D": 1,
+          "1W": 7,
+          "1M": 30,
+          "3M": 90,
+          "6M": 180,
+          "YTD": Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / (1000 * 60 * 60 * 24)),
+          "1Y": 365,
+          "2Y": 730,
+          "5Y": 1825,
+          "10Y": 3650,
+          "ALL": 3650, // Max supported by CoinGecko free tier
+        };
+        const days = timeRangeToDays[chartTimeRange] || 7;
         const vs_currency = "usd";
         
         // Use Next.js API route to avoid CORS issues
@@ -2196,7 +2209,7 @@ export default function SwapPage() {
     };
     
     fetchRealPriceData();
-  }, [tokenA.symbol, tokenB.symbol]);
+  }, [tokenA.symbol, tokenB.symbol, chartTimeRange]);
 
   // Live price updates - USING COINGECKO API for real-time prices
   useEffect(() => {
@@ -3793,15 +3806,42 @@ export default function SwapPage() {
                     </button>
                   </div>
                 </div>
+                {/* Time Range Buttons - Desktop: below header */}
+                {!isMobileView && (() => {
+                  const timeRanges: Array<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL"> = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "10Y", "ALL"];
+                  
+                  return (
+                    <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10 bg-black">
+                      {timeRanges.map((range) => (
+                        <button
+                          key={range}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setChartTimeRange(range);
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wide font-medium transition-all ${
+                            chartTimeRange === range
+                              ? "bg-white/20 text-white"
+                              : "text-white/60 hover:text-white/80"
+                          }`}
+                        >
+                          {range}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {/* Chart Container - 65vh on mobile, full height on desktop */}
                 <div
-                  key={`chart-${tokenA.symbol}-${tokenB.symbol}`}
-                  className={isMobileView ? "relative overflow-hidden flex-shrink-0" : "absolute overflow-hidden"}
+                  key={`chart-container-${tokenA.symbol}-${tokenB.symbol}-${chartTimeRange}`}
+                  className={isMobileView ? "relative overflow-visible flex-shrink-0" : "absolute overflow-hidden"}
                   style={{
                     ...(isMobileView ? {
                       height: "calc(65vh - 62px)", // 65vh minus header height
                     } : {
-                      top: "48px",
+                      top: "96px", // 48px header + 48px time range buttons
                       left: "0",
                       right: "0",
                       bottom: "0",
@@ -3810,27 +3850,82 @@ export default function SwapPage() {
                     }),
                   }}
                 >
-                  {chartData.length > 0 ? (
-                    <div className="relative w-full h-full">
-                      <LightweightChart 
-                        key={`lw-${tokenA.symbol}-${tokenB.symbol}`} 
-                        data={chartData}
-                        pulseColor={latestPriceChange === "up" ? "#10b981" : latestPriceChange === "down" ? "#ef4444" : "#3b82f6"}
-                        showPulse={showPulse}
-                        permanentDotColor={permanentDotColor}
-                        onSeriesReady={(series, chart) => {
-                          console.log("📢 Chart series ready, storing reference");
-                          chartSeriesRef.current = { series, chart };
+                  <div className="relative w-full h-full">
+                    {chartData.length > 0 ? (
+                      <div 
+                        className="w-full h-full transition-opacity duration-300"
+                        style={{
+                          opacity: isLoadingChartData ? 0.3 : 1,
                         }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-                      <LoadingAnimation />
-                      <p className="text-sm text-white/40 font-medium">Loading chart data...</p>
-                    </div>
-                  )}
+                      >
+                        <LightweightChart 
+                          key={`lw-${tokenA.symbol}-${tokenB.symbol}-${chartTimeRange}-${chartData.length}`} 
+                          data={chartData}
+                          pulseColor={latestPriceChange === "up" ? "#10b981" : latestPriceChange === "down" ? "#ef4444" : "#3b82f6"}
+                          showPulse={showPulse}
+                          permanentDotColor={permanentDotColor}
+                          onSeriesReady={(series, chart) => {
+                            console.log("📢 Chart series ready, storing reference");
+                            chartSeriesRef.current = { series, chart };
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+                        <LoadingAnimation />
+                        <p className="text-sm text-white/40 font-medium">Loading chart data...</p>
+                      </div>
+                    )}
+                    {/* Loading overlay with spinner */}
+                    {isLoadingChartData && chartData.length > 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm z-50">
+                        <div className="flex flex-col items-center justify-center gap-3">
+                          <div className="relative">
+                            <div className="h-12 w-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                          </div>
+                          <p className="text-sm text-white/70 font-medium">Loading new data...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
+                
+                {/* Time Range Buttons - Mobile: below chart area */}
+                {isMobileView && (() => {
+                  const timeRanges: Array<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL"> = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "10Y", "ALL"];
+                  
+                  return (
+                    <div className="relative flex-shrink-0 border-t border-white/10 bg-black overflow-hidden">
+                      <div
+                        className="flex gap-2 px-4 py-3 overflow-x-auto"
+                        style={{
+                          scrollbarWidth: 'none',
+                          msOverflowStyle: 'none',
+                          WebkitOverflowScrolling: 'touch',
+                        }}
+                      >
+                        {timeRanges.map((range) => (
+                          <button
+                            key={range}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChartTimeRange(range);
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className={`flex-shrink-0 px-4 py-2 rounded-lg text-xs uppercase tracking-wide font-medium transition-all ${
+                              chartTimeRange === range
+                                ? "bg-white/20 text-white"
+                                : "text-white/60 hover:text-white/80"
+                            }`}
+                          >
+                            {range}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 
                 {/* Info Card - Mobile only, 35vh */}
                 {isMobileView && (
@@ -3843,7 +3938,7 @@ export default function SwapPage() {
                   >
                     <div className="h-full w-full p-4">
                       {/* Info card content - placeholder for now */}
-                      <div className="h-full w-full rounded-lg border border-white/10 bg-white/5 p-4 flex items-center justify-center">
+                      <div className="h-full w-full rounded-lg border border-white/10 bg-black p-4 flex items-center justify-center">
                         <p className="text-sm text-white/60">Info card content</p>
                       </div>
                     </div>
@@ -4628,6 +4723,15 @@ export default function SwapPage() {
       </main>
 
       <style jsx global>{`
+        /* Hide scrollbar for time range buttons on mobile */
+        .overflow-x-auto::-webkit-scrollbar {
+          display: none;
+        }
+        .overflow-x-auto {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        
         @keyframes swapGradientShift {
           0% {
             background-position: 100% 50%;
