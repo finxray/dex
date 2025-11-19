@@ -49,6 +49,41 @@ type AreaData = {
 
 const DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
 
+// Bucket data into 5-minute bars for 1D charts
+function bucketDataInto5MinBars(data: AreaData[]): AreaData[] {
+  if (data.length === 0) return [];
+  
+  const BUCKET_SIZE_SECONDS = 300; // 5 minutes
+  const bucketed: AreaData[] = [];
+  const buckets = new Map<number, AreaData[]>();
+  
+  // Group data points into 5-minute buckets
+  for (const point of data) {
+    // Round down to the nearest 5-minute bucket
+    const bucketTime = Math.floor(point.time / BUCKET_SIZE_SECONDS) * BUCKET_SIZE_SECONDS;
+    
+    if (!buckets.has(bucketTime)) {
+      buckets.set(bucketTime, []);
+    }
+    buckets.get(bucketTime)!.push(point);
+  }
+  
+  // For each bucket, use the last value (closing price for that 5-minute period)
+  const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+  
+  for (const [bucketTime, points] of sortedBuckets) {
+    // Use the last point in the bucket as the representative value
+    // This gives us the "close" price for that 5-minute bar
+    const lastPoint = points[points.length - 1];
+    bucketed.push({
+      time: bucketTime as UTCTimestamp,
+      value: lastPoint.value,
+    });
+  }
+  
+  return bucketed;
+}
+
 const sanitizeNumeric = (value: string): string | null => {
   if (value === undefined || value === null) return null;
   const stripped = value.replace(/,/g, "");
@@ -565,6 +600,7 @@ export default function SwapPage() {
   const [chartTimeRange, setChartTimeRange] = useState<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL">("1D");
   const [latestPriceChange, setLatestPriceChange] = useState<"up" | "down" | "same" | null>(null);
   const [showPulse, setShowPulse] = useState(false);
+  const [isCrosshairActive, setIsCrosshairActive] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
   const [updateCount, setUpdateCount] = useState(0);
   const [pulseKey, setPulseKey] = useState(0);
@@ -2157,7 +2193,18 @@ export default function SwapPage() {
             average: points.reduce((sum, p) => sum + p.value, 0) / points.length
           });
           
-          setChartData(points);
+          // Apply bucketing for 1D charts (5-minute bars)
+          let finalPoints = points;
+          if (chartTimeRange === "1D") {
+            console.log("\n📊 Applying 5-minute bucketing for 1D chart...");
+            finalPoints = bucketDataInto5MinBars(points);
+            console.log("✅ Bucketing complete:");
+            console.log("  Original points:", points.length);
+            console.log("  Bucketed points:", finalPoints.length);
+            console.log("  Reduction:", ((1 - finalPoints.length / points.length) * 100).toFixed(1) + "%");
+          }
+          
+          setChartData(finalPoints);
           setIsLoadingChartData(false);
           console.log("✅ Chart data set successfully!");
         } else {
@@ -2203,7 +2250,19 @@ export default function SwapPage() {
         first_3_points: points.slice(0, 3),
         last_3_points: points.slice(-3)
       });
-      setChartData(points);
+      
+      // Apply bucketing for 1D charts (5-minute bars)
+      let finalPoints = points;
+      if (chartTimeRange === "1D") {
+        console.log("\n📊 Applying 5-minute bucketing for 1D chart (synthetic data)...");
+        finalPoints = bucketDataInto5MinBars(points);
+        console.log("✅ Bucketing complete:");
+        console.log("  Original points:", points.length);
+        console.log("  Bucketed points:", finalPoints.length);
+        console.log("  Reduction:", ((1 - finalPoints.length / points.length) * 100).toFixed(1) + "%");
+      }
+      
+      setChartData(finalPoints);
       setIsLoadingChartData(false);
       console.log("✅ Synthetic chart data set!");
     };
@@ -2358,26 +2417,225 @@ export default function SwapPage() {
         console.log("  Expected color:", direction === "up" ? "🟢 GREEN" : direction === "down" ? "🔴 RED" : "🔵 BLUE");
         console.log("  Time:", new Date(now * 1000).toISOString());
         
-        const newPoint = { time: now, value: newValue };
+        // CRITICAL: Calculate time interval based on chartTimeRange
+        // Only add new X-axis tick when enough time has passed
+        const timeRangeToInterval: Record<string, number> = {
+          "1D": 300,      // 5 minutes for 1D
+          "1W": 3600,     // 1 hour for 1W
+          "1M": 14400,    // 4 hours for 1M
+          "3M": 86400,    // 1 day for 3M
+          "6M": 259200,   // 3 days for 6M
+          "YTD": 259200,  // 3 days
+          "1Y": 604800,   // 1 week for 1Y
+          "2Y": 1209600,  // 2 weeks for 2Y
+          "5Y": 2592000,  // 30 days for 5Y
+          "10Y": 2592000, // 30 days for 10Y
+          "ALL": 2592000, // 30 days
+        };
+        const tickInterval = timeRangeToInterval[chartTimeRange] || 300;
+        const timeSinceLastTick = now - lastPoint.time;
+        const shouldAddNewTick = timeSinceLastTick >= tickInterval;
         
-        // Use chart series update method if available (smooth update, no refresh)
-        if (chartSeriesRef.current?.series) {
-          console.log("  ✅ Using series.update() - SMOOTH addition, no chart refresh");
+        console.log("⏰ Time-based update logic:");
+        console.log("  Time range:", chartTimeRange);
+        console.log("  Tick interval:", tickInterval, "seconds");
+        console.log("  Time since last tick:", timeSinceLastTick, "seconds");
+        console.log("  Should add new tick:", shouldAddNewTick);
+        
+        // CRITICAL: Use series.update() for smooth updates without chart refresh
+        // Only update data array if we're adding a new tick, otherwise just update Y value
+        if (chartSeriesRef.current?.series && chartSeriesRef.current?.chart) {
           try {
-            chartSeriesRef.current.series.update(newPoint);
-            console.log("  ✅ Point added smoothly to chart via update()!");
+            const series = chartSeriesRef.current.series;
+            const chart = chartSeriesRef.current.chart;
+            const timeScale = chart.timeScale();
+            const priceScale = chart.priceScale('right');
+            
+            // Get current visible ranges BEFORE update
+            const currentTimeRange = timeScale.getVisibleRange();
+            // Calculate current gap BEFORE update to preserve it (including if user dragged to increase it)
+            let currentGapBeforeUpdate = 0;
+            if (currentTimeRange && typeof currentTimeRange.from === 'number' && typeof currentTimeRange.to === 'number') {
+              const lastTimeCoordinate = timeScale.timeToCoordinate(lastPoint.time);
+              const containerWidth = chart.options().width;
+              if (containerWidth && lastTimeCoordinate !== null) {
+                let priceScaleWidth = 60;
+                try {
+                  const ps = chart.priceScale('right');
+                  if (ps && typeof ps.width === 'function') {
+                    priceScaleWidth = ps.width() || 60;
+                  }
+                } catch (e) {}
+                const chartPaneWidth = containerWidth - priceScaleWidth;
+                currentGapBeforeUpdate = chartPaneWidth - lastTimeCoordinate;
+              }
+            }
+            // Get current visible price range if user has manually zoomed (autoScale is false)
+            const currentPriceRange = priceScale ? (() => {
+              try {
+                const options = priceScale.options();
+                if (options && options.autoScale === false) {
+                  // User has manually adjusted - get visible range from series
+                  const visibleRange = series.priceScale().getVisibleRange();
+                  if (visibleRange && typeof visibleRange.from === 'number' && typeof visibleRange.to === 'number') {
+                    return { from: visibleRange.from, to: visibleRange.to };
+                  }
+                }
+              } catch (e) {}
+              return null;
+            })() : null;
+            
+            // CRITICAL: Disable auto-scale BEFORE update if user has manually zoomed
+            // This prevents series.update() from resetting the zoom
+            if (currentPriceRange && priceScale) {
+              priceScale.applyOptions({ autoScale: false });
+            }
+            
+            if (shouldAddNewTick) {
+              // Add new point with new time tick
+              console.log("  ✅ Adding new time tick - X-axis will move");
+              const newPoint = { time: now, value: newValue };
+              series.update(newPoint);
+              
+              // CRITICAL: Update position cache immediately after series.update()
+              // This ensures dots, ripple, and caret update synchronously
+              if (chartSeriesRef.current?.updatePositions) {
+                chartSeriesRef.current.updatePositions();
+              }
+              
+              // Update data array
+              setChartData(prev => {
+                const next = [...prev, newPoint];
+                chartDataRef.current = next;
+                return next;
+              });
+              
+              // CRITICAL: Preserve the gap that existed before update (including if user dragged to increase it)
+              // Always preserve the gap, whether it's the initial gap or a larger gap from dragging
+              requestAnimationFrame(() => {
+                // Check current gap after update
+                const lastTimeCoordinate = timeScale.timeToCoordinate(now);
+                const containerWidth = chart.options().width;
+                if (containerWidth && lastTimeCoordinate !== null) {
+                  let priceScaleWidth = 60;
+                  try {
+                    const ps = chart.priceScale('right');
+                    if (ps && typeof ps.width === 'function') {
+                      priceScaleWidth = ps.width() || 60;
+                    }
+                  } catch (e) {}
+                  const chartPaneWidth = containerWidth - priceScaleWidth;
+                  const currentGapAfterUpdate = chartPaneWidth - lastTimeCoordinate;
+                  
+                  // Calculate how much to scroll to restore the gap that existed before update
+                  // This preserves both the initial gap and any gap increase from dragging
+                  const gapDifference = currentGapBeforeUpdate - currentGapAfterUpdate;
+                  if (Math.abs(gapDifference) > 1) { // Only restore if gap changed significantly
+                    // Use scrollToPosition to pan (preserves zoom) instead of setVisibleRange (which scales)
+                    // Negative value scrolls left, which increases gap
+                    timeScale.scrollToPosition(-gapDifference, false);
+                  }
+                }
+              });
+            } else {
+              // Update only Y value of last point (no X-axis movement)
+              console.log("  ✅ Updating Y value only - X-axis stays still");
+              const updatedPoint = { time: lastPoint.time, value: newValue };
+              series.update(updatedPoint);
+              
+              // CRITICAL: Update position cache immediately after series.update()
+              // This ensures dots, ripple, and caret update synchronously
+              if (chartSeriesRef.current?.updatePositions) {
+                chartSeriesRef.current.updatePositions();
+              }
+              
+              // Update data array (replace last point)
+              setChartData(prev => {
+                const next = [...prev];
+                next[next.length - 1] = updatedPoint;
+                chartDataRef.current = next;
+                return next;
+              });
+            }
+            
+            // CRITICAL: Preserve vertical zoom (price scale) if user has manually zoomed
+            // Restore the visible price range after update to maintain user's zoom level
+            if (currentPriceRange && priceScale) {
+              // Use multiple attempts with delays to ensure the range is restored
+              // The chart library might reset it during series.update()
+              const restorePriceRange = () => {
+                try {
+                  // Restore the exact price range the user had zoomed to
+                  series.priceScale().setVisibleRange(currentPriceRange);
+                  // Ensure autoScale stays false to preserve manual zoom
+                  priceScale.applyOptions({ autoScale: false });
+                } catch (e) {
+                  console.error("  ❌ Error restoring price range:", e);
+                }
+              };
+              
+              // Immediate restore
+              restorePriceRange();
+              
+              // Also restore after chart has processed the update
+              requestAnimationFrame(() => {
+                restorePriceRange();
+                // One more attempt after a short delay
+                setTimeout(() => {
+                  restorePriceRange();
+                }, 10);
+              });
+            } else {
+              // CRITICAL: Smart rescaling - only rescale if price goes outside bounds
+              // Top bound: 0.07 (7%), Bottom bound: 0.175 (17.5%)
+              // Only do this if user hasn't manually zoomed (autoScale is true)
+              requestAnimationFrame(() => {
+                if (priceScale) {
+                  try {
+                    const coordinate = series.priceToCoordinate(newValue);
+                    const chartHeight = chart.options().height;
+                    if (coordinate !== null && chartHeight) {
+                      const topBound = chartHeight * 0.07;
+                      const bottomBound = chartHeight * 0.175;
+                      const distanceFromTop = coordinate;
+                      const distanceFromBottom = chartHeight - coordinate;
+                      
+                      const needsRescale = distanceFromTop < topBound || distanceFromBottom < bottomBound;
+                      
+                      if (needsRescale) {
+                        console.log("  ⚠️ Price outside bounds - rescaling");
+                        console.log("    Distance from top:", distanceFromTop, "px (bound:", topBound, "px)");
+                        console.log("    Distance from bottom:", distanceFromBottom, "px (bound:", bottomBound, "px)");
+                        priceScale.applyOptions({ autoScale: true });
+                      }
+                    }
+                  } catch (e) {
+                    console.error("  ❌ Error checking price bounds:", e);
+                  }
+                }
+              });
+            }
+            
+            console.log("  ✅ Point updated smoothly via series.update()!");
           } catch (error) {
             console.error("  ❌ Error updating series:", error);
+            // Fallback to setChartData if update fails
+            const newPoint = { time: now, value: newValue };
+            setChartData(prev => {
+              const next = [...prev, newPoint];
+              chartDataRef.current = next;
+              return next;
+            });
           }
         } else {
           console.log("  ⚠️ Series ref not ready, using setChartData (will refresh chart)");
+          const newPoint = { time: now, value: newValue };
+          setChartData(prev => {
+            const next = [...prev, newPoint];
+            chartDataRef.current = next;
+            return next;
+          });
         }
-
-        setChartData(prev => {
-          const next = [...prev, newPoint];
-          chartDataRef.current = next;
-          return next;
-        });
         
         // Update counters
         const currentTime = new Date();
@@ -2417,15 +2675,15 @@ export default function SwapPage() {
     console.log("⏰ Fetching first real-time update IMMEDIATELY");
     fetchLatestPrice();
 
-    // Then fetch every 60 seconds (reduced frequency due to server-side caching)
-    // The API route has a 10-second cache, so we can poll less frequently
-    console.log("⏰ Setting up interval to fetch real prices every 60 seconds");
+    // Then fetch every 15 seconds
+    // The API route has a 60-second cache, but we poll more frequently for better UX
+    console.log("⏰ Setting up interval to fetch real prices every 15 seconds");
     let callCount = 0;
     const interval = setInterval(() => {
       callCount++;
       console.log(`\n⏰⏰⏰ INTERVAL FIRED - Call #${callCount} at ${new Date().toLocaleTimeString()}`);
       fetchLatestPrice();
-    }, 60000); // 60 seconds (reduced frequency due to server-side caching)
+    }, 15000); // 15 seconds
 
     return () => {
       console.log("🛑 Cleaning up interval - effect is re-running");
@@ -3691,10 +3949,9 @@ export default function SwapPage() {
         const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
         const offsetX = overlayOffset?.x ?? 0;
         const offsetY = overlayOffset?.y ?? 0;
-        // On mobile, shift down by half header height (~24px) to prevent top cutoff
-        const mobileHeaderOffset = isMobileView ? 24 : 0;
+        // On mobile, position at top: 0, desktop uses centered positioning
         const transform = isMobileView
-          ? `translate(-50%, calc(-50% + ${mobileHeaderOffset}px))`
+          ? "translateX(-50%)"
           : isChartMaximized
           ? "translate(-50%, -50%)"
           : `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
@@ -3702,7 +3959,7 @@ export default function SwapPage() {
           <div
             className={`fixed pointer-events-none ${isMobileView ? 'z-[60]' : 'z-20'}`}
             style={{
-              top: "50%",
+              top: isMobileView ? "0" : "50%",
               left: "50%",
               transform,
             }}
@@ -3711,9 +3968,9 @@ export default function SwapPage() {
               className={`pointer-events-auto relative flex flex-col ${isMobileView ? '' : 'rounded-[20px] border border-white/15'} shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)]`}
                 style={{
                   width: isMobileView ? "100vw" : (chartSize.width > 0 ? `${chartSize.width}px` : (isChartMaximized ? "80vw" : "92vw")),
-                  maxWidth: isMobileView ? "none" : (chartSize.width > 0 ? "none" : (isChartMaximized ? "none" : "1100px")),
+                  maxWidth: isMobileView ? "100vw" : (chartSize.width > 0 ? "none" : (isChartMaximized ? "none" : "1100px")),
                   height: isMobileView ? "100vh" : (chartSize.height > 0 ? `${chartSize.height}px` : (isChartMaximized ? "90vh" : "77vh")),
-                  maxHeight: isMobileView ? "none" : (chartSize.height > 0 ? "none" : (isChartMaximized ? "none" : "840px")),
+                  maxHeight: isMobileView ? "100vh" : (chartSize.height > 0 ? "none" : (isChartMaximized ? "none" : "840px")),
                   backgroundColor: isMobileView ? "#000000" : "rgba(12, 14, 22, 0.6)",
                   backdropFilter: isMobileView ? "none" : "blur(40px) saturate(180%)",
                   WebkitBackdropFilter: isMobileView ? "none" : "blur(40px) saturate(180%)",
@@ -3726,44 +3983,59 @@ export default function SwapPage() {
               >
                 {/* Header with drag and buttons */}
                 <div
-                  className={`flex items-center justify-between px-4 border-b border-white/10 ${
+                  className={`flex items-center justify-between border-b border-white/10 ${
                     isMobileView ? "h-[62px]" : "h-12"
                   } ${
                     (typeof window !== 'undefined' && window.innerWidth < 768) 
                       ? "" 
                       : (isChartMaximized || isDraggingChart ? "cursor-grabbing" : "cursor-grab")
                   }`}
+                  style={{
+                    ...(isMobileView && {
+                      paddingLeft: "16px", // px-4 - same as mobile content padding
+                      paddingRight: "16px", // px-4 - same as mobile content padding
+                      paddingTop: "16px", // 2x of 8px (default)
+                      paddingBottom: "16px", // 2x of 8px (default)
+                    }),
+                    ...(!isMobileView && {
+                      paddingLeft: "16px", // px-4
+                      paddingRight: "16px", // px-4
+                    }),
+                  }}
                   onPointerDown={handleOverlayPointerDown}
                 >
-                  {/* Token pair with icons */}
-                  <div className="flex items-center gap-2">
-                    {tokenA.icon && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={tokenA.icon}
-                        alt={tokenA.symbol}
-                        className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null;
-                          event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
-                        }}
-                      />
-                    )}
-                    <span className="text-xs uppercase tracking-[0.35em] text-white/55">
-                      {chartPairLabel}
-                    </span>
-                    {tokenB.icon && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={tokenB.icon}
-                        alt={tokenB.symbol}
-                        className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null;
-                          event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
-                        }}
-                      />
-                    )}
+                  <div className="flex items-center gap-4">
+                    {/* Token pair with icons */}
+                    <div className="flex items-center gap-2">
+                      {tokenA.icon && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={tokenA.icon}
+                          alt={tokenA.symbol}
+                          className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
+                          onError={(event) => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
+                          }}
+                        />
+                      )}
+                      <span className="text-xs uppercase tracking-[0.35em] text-white/55">
+                        {chartPairLabel}
+                      </span>
+                      {tokenB.icon && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={tokenB.icon}
+                          alt={tokenB.symbol}
+                          className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
+                          onError={(event) => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
+                          }}
+                        />
+                      )}
+                    </div>
+                    
                   </div>
                   <div className="flex items-center gap-3">
                     {/* Maximize button - hidden on mobile */}
@@ -3806,96 +4078,12 @@ export default function SwapPage() {
                     </button>
                   </div>
                 </div>
-                {/* Time Range Buttons - Desktop: below header */}
-                {!isMobileView && (() => {
-                  const timeRanges: Array<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL"> = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "10Y", "ALL"];
-                  
-                  return (
-                    <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10 bg-black">
-                      {timeRanges.map((range) => (
-                        <button
-                          key={range}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setChartTimeRange(range);
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wide font-medium transition-all ${
-                            chartTimeRange === range
-                              ? "bg-white/20 text-white"
-                              : "text-white/60 hover:text-white/80"
-                          }`}
-                        >
-                          {range}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-                {/* Chart Container - 65vh on mobile, full height on desktop */}
-                <div
-                  key={`chart-container-${tokenA.symbol}-${tokenB.symbol}-${chartTimeRange}`}
-                  className={isMobileView ? "relative overflow-visible flex-shrink-0" : "absolute overflow-hidden"}
-                  style={{
-                    ...(isMobileView ? {
-                      height: "calc(65vh - 62px)", // 65vh minus header height
-                    } : {
-                      top: "96px", // 48px header + 48px time range buttons
-                      left: "0",
-                      right: "0",
-                      bottom: "0",
-                      borderBottomLeftRadius: "20px",
-                      borderBottomRightRadius: "20px",
-                    }),
-                  }}
-                >
-                  <div className="relative w-full h-full">
-                    {chartData.length > 0 ? (
-                      <div 
-                        className="w-full h-full transition-opacity duration-300"
-                        style={{
-                          opacity: isLoadingChartData ? 0.3 : 1,
-                        }}
-                      >
-                        <LightweightChart 
-                          key={`lw-${tokenA.symbol}-${tokenB.symbol}-${chartTimeRange}-${chartData.length}`} 
-                          data={chartData}
-                          pulseColor={latestPriceChange === "up" ? "#10b981" : latestPriceChange === "down" ? "#ef4444" : "#3b82f6"}
-                          showPulse={showPulse}
-                          permanentDotColor={permanentDotColor}
-                          onSeriesReady={(series, chart) => {
-                            console.log("📢 Chart series ready, storing reference");
-                            chartSeriesRef.current = { series, chart };
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-                        <LoadingAnimation />
-                        <p className="text-sm text-white/40 font-medium">Loading chart data...</p>
-                      </div>
-                    )}
-                    {/* Loading overlay with spinner */}
-                    {isLoadingChartData && chartData.length > 0 && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm z-50">
-                        <div className="flex flex-col items-center justify-center gap-3">
-                          <div className="relative">
-                            <div className="h-12 w-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-                          </div>
-                          <p className="text-sm text-white/70 font-medium">Loading new data...</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Time Range Buttons - Mobile: below chart area */}
+                {/* Time Range Buttons - Mobile: below header */}
                 {isMobileView && (() => {
                   const timeRanges: Array<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL"> = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "10Y", "ALL"];
                   
                   return (
-                    <div className="relative flex-shrink-0 border-t border-white/10 bg-black overflow-hidden">
+                    <div className="relative flex-shrink-0 border-b border-white/10 bg-black overflow-hidden" style={{ minHeight: "48px" }}>
                       <div
                         className="flex gap-2 px-4 py-3 overflow-x-auto"
                         style={{
@@ -3926,6 +4114,105 @@ export default function SwapPage() {
                     </div>
                   );
                 })()}
+                {/* Time Range Buttons - Desktop: below header */}
+                {!isMobileView && (() => {
+                  const timeRanges: Array<"1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "10Y" | "ALL"> = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "10Y", "ALL"];
+                  
+                  return (
+                    <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10 bg-black">
+                      {timeRanges.map((range) => (
+                        <button
+                          key={range}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setChartTimeRange(range);
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wide font-medium transition-all ${
+                            chartTimeRange === range
+                              ? "bg-white/20 text-white"
+                              : "text-white/60 hover:text-white/80"
+                          }`}
+                        >
+                          {range}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {/* Chart Container - flex-1 on mobile to take remaining space, full height on desktop */}
+                <div
+                  key={`chart-container-${tokenA.symbol}-${tokenB.symbol}-${chartTimeRange}`}
+                  className={isMobileView ? "relative overflow-visible flex-1" : "absolute overflow-hidden"}
+                  onTouchStart={(e) => {
+                    if (isMobileView) {
+                      // Touch start - crosshair will appear, buttons will hide via onCrosshairChange
+                    }
+                  }}
+                  onTouchEnd={(e) => {
+                    if (isMobileView) {
+                      // Touch end - hide crosshair and show buttons
+                      setIsCrosshairActive(false);
+                    }
+                  }}
+                  style={{
+                    ...(isMobileView ? {
+                      // flex-1 will take remaining space after header and buttons
+                    } : {
+                      top: "96px", // 48px header + 48px time range buttons
+                      left: "0",
+                      right: "0",
+                      bottom: "0",
+                      borderBottomLeftRadius: "20px",
+                      borderBottomRightRadius: "20px",
+                    }),
+                  }}
+                >
+                  <div className="relative w-full h-full">
+                    {chartData.length > 0 ? (
+                      <div 
+                        className="w-full h-full transition-opacity duration-300"
+                        style={{
+                          opacity: isLoadingChartData ? 0.3 : 1,
+                        }}
+                      >
+                        <LightweightChart 
+                          key={`lw-${tokenA.symbol}-${tokenB.symbol}-${chartTimeRange}-${chartData.length}`} 
+                          data={chartData}
+                          pulseColor={latestPriceChange === "up" ? "#10b981" : latestPriceChange === "down" ? "#ef4444" : "#3b82f6"}
+                          showPulse={showPulse}
+                          permanentDotColor={permanentDotColor}
+                          onSeriesReady={(series, chart, updatePositions) => {
+                            console.log("📢 Chart series ready, storing reference");
+                            chartSeriesRef.current = { series, chart, updatePositions };
+                          }}
+                          onCrosshairChange={(isActive) => {
+                            if (isMobileView) {
+                              setIsCrosshairActive(isActive);
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+                        <LoadingAnimation />
+                        <p className="text-sm text-white/40 font-medium">Loading chart data...</p>
+                      </div>
+                    )}
+                    {/* Loading overlay with spinner */}
+                    {isLoadingChartData && chartData.length > 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm z-50">
+                        <div className="flex flex-col items-center justify-center gap-3">
+                          <div className="relative">
+                            <div className="h-12 w-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                          </div>
+                          <p className="text-sm text-white/70 font-medium">Loading new data...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 
                 {/* Info Card - Mobile only, 35vh */}
                 {isMobileView && (
@@ -4016,7 +4303,7 @@ export default function SwapPage() {
               >
                 {/* Header with drag and close button */}
                 <div 
-                  className={`relative z-10 flex h-12 items-center justify-between border-b border-white/10 bg-white/5 px-6 backdrop-blur-xl backdrop-saturate-[180%] ${
+                  className={`relative z-10 flex h-12 items-center justify-between border-b border-white/10 bg-white/5 px-4 md:px-6 backdrop-blur-xl backdrop-saturate-[180%] ${
                     isDraggingSwapDetails ? "cursor-grabbing" : "cursor-grab"
                   }`}
                   onPointerDown={handleSwapDetailsPointerDown}
