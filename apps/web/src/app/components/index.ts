@@ -9,4 +9,8 @@ export { Footer } from "./Footer/Footer";
 export { CodeBlock } from "./CodeBlock/CodeBlock";
 export { ArchitectureSection } from "./ArchitectureSection/ArchitectureSection";
 export { SwapModal } from "./Swap/SwapModal";
+export { TestScrollCard } from "./TestScrollCard/TestScrollCard";
+export { TokenSelector } from "./TokenSelector/TokenSelector";
+export { TokenSelectorButton } from "./TokenSelector/TokenSelectorButton";
+export type { Token } from "./TokenSelector/TokenSelector";
 

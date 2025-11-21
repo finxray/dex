@@ -11,6 +11,7 @@ import styles from "./Header.module.css";
 export function Header() {
   const pathname = usePathname();
   const isSwapPage = pathname === "/swap";
+  const isConnectingRef = useRef(false); // Track connection attempts to prevent duplicates
   
   // App pages that should show the app toolbar
   const appPages = ["/swap", "/liquidity", "/pools", "/positions", "/analytics"];
@@ -354,31 +355,55 @@ export function Header() {
           ) : (
             <>
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    if (hasConnector && connectors[0]) {
-                      connect({ connector: connectors[0] });
+                    // Prevent duplicate connection attempts
+                    if (isConnectingRef.current || isConnectPending || !hasConnector || !connectors[0]) {
+                      return;
+                    }
+                    isConnectingRef.current = true;
+                    try {
+                      await connect({ connector: connectors[0] });
+                    } catch (error) {
+                      console.error("Failed to connect wallet:", error);
+                    } finally {
+                      setTimeout(() => {
+                        isConnectingRef.current = false;
+                      }, 1000);
                     }
                   } catch (error) {
                     console.error("Failed to connect wallet:", error);
+                    isConnectingRef.current = false;
                   }
                 }}
-                disabled={isConnectPending || !hasConnector}
+                disabled={isConnectPending || !hasConnector || isConnectingRef.current}
                 className="hidden rounded-full border border-white/20 px-3 py-1 text-xs font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed md:flex items-center justify-center whitespace-nowrap"
               >
                 {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    if (hasConnector && connectors[0]) {
-                      connect({ connector: connectors[0] });
+                    // Prevent duplicate connection attempts
+                    if (isConnectingRef.current || isConnectPending || !hasConnector || !connectors[0]) {
+                      return;
+                    }
+                    isConnectingRef.current = true;
+                    try {
+                      await connect({ connector: connectors[0] });
+                    } catch (error) {
+                      console.error("Failed to connect wallet:", error);
+                    } finally {
+                      setTimeout(() => {
+                        isConnectingRef.current = false;
+                      }, 1000);
                     }
                   } catch (error) {
                     console.error("Failed to connect wallet:", error);
+                    isConnectingRef.current = false;
                   }
                 }}
-                disabled={isConnectPending || !hasConnector}
+                disabled={isConnectPending || !hasConnector || isConnectingRef.current}
                 className="md:hidden rounded-full px-3 py-2 text-xs font-normal transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center whitespace-nowrap touch-manipulation"
                 style={{ 
                   minHeight: "36px",
@@ -554,17 +579,29 @@ export function Header() {
                 </div>
               ) : (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     try {
-                      if (hasConnector && connectors[0]) {
-                        connect({ connector: connectors[0] });
+                      // Prevent duplicate connection attempts
+                      if (isConnectingRef.current || isConnectPending || !hasConnector || !connectors[0]) {
+                        return;
+                      }
+                      isConnectingRef.current = true;
+                      try {
+                        await connect({ connector: connectors[0] });
+                      } catch (error) {
+                        console.error("Failed to connect wallet:", error);
+                      } finally {
+                        setTimeout(() => {
+                          isConnectingRef.current = false;
+                        }, 1000);
                       }
                     } catch (error) {
                       console.error("Failed to connect wallet:", error);
+                      isConnectingRef.current = false;
                     }
                     handleNavClick();
                   }}
-                  disabled={isConnectPending || !hasConnector}
+                  disabled={isConnectPending || !hasConnector || isConnectingRef.current}
                   className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
                   style={{ minHeight: "48px" }}
                 >

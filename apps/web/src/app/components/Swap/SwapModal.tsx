@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors } from "wagmi";
 import { formatUnits, parseUnits, maxUint256 } from "viem";
 
@@ -36,6 +36,7 @@ export function SwapModal() {
   const connectors = useConnectors();
   const { connect, error: connectError, isPending: isConnectPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const isConnectingRef = useRef(false); // Track connection attempts to prevent duplicates
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
@@ -367,12 +368,23 @@ export function SwapModal() {
 
         {!isConnected ? (
           <button
-            onClick={() => {
-              if (connectors[0]) {
-                connect({ connector: connectors[0] });
+            onClick={async () => {
+              // Prevent duplicate connection attempts
+              if (isConnectingRef.current || isConnecting || isConnectPending || !connectors[0]) {
+                return;
+              }
+              isConnectingRef.current = true;
+              try {
+                await connect({ connector: connectors[0] });
+              } catch (error) {
+                // Ignore connection errors
+              } finally {
+                setTimeout(() => {
+                  isConnectingRef.current = false;
+                }, 1000);
               }
             }}
-            disabled={isConnecting || isConnectPending || !connectors[0]}
+            disabled={isConnecting || isConnectPending || isConnectingRef.current || !connectors[0]}
             className="w-full rounded-2xl bg-white text-black py-3 font-medium transition hover:bg-white/80"
           >
             {isConnecting || isConnectPending ? "Connecting..." : "Connect Wallet"}

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type PointerEvent as ReactPointerEvent, type MutableRefObject } from "react";
-import { createPortal } from "react-dom";
 import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors, useChainId, useSwitchChain } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { defineChain } from "viem";
@@ -30,6 +29,7 @@ import { quoterAbi } from "../../lib/abi/quoter";
 import { erc20Abi } from "../../lib/abi/erc20";
 import LightweightChart from "./components/LightweightChart";
 import { Header } from "../components/Header/Header";
+import { TokenSelector, TokenSelectorButton, type Token } from "../components";
 
 
 type Token = {
@@ -207,6 +207,7 @@ export default function SwapPage() {
   const { address, isConnecting, isConnected, connector } = useAccount();
   const connectors = useConnectors();
   const { connect, error: connectError, isPending: isConnectPending } = useConnect();
+  const isConnectingRef = useRef(false); // Track connection attempts to prevent duplicates
   const { disconnect } = useDisconnect();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -330,6 +331,154 @@ export default function SwapPage() {
 
   // Use walletClient if available, otherwise use fallback
   const effectiveWalletClient = walletClient || fallbackWalletClient;
+
+  // Track if auto-connect has been attempted to prevent repeated attempts
+  const autoConnectAttemptedRef = useRef(false);
+
+  // Auto-connect to previously connected wallet on mount and listen for account changes
+  useEffect(() => {
+    // Only attempt auto-connect once on mount
+    if (autoConnectAttemptedRef.current) {
+      return;
+    }
+
+    const autoConnect = async () => {
+      // Only try to auto-connect if not already connected and connectors are available
+      if (isConnected || isConnecting || isConnectPending || isConnectingRef.current || !connectors[0]) {
+        return;
+      }
+
+      // Mark as attempted to prevent retries
+      autoConnectAttemptedRef.current = true;
+
+      // Check if wallet extension is available
+      if (typeof window !== "undefined" && (window as any).ethereum) {
+        try {
+          // Check if wallet is already connected (has accounts)
+          const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
+          if (accounts && accounts.length > 0) {
+            console.log("🔗 Auto-connecting to previously connected wallet...");
+            console.log("  Account:", accounts[0]);
+            isConnectingRef.current = true;
+            try {
+              await connect({ connector: connectors[0] });
+            } catch (error: any) {
+              // Suppress "already pending" errors to prevent UI glitches
+              const errorMessage = error?.message || error?.toString() || "";
+              if (errorMessage.includes("already pending") || errorMessage.includes("Request of type")) {
+                console.log("⚠️ Connection already in progress, skipping auto-connect");
+              } else {
+                console.log("⚠️ Auto-connect error:", error);
+              }
+            } finally {
+              isConnectingRef.current = false;
+            }
+          }
+        } catch (error: any) {
+          // Suppress errors that might cause UI glitches
+          const errorMessage = error?.message || error?.toString() || "";
+          if (!errorMessage.includes("already pending") && !errorMessage.includes("Request of type")) {
+            console.log("⚠️ Auto-connect failed:", error);
+          }
+          isConnectingRef.current = false;
+        }
+      }
+    };
+
+    // Listen for account changes from wallet extension
+    const handleAccountsChanged = async (accounts: string[]) => {
+      console.log("🔔 Wallet accounts changed:", accounts);
+      if (accounts.length > 0 && !isConnected && !isConnectingRef.current && !isConnectPending) {
+        // Wallet connected externally - try to connect
+        console.log("🔗 Wallet connected externally, syncing...");
+        if (connectors[0]) {
+          isConnectingRef.current = true;
+          try {
+            await connect({ connector: connectors[0] });
+          } catch (error: any) {
+            // Suppress "already pending" errors
+            const errorMessage = error?.message || error?.toString() || "";
+            if (!errorMessage.includes("already pending") && !errorMessage.includes("Request of type")) {
+              console.log("⚠️ External connection sync failed:", error);
+            }
+          } finally {
+            isConnectingRef.current = false;
+          }
+        }
+      } else if (accounts.length === 0 && isConnected) {
+        // Wallet disconnected externally - disconnect from app
+        console.log("🔗 Wallet disconnected externally, syncing...");
+        disconnect();
+      }
+    };
+
+    // Small delay to ensure connectors are ready, but only run once
+    const timer = setTimeout(() => {
+      autoConnect();
+    }, 500); // Increased delay to avoid conflicts
+
+    // Listen for wallet account changes
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      (window as any).ethereum.on("accountsChanged", handleAccountsChanged);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      if (typeof window !== "undefined" && (window as any).ethereum) {
+        (window as any).ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      }
+    };
+  }, []); // Only run once on mount - removed dependencies to prevent re-runs
+
+  // Sync connection state when wallet connects externally
+  // This effect watches for when the wallet has accounts but wagmi hasn't detected connection yet
+  useEffect(() => {
+    // Skip if already connected or connecting
+    if (isConnected || isConnecting || isConnectPending || isConnectingRef.current || !connectors[0]) {
+      return;
+    }
+
+    const checkAndSync = async () => {
+      // Double-check state hasn't changed
+      if (isConnected || isConnecting || isConnectPending || isConnectingRef.current) {
+        return;
+      }
+
+      if (typeof window !== "undefined" && (window as any).ethereum) {
+        try {
+          const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
+          if (accounts && accounts.length > 0 && !isConnected && !isConnectingRef.current) {
+            console.log("🔗 Wallet has accounts but app not connected, syncing...");
+            console.log("  Account:", accounts[0]);
+            isConnectingRef.current = true;
+            try {
+              await connect({ connector: connectors[0] });
+              console.log("✅ Successfully synced wallet connection");
+            } catch (error: any) {
+              const errorMessage = error?.message || error?.toString() || "";
+              if (!errorMessage.includes("already pending") && !errorMessage.includes("Request of type")) {
+                console.log("⚠️ Sync connection failed:", error);
+              }
+            } finally {
+              setTimeout(() => {
+                isConnectingRef.current = false;
+              }, 500);
+            }
+          }
+        } catch (error) {
+          // Silently fail - wallet might not be available
+        }
+      }
+    };
+
+    // Check periodically when not connected (but throttle it)
+    const interval = setInterval(checkAndSync, 2000); // Check every 2 seconds
+    
+    // Also check immediately
+    checkAndSync();
+
+    return () => clearInterval(interval);
+  }, [isConnected, address, isConnecting, isConnectPending, connectors, connect]); // Watch connection state
 
   // Debug: Monitor connection state
   useEffect(() => {
@@ -566,8 +715,11 @@ export default function SwapPage() {
   const [cardRect, setCardRect] = useState<DOMRect | null>(null);
   const [swapTitleRect, setSwapTitleRect] = useState<DOMRect | null>(null);
   const [swapCardRect, setSwapCardRect] = useState<DOMRect | null>(null);
+  const receiveCardRef = useRef<HTMLDivElement | null>(null);
+  const [receiveCardRect, setReceiveCardRect] = useState<DOMRect | null>(null);
   const [chartData, setChartData] = useState<AreaData[]>([]);
   const chartDataRef = useRef<AreaData[]>([]);
+  const isChartOpenRef = useRef(false); // Track chart open state for interval callbacks
   const hasInitialChartData = chartData.length > 0;
   const [quote, setQuote] = useState<QuoteState | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -581,6 +733,7 @@ export default function SwapPage() {
   const [isFetchingAllowance, setIsFetchingAllowance] = useState(false);
   const [fiatCurrency, setFiatCurrency] = useState<"USD" | "EUR" | "GBP">("USD");
   const [orderType, setOrderType] = useState<"Swap" | "Limit" | "Buy" | "Sell">("Swap");
+  
   const swapButtonRef = useRef<HTMLButtonElement | null>(null);
   const [orderButtonWidth, setOrderButtonWidth] = useState<number | null>(null);
   
@@ -708,6 +861,7 @@ export default function SwapPage() {
     }
     setChartPhase("closed");
     setIsChartOpen(true);
+    isChartOpenRef.current = true; // Update ref immediately to start updates
     requestAnimationFrame(() => {
       setChartPhase("opening");
       // After card opening animation completes (0.52s), set phase to "open" to show glow
@@ -718,6 +872,7 @@ export default function SwapPage() {
   };
 
   const handleCloseChart = () => {
+    isChartOpenRef.current = false; // Update ref immediately to stop updates
     setChartPhase("closing");
     setTimeout(() => {
       setIsChartOpen(false);
@@ -833,6 +988,9 @@ export default function SwapPage() {
       if (swapCardRef.current) {
         setSwapCardRect(swapCardRef.current.getBoundingClientRect());
       }
+      if (receiveCardRef.current) {
+        setReceiveCardRect(receiveCardRef.current.getBoundingClientRect());
+      }
     };
     updateRect();
     window.addEventListener("resize", updateRect);
@@ -842,6 +1000,7 @@ export default function SwapPage() {
       window.removeEventListener("scroll", updateRect, true);
     };
   }, []);
+
 
   useEffect(() => {
     const updateViewport = () => {
@@ -2270,7 +2429,90 @@ export default function SwapPage() {
     fetchRealPriceData();
   }, [tokenA.symbol, tokenB.symbol, chartTimeRange]);
 
+  // Fetch one initial price update even when chart is closed to prevent flicker on first open
+  useEffect(() => {
+    if (!hasInitialChartData || chartDataRef.current.length === 0) {
+      return;
+    }
+
+    const symbolA = tokenA.symbol.toUpperCase();
+    const symbolB = tokenB.symbol.toUpperCase();
+    
+    const coins: Record<string, string> = {
+      ETH: "ethereum",
+      WETH: "ethereum",
+      SWETH: "ethereum",
+      BTC: "bitcoin",
+      WBTC: "wrapped-bitcoin",
+      USDC: "usd-coin",
+      SUSDC: "usd-coin",
+      DAI: "dai",
+      USDT: "tether",
+      LINK: "chainlink",
+      UNI: "uniswap",
+      MKR: "maker",
+      AAVE: "aave",
+      COMP: "compound-governance-token",
+      ARB: "arbitrum",
+    };
+    
+    const coinA = coins[symbolA];
+    const coinB = coins[symbolB];
+    
+    if (!coinA || !coinB) {
+      return;
+    }
+
+    // Fetch one price update silently (don't update chart, just refresh data)
+    const fetchInitialPriceUpdate = async () => {
+      try {
+        const combinedIds = `${coinA},${coinB}`;
+        const url = `/api/coingecko/price?ids=${combinedIds}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          return;
+        }
+        
+        const data = await response.json();
+        const priceA = data[coinA]?.usd;
+        const priceB = data[coinB]?.usd;
+        
+        if (!priceA || !priceB || priceB === 0) {
+          return;
+        }
+        
+        const newValue = Number((priceA / priceB).toFixed(6));
+        const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        const lastPoint = chartDataRef.current[chartDataRef.current.length - 1];
+        
+        // Update the last point with new value (silently, no chart update)
+        const updatedPoint = { time: lastPoint.time, value: newValue };
+        setChartData(prev => {
+          const next = [...prev];
+          next[next.length - 1] = updatedPoint;
+          chartDataRef.current = next;
+          return next;
+        });
+        
+        console.log("✅ Initial price update fetched (chart closed) - prevents flicker on open");
+      } catch (error) {
+        // Silently fail - this is just a pre-fetch
+      }
+    };
+
+    // Fetch once after a short delay to avoid interfering with initial chart load
+    const timeoutId = setTimeout(() => {
+      fetchInitialPriceUpdate();
+    }, 2000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [hasInitialChartData, tokenA.symbol, tokenB.symbol]);
+
   // Live price updates - USING COINGECKO API for real-time prices
+  // Only runs when chart is open, stops when chart is closed
   useEffect(() => {
     console.log("\n╔════════════════════════════════════════════════════════╗");
     console.log("║  🔴 LIVE PRICE UPDATE EFFECT TRIGGERED                ║");
@@ -2279,11 +2521,13 @@ export default function SwapPage() {
     console.log("  chartData points:", chartDataRef.current.length);
     console.log("  Will start updates:", isChartOpen && hasInitialChartData);
     
+    // CRITICAL: Don't start updates if chart is closed
     if (!isChartOpen) {
       console.log("❌ Live updates NOT starting - chart closed");
       return;
     }
     
+    // Wait for initial chart data before starting live updates
     if (!hasInitialChartData) {
       console.log("⏳ Live updates waiting for initial chart data to load...");
       return;
@@ -2327,8 +2571,16 @@ export default function SwapPage() {
     console.log("   Using 60s interval + 60s cache to stay within limits");
 
     let updateCounter = 0;
+    let isActive = true; // Track if this effect instance is still active
 
     const fetchLatestPrice = async () => {
+      // CRITICAL: Check if chart is still open before fetching using ref (avoids stale closure)
+      // This prevents race conditions where chart closes but interval still fires
+      if (!isChartOpenRef.current || !isActive) {
+        console.log("❌ Chart closed - stopping price updates");
+        return;
+      }
+      
       console.log(`\n🚀 === REAL-TIME PRICE UPDATE #${updateCounter + 1} ===`);
       
       if (chartDataRef.current.length === 0) {
@@ -2671,22 +2923,31 @@ export default function SwapPage() {
       }
     };
 
-    // Fetch first update immediately
-    console.log("⏰ Fetching first real-time update IMMEDIATELY");
-    fetchLatestPrice();
+    // Fetch first update immediately (only if chart is open)
+    if (isChartOpenRef.current && isActive) {
+      console.log("⏰ Fetching first real-time update IMMEDIATELY");
+      fetchLatestPrice();
+    }
 
     // Then fetch every 15 seconds
     // The API route has a 60-second cache, but we poll more frequently for better UX
     console.log("⏰ Setting up interval to fetch real prices every 15 seconds");
     let callCount = 0;
     const interval = setInterval(() => {
+      // Double-check chart is still open before each fetch using ref (avoids stale closure)
+      if (!isChartOpenRef.current || !isActive) {
+        console.log("🛑 Chart closed - clearing interval");
+        clearInterval(interval);
+        return;
+      }
       callCount++;
       console.log(`\n⏰⏰⏰ INTERVAL FIRED - Call #${callCount} at ${new Date().toLocaleTimeString()}`);
       fetchLatestPrice();
     }, 15000); // 15 seconds
 
     return () => {
-      console.log("🛑 Cleaning up interval - effect is re-running");
+      console.log("🛑 Cleaning up interval - chart closed or effect re-running");
+      isActive = false; // Mark as inactive to prevent any pending fetches
       clearInterval(interval);
     };
   }, [isChartOpen, hasInitialChartData, tokenA.symbol, tokenB.symbol]);
@@ -2818,1121 +3079,7 @@ export default function SwapPage() {
     }
   }, [chartData]);
 
-  // Simple test card component - exact same as Analytics page, positioned next to swap card
-  function TestScrollCard({ isLimitSelected, onClose, cardRect }: { isLimitSelected: boolean; onClose: () => void; cardRect: DOMRect | null }) {
-    const testItems = Array.from({ length: 50 }, (_, i) => `Test Item ${i + 1} - This is a scrollable item for testing purposes`);
-
-    if (!isLimitSelected || !cardRect) {
-      return null;
-    }
-
-    return (
-      <div 
-        className="fixed"
-        style={{ 
-          zIndex: 99999,
-          top: `${cardRect.top}px`,
-          left: `${cardRect.right + 20}px`,
-        }}
-      >
-        <div 
-          className="bg-gray-900 border border-white/20 rounded-lg shadow-2xl" 
-          style={{ 
-            width: "400px", 
-            height: "600px", 
-            display: "flex", 
-            flexDirection: "column",
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
-            <h2 className="text-lg font-semibold text-white">Test Scroll Card</h2>
-            <button
-              onClick={onClose}
-              className="text-white/70 hover:text-white transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Scrollable Content */}
-          <div 
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              overflowX: "hidden",
-              padding: "16px",
-              minHeight: 0,
-            }}
-          >
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {testItems.map((item, index) => (
-                <li 
-                  key={index}
-                  style={{
-                    padding: "12px",
-                    marginBottom: "8px",
-                    backgroundColor: "rgba(255,255,255,0.05)",
-                    borderRadius: "8px",
-                    color: "white",
-                  }}
-                >
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function TokenSelector({ selected, tokens, onSelect, side = "left", cardRect, swapTitleRect, swapCardRect }: { selected: Token; tokens: Token[]; onSelect: (t: Token) => void; side?: "left" | "right"; cardRect: DOMRect | null; swapTitleRect?: DOMRect | null; swapCardRect?: DOMRect | null }) {
-    type PointerTracker = {
-      pointerId: number;
-      x: number;
-      y: number;
-      time: number;
-      moved: boolean;
-      endedAt?: number;
-    };
-
-    const POINTER_MOVE_THRESHOLD = 6;
-    const LONG_PRESS_THRESHOLD = 220;
-    const [isDesktop, setIsDesktop] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-    const [shouldRender, setShouldRender] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
-    
-    // TEMPORARY: Wrap setters to prevent closing during scroll testing
-    const setIsOpenSafe = (value: boolean) => {
-      if (value === false) {
-        console.log("🚫 BLOCKED setIsOpen(false) - card should stay open for testing");
-        console.trace("Call stack:");
-        return;
-      }
-      console.log("✅ setIsOpen(true) allowed");
-      setIsOpen(value);
-    };
-    
-    const setShouldRenderSafe = (value: boolean) => {
-      if (value === false) {
-        console.log("🚫 BLOCKED setShouldRender(false) - card should stay rendered for testing");
-        console.trace("Call stack:");
-        return;
-      }
-      console.log("✅ setShouldRender(true) allowed");
-      setShouldRender(value);
-    };
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const isScrollingRef = useRef(false);
-    const scrollPositionRef = useRef<{ top: number; timestamp: number } | null>(null);
-    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const buttonPointerDownRef = useRef<PointerTracker | null>(null);
-    const tokenPointerDownRef = useRef<PointerTracker | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizingSelector, setIsResizingSelector] = useState(false);
-  const [resizeEdgeSelector, setResizeEdgeSelector] = useState<string | null>(null);
-  const [selectorOffset, setSelectorOffset] = useState({ x: 0, y: 0 });
-  const [selectorSize, setSelectorSize] = useState({ width: 360, height: 0 }); // Will match swap card height
-    const dragLastRef = useRef<{ x: number; y: number } | null>(null);
-    const resizeSelectorStartRef = useRef<{ x: number; y: number; width: number; height: number; offsetX: number; offsetY: number } | null>(null);
-
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-      const check = () => {
-        setIsDesktop(window.innerWidth >= 1024);
-        setIsMobile(window.innerWidth < 768);
-      };
-      check();
-      window.addEventListener("resize", check);
-      return () => window.removeEventListener("resize", check);
-    }, []);
-
-
-    const animateDuration = 260;
-    const [phase, setPhase] = useState<"closed" | "opening" | "open" | "closing">("closed");
-    
-    // DEBUG: Log state changes
-    useEffect(() => {
-      console.log("🔍 TokenSelector state changed:", { isOpen, shouldRender, phase });
-    }, [isOpen, shouldRender, phase]);
-    
-    // TEMPORARY: Wrap setPhase to prevent closing during scroll testing
-    const setPhaseSafe = (value: "closed" | "opening" | "open" | "closing") => {
-      if (value === "closing") {
-        console.log("🚫 BLOCKED setPhase('closing') - card should stay open for testing");
-        console.trace("Call stack:");
-        return;
-      }
-      if (value === "closed" && phase === "open") {
-        console.log("🚫 BLOCKED setPhase('closed') while card is open - card should stay open for testing");
-        console.trace("Call stack:");
-        return;
-      }
-      console.log(`✅ setPhase('${value}') allowed`);
-      setPhase(value);
-    };
-
-    const filteredTokens = useMemo(() => {
-      const query = searchTerm.trim().toLowerCase();
-      if (!query) return tokens;
-      return tokens.filter((t) =>
-        t.symbol.toLowerCase().includes(query) || t.name.toLowerCase().includes(query)
-      );
-    }, [tokens, searchTerm]);
-
-    const tokensToDisplay = filteredTokens.length ? filteredTokens : tokens;
-
-    const openDropdown = () => {
-      setSearchTerm("");
-      setShouldRenderSafe(true);
-      setPhaseSafe("closed");
-      setSelectorOffset({ x: 0, y: 0 });
-      // Set height to 70vh for both cards
-      const viewportHeight = window.innerHeight;
-      const height70vh = viewportHeight * 0.7;
-      setSelectorSize({ width: 360, height: height70vh });
-      console.log("🪙 Token selector height set to 70vh:", height70vh);
-      requestAnimationFrame(() => {
-        setPhaseSafe("opening");
-        setIsOpenSafe(true);
-        // After card opening animation completes (0.52s), set phase to "open" to show glow
-        setTimeout(() => {
-          setPhaseSafe("open");
-        }, 520);
-      });
-    };
-
-    const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      dragLastRef.current = { x: event.clientX, y: event.clientY };
-      setIsDragging(true);
-    };
-
-    const handleResizeSelectorStart = (edge: string, event: React.PointerEvent<HTMLDivElement>) => {
-      event.stopPropagation();
-      event.preventDefault();
-      
-      resizeSelectorStartRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-        width: selectorSize.width,
-        height: selectorSize.height,
-        offsetX: selectorOffset.x,
-        offsetY: selectorOffset.y,
-      };
-      
-      setResizeEdgeSelector(edge);
-      setIsResizingSelector(true);
-    };
-
-    useEffect(() => {
-      if (!isDragging && !isResizingSelector) return;
-
-      const handleMove = (event: PointerEvent) => {
-        if (isDragging && dragLastRef.current) {
-          const deltaX = event.clientX - dragLastRef.current.x;
-          const deltaY = event.clientY - dragLastRef.current.y;
-          dragLastRef.current = { x: event.clientX, y: event.clientY };
-          setSelectorOffset(prev => ({
-            x: prev.x + deltaX,
-            y: prev.y + deltaY,
-          }));
-        } else if (isResizingSelector && resizeSelectorStartRef.current && resizeEdgeSelector) {
-          const deltaX = event.clientX - resizeSelectorStartRef.current.x;
-          const deltaY = event.clientY - resizeSelectorStartRef.current.y;
-          
-          let newWidth = resizeSelectorStartRef.current.width;
-          let newHeight = resizeSelectorStartRef.current.height;
-          
-          if (resizeEdgeSelector.includes('right')) {
-            newWidth = Math.max(300, Math.min(window.innerWidth - 100, resizeSelectorStartRef.current.width + deltaX));
-          }
-          if (resizeEdgeSelector.includes('left')) {
-            newWidth = Math.max(300, Math.min(window.innerWidth - 100, resizeSelectorStartRef.current.width - deltaX));
-          }
-          if (resizeEdgeSelector.includes('bottom')) {
-            newHeight = Math.max(400, Math.min(window.innerHeight - 100, resizeSelectorStartRef.current.height + deltaY));
-          }
-          if (resizeEdgeSelector.includes('top')) {
-            newHeight = Math.max(400, Math.min(window.innerHeight - 100, resizeSelectorStartRef.current.height - deltaY));
-          }
-          
-          setSelectorSize({ width: newWidth, height: newHeight });
-          
-          let newOffsetX = resizeSelectorStartRef.current.offsetX;
-          let newOffsetY = resizeSelectorStartRef.current.offsetY;
-          
-          if (resizeEdgeSelector.includes('left')) {
-            const widthChange = newWidth - resizeSelectorStartRef.current.width;
-            newOffsetX = resizeSelectorStartRef.current.offsetX - (widthChange / 2);
-          } else if (resizeEdgeSelector.includes('right')) {
-            const widthChange = newWidth - resizeSelectorStartRef.current.width;
-            newOffsetX = resizeSelectorStartRef.current.offsetX + (widthChange / 2);
-          }
-          
-          if (resizeEdgeSelector.includes('top')) {
-            const heightChange = newHeight - resizeSelectorStartRef.current.height;
-            newOffsetY = resizeSelectorStartRef.current.offsetY - (heightChange / 2);
-          } else if (resizeEdgeSelector.includes('bottom')) {
-            const heightChange = newHeight - resizeSelectorStartRef.current.height;
-            newOffsetY = resizeSelectorStartRef.current.offsetY + (heightChange / 2);
-          }
-          
-          setSelectorOffset({ x: newOffsetX, y: newOffsetY });
-        }
-      };
-
-      const handleUp = () => {
-        if (isDragging) {
-          dragLastRef.current = null;
-          setIsDragging(false);
-        } else if (isResizingSelector) {
-          setIsResizingSelector(false);
-          setResizeEdgeSelector(null);
-          resizeSelectorStartRef.current = null;
-        }
-      };
-
-      window.addEventListener("pointermove", handleMove);
-      window.addEventListener("pointerup", handleUp);
-      window.addEventListener("pointercancel", handleUp);
-
-      return () => {
-        window.removeEventListener("pointermove", handleMove);
-        window.removeEventListener("pointerup", handleUp);
-        window.removeEventListener("pointercancel", handleUp);
-      };
-    }, [isDragging, isResizingSelector, resizeEdgeSelector]);
-
-    const closeDropdown = () => {
-      // TEMPORARILY DISABLED FOR SCROLL TESTING - card will not close
-      console.log("🔒 closeDropdown called but disabled for testing");
-      console.trace("Call stack:");
-      return;
-      
-      /* DISABLED CODE - Re-enable after scroll testing
-      // Don't close if we're currently scrolling
-      if (isScrollingRef.current) {
-        return;
-      }
-      
-      // Clear any pending scroll timeouts
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = null;
-      }
-      
-      setPhase("closing");
-      setIsOpenSafe(false);
-      setTimeout(() => {
-        setShouldRenderSafe(false);
-        setPhase("closed");
-        setSearchTerm("");
-        // Reset scroll tracking
-        isScrollingRef.current = false;
-        scrollPositionRef.current = null;
-      }, animateDuration);
-      */
-    };
-
-    // Prevent body scroll when card is open and listen for scroll events
-    useEffect(() => {
-      if (isOpen && isDesktop) {
-        // Save current scroll position
-        const scrollY = window.scrollY;
-        // Prevent scrolling
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${scrollY}px`;
-        document.body.style.width = '100%';
-        document.body.style.overflow = 'hidden';
-        
-        // Listen for scroll events anywhere to mark scrolling state
-        const handleScroll = (e: Event) => {
-          // IMPORTANT: If scroll is happening inside the dropdown card, allow it and don't mark as scrolling
-          if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) {
-            console.log("🔒 Scroll event INSIDE card - allowing scroll, NOT marking as scrolling");
-            // Don't mark as scrolling - let the card's internal scroll work
-            return;
-          }
-          // Only mark as scrolling if it's OUTSIDE the dropdown card
-          console.log("🔒 Scroll event OUTSIDE card - marking as scrolling");
-          isScrollingRef.current = true;
-          if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-          }
-          scrollTimeoutRef.current = setTimeout(() => {
-            isScrollingRef.current = false;
-          }, 300);
-        };
-        
-        // Listen for wheel events (scroll) anywhere
-        const handleWheel = (e: WheelEvent) => {
-          // IMPORTANT: If scroll is happening inside the dropdown card, allow it and don't mark as scrolling
-          // This prevents the card from closing when scrolling inside it
-          if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) {
-            console.log("🔒 Wheel event INSIDE card - allowing scroll, NOT marking as scrolling");
-            // Don't mark as scrolling - let the card's internal scroll work
-            return;
-          }
-          // Only mark as scrolling if it's OUTSIDE the dropdown card
-          console.log("🔒 Wheel event OUTSIDE card - marking as scrolling");
-          isScrollingRef.current = true;
-          if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-          }
-          scrollTimeoutRef.current = setTimeout(() => {
-            isScrollingRef.current = false;
-          }, 300);
-        };
-        
-        window.addEventListener('scroll', handleScroll, true);
-        window.addEventListener('wheel', handleWheel, true);
-        
-        return () => {
-          // Restore scrolling
-          document.body.style.position = '';
-          document.body.style.top = '';
-          document.body.style.width = '';
-          document.body.style.overflow = '';
-          // Restore scroll position
-          window.scrollTo(0, scrollY);
-          // Remove scroll listeners
-          window.removeEventListener('scroll', handleScroll, true);
-          window.removeEventListener('wheel', handleWheel, true);
-        };
-      }
-    }, [isOpen, isDesktop]);
-
-
-    const markScrolling = useCallback((delay = 250) => {
-      isScrollingRef.current = true;
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-      scrollTimeoutRef.current = setTimeout(() => {
-        isScrollingRef.current = false;
-        scrollPositionRef.current = null;
-      }, delay);
-    }, []);
-
-    useEffect(() => {
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      const maybeUpdateTracker = (trackerRef: MutableRefObject<PointerTracker | null>, event: PointerEvent) => {
-        const tracker = trackerRef.current;
-        if (!tracker || tracker.pointerId !== event.pointerId || tracker.moved) {
-          return;
-        }
-
-        const deltaX = Math.abs(event.clientX - tracker.x);
-        const deltaY = Math.abs(event.clientY - tracker.y);
-        if (deltaX > POINTER_MOVE_THRESHOLD || deltaY > POINTER_MOVE_THRESHOLD) {
-          tracker.moved = true;
-          markScrolling();
-        }
-      };
-
-      const handlePointerMove = (event: PointerEvent) => {
-        maybeUpdateTracker(buttonPointerDownRef, event);
-        maybeUpdateTracker(tokenPointerDownRef, event);
-      };
-
-      const handlePointerUp = (event: PointerEvent) => {
-        if (buttonPointerDownRef.current?.pointerId === event.pointerId) {
-          buttonPointerDownRef.current.endedAt = Date.now();
-        }
-        if (tokenPointerDownRef.current?.pointerId === event.pointerId) {
-          tokenPointerDownRef.current.endedAt = Date.now();
-        }
-      };
-
-      const handlePointerCancel = (event: PointerEvent) => {
-        if (buttonPointerDownRef.current?.pointerId === event.pointerId) {
-          buttonPointerDownRef.current = null;
-        }
-        if (tokenPointerDownRef.current?.pointerId === event.pointerId) {
-          tokenPointerDownRef.current = null;
-        }
-      };
-
-      window.addEventListener("pointermove", handlePointerMove, true);
-      window.addEventListener("pointerup", handlePointerUp, true);
-      window.addEventListener("pointercancel", handlePointerCancel, true);
-
-      return () => {
-        window.removeEventListener("pointermove", handlePointerMove, true);
-        window.removeEventListener("pointerup", handlePointerUp, true);
-        window.removeEventListener("pointercancel", handlePointerCancel, true);
-      };
-    }, [markScrolling]);
-
-    const renderList = (tokenSet: Token[]) => (
-      <div className="relative w-full h-full" style={{ minHeight: 0 }}>
-        <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2">
-          <span
-            className={`h-0.5 rounded-full bg-white/40 transition-all duration-[${animateDuration}ms] ease-out ${
-              phase === "opening" || phase === "open"
-                ? "w-24 opacity-0"
-                : "w-0 opacity-100"
-            }`}
-          />
-          <span
-            className={`h-2 w-2 rounded-full bg-white transition-transform duration-[${animateDuration}ms] ease-out ${
-              phase === "opening" || phase === "open"
-                ? "scale-0"
-                : "scale-100"
-            }`}
-          />
-          <span
-            className={`h-0.5 rounded-full bg-white/40 transition-all duration-[${animateDuration}ms] ease-out ${
-              phase === "opening" || phase === "open"
-                ? "w-24 opacity-0"
-                : "w-0 opacity-100"
-            }`}
-          />
-        </div>
-        <div
-          className={`relative origin-center transition-all duration-[${animateDuration}ms] ease-out w-full h-full ${
-            phase === "opening" || phase === "open"
-              ? "scale-y-100 opacity-100"
-              : "scale-y-0 opacity-0"
-          }`}
-          style={{ minHeight: 0 }}
-        >
-          <ul 
-            className="w-full h-full overflow-y-auto"
-            style={{ 
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-              maxHeight: "100%"
-            }}
-            onWheel={(e) => {
-              markScrolling();
-              e.stopPropagation();
-            }}
-            onScroll={(e) => {
-              markScrolling();
-              e.stopPropagation();
-            }}
-            onTouchMove={(e) => {
-              markScrolling();
-              e.stopPropagation();
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-            }}
-            onTouchEnd={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            {tokenSet.length ? (
-              tokenSet.map((t) => (
-                <li key={t.address}>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      // TEMPORARILY DISABLED FOR SCROLL TESTING
-                      console.log("🔒 Token button onClick called but disabled for testing");
-                      event.preventDefault();
-                      event.stopPropagation();
-                      return;
-                      
-                      /* DISABLED CODE - Re-enable after scroll testing
-                      if (isScrollingRef.current) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        tokenPointerDownRef.current = null;
-                        return;
-                      }
-
-                      const pointerInfo = tokenPointerDownRef.current;
-                      if (pointerInfo) {
-                        if (pointerInfo.moved) {
-                          tokenPointerDownRef.current = null;
-                          event.preventDefault();
-                          event.stopPropagation();
-                          return;
-                        }
-
-                        const duration = (pointerInfo.endedAt ?? Date.now()) - pointerInfo.time;
-                        if (duration > LONG_PRESS_THRESHOLD) {
-                          tokenPointerDownRef.current = null;
-                          event.preventDefault();
-                          event.stopPropagation();
-                          return;
-                        }
-                      }
-
-                      tokenPointerDownRef.current = null;
-
-                      onSelect(t);
-                      closeDropdown();
-                      */
-                    }}
-                    onPointerDown={(event) => {
-                      tokenPointerDownRef.current = {
-                        pointerId: event.pointerId,
-                        x: event.clientX,
-                        y: event.clientY,
-                        time: Date.now(),
-                        moved: false,
-                      };
-                      event.stopPropagation();
-                    }}
-                    onPointerMove={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onPointerUp={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onPointerCancel={(event) => {
-                      if (tokenPointerDownRef.current?.pointerId === event.pointerId) {
-                        tokenPointerDownRef.current = null;
-                      }
-                      event.stopPropagation();
-                    }}
-                    onWheel={(e) => {
-                      markScrolling();
-                      e.stopPropagation();
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-full border border-transparent px-3 md:px-3 py-2 md:py-2 text-left transition-all touch-manipulation min-h-[48px] md:min-h-0 ${
-                      selected.address === t.address
-                        ? "bg-white/10 hover:border-white/30"
-                        : "hover:border-white/30 hover:bg-white/5"
-                    }`}
-                    style={{ minHeight: "48px" }}
-                  >
-                    {t.icon ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={t.icon}
-                        alt={t.symbol}
-                        className="h-6 w-6 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null;
-                          event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
-                        }}
-                      />
-                    ) : (
-                      <div className="h-6 w-6 rounded-full bg-white/20 ring-1 ring-white/15" />
-                    )}
-                    <div className="flex-1">
-                      <div className="text-sm text-white">{t.symbol}</div>
-                      <div className="text-xs text-white/50">{t.name}</div>
-                    </div>
-                  </button>
-                </li>
-              ))
-            ) : (
-              <li className="px-3 py-4 text-center text-xs text-white/40">No tokens found</li>
-            )}
-          </ul>
-        </div>
-      </div>
-    );
-
-    return (
-      <div className="relative">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            
-            if (isScrollingRef.current) {
-              e.preventDefault();
-              return;
-            }
-            
-            const pointerInfo = buttonPointerDownRef.current;
-            if (pointerInfo) {
-              if (pointerInfo.moved) {
-                buttonPointerDownRef.current = null;
-                e.preventDefault();
-                return;
-              }
-              const duration = (pointerInfo.endedAt ?? Date.now()) - pointerInfo.time;
-              if (duration > LONG_PRESS_THRESHOLD) {
-                buttonPointerDownRef.current = null;
-                e.preventDefault();
-                return;
-              }
-            }
-            
-            buttonPointerDownRef.current = null;
-            
-            if (!isOpen) {
-              openDropdown();
-            }
-          }}
-          onPointerDown={(e) => {
-            buttonPointerDownRef.current = {
-              pointerId: e.pointerId,
-              x: e.clientX,
-              y: e.clientY,
-              time: Date.now(),
-              moved: false,
-            };
-            e.stopPropagation();
-          }}
-          onPointerMove={(e) => {
-            e.stopPropagation();
-          }}
-          onPointerUp={(e) => {
-            e.stopPropagation();
-          }}
-          onPointerCancel={(e) => {
-            if (buttonPointerDownRef.current?.pointerId === e.pointerId) {
-              buttonPointerDownRef.current = null;
-            }
-            e.stopPropagation();
-          }}
-          onWheel={(e) => {
-            markScrolling();
-            e.stopPropagation();
-          }}
-          onTouchMove={(e) => {
-            markScrolling();
-            if (buttonPointerDownRef.current) {
-              buttonPointerDownRef.current.moved = true;
-            }
-            e.stopPropagation();
-          }}
-          onTouchStart={(e) => {
-            e.stopPropagation();
-          }}
-          onTouchEnd={(e) => {
-            e.stopPropagation();
-          }}
-          className="flex items-center gap-2 rounded-full bg-white/10 pl-3 md:pl-4 pr-2 md:pr-3 py-2 md:py-2 text-sm md:text-sm text-white hover:bg-white/15 w-fit touch-manipulation min-h-[48px] md:min-h-0"
-          style={{ minHeight: "48px" }}
-        >
-          {selected.icon ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={selected.icon}
-              alt={selected.symbol}
-              className="h-5 w-5 rounded-full ring-1 ring-white/15 bg-white/5 object-cover"
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png";
-              }}
-            />
-          ) : (
-            <div className="h-5 w-5 rounded-full bg-white/20 ring-1 ring-white/15" />
-          )}
-          <span className="font-medium">{selected.symbol}</span>
-          <div className="flex-shrink-0">
-            <svg className={`h-5 w-5 transition-transform ${isOpen ? "rotate-180" : "rotate-0"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </button>
-        {shouldRender && isDesktop && swapTitleRect && cardRect
-          ? createPortal(
-              <div
-                className="fixed z-[9999] pointer-events-none"
-                style={{
-                  top: swapTitleRect.top,
-                  left: side === "left" 
-                    ? Math.max(16, cardRect.left - 65 - selectorSize.width)
-                    : Math.min(window.innerWidth - 16 - selectorSize.width, cardRect.right + 65),
-                  transform: `translate(0, 0) translate(${selectorOffset.x}px, ${selectorOffset.y}px)`,
-                  height: "70vh",
-                }}
-              >
-                {/* Token selector card - no glow effect */}
-                <div
-                  ref={dropdownRef}
-                  className={`pointer-events-auto relative overflow-hidden rounded-[20px] border border-white/15 shadow-[0_50px_120px_-40px_rgba(0,0,0,0.85)] transition-all flex flex-col ${
-                    isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-                  }`}
-                  style={{
-                    width: `${selectorSize.width}px`,
-                    height: "70vh",
-                    maxHeight: "70vh",
-                    backgroundColor: "rgba(12, 14, 22, 0.3)",
-                    backdropFilter: "blur(40px) saturate(180%)",
-                    WebkitBackdropFilter: "blur(40px) saturate(180%)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.25)",
-                    transition: isResizingSelector ? "none" : "opacity 0.3s ease",
-                    animation: phase === "opening" ? "chartRectangleAppear 0.52s cubic-bezier(0.16, 1, 0.3, 1) forwards" : phase === "closing" ? "chartRectangleDisappear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards" : "none",
-                    zIndex: 0,
-                    position: "relative",
-                  }}
-                  onWheel={(e) => {
-                    // Check if scroll is happening inside the scrollable area
-                    const scrollableArea = e.currentTarget.querySelector('.overflow-y-auto') as HTMLElement;
-                    if (scrollableArea && scrollableArea.contains(e.target as Node)) {
-                      // Scroll is happening inside the scrollable area
-                      // IMPORTANT: DON'T stop propagation - let the scrollable area handle the scroll!
-                      console.log("🔒 Card onWheel - scroll INSIDE scrollable area, allowing scroll to work");
-                      // Just mark as scrolling but don't prevent the scroll
-                      isScrollingRef.current = true;
-                      
-                      // Clear any existing timeout
-                      if (scrollTimeoutRef.current) {
-                        clearTimeout(scrollTimeoutRef.current);
-                      }
-                      
-                      // Reset scrolling flag after scroll ends
-                      scrollTimeoutRef.current = setTimeout(() => {
-                        isScrollingRef.current = false;
-                      }, 500);
-                      // DON'T call e.stopPropagation() - let the event reach the scrollable div!
-                      return;
-                    }
-                    // If scroll is NOT in scrollable area, stop it
-                    console.log("🔒 Card onWheel - scroll OUTSIDE scrollable area, preventing");
-                    e.stopPropagation();
-                  }}
-                  onTouchMove={(e) => {
-                    // Mark scrolling for touch moves
-                    console.log("🔒 Card onTouchMove - marking as scrolling");
-                    isScrollingRef.current = true;
-                    e.preventDefault(); // Prevent default touch behavior
-                    e.stopPropagation();
-                    
-                    // Clear any existing timeout
-                    if (scrollTimeoutRef.current) {
-                      clearTimeout(scrollTimeoutRef.current);
-                    }
-                    
-                    // Reset scrolling flag after touch ends - INCREASED DELAY to prevent click conversion
-                    scrollTimeoutRef.current = setTimeout(() => {
-                      console.log("🔒 Resetting isScrollingRef to false after touch move");
-                      isScrollingRef.current = false;
-                    }, 500); // Increased from 150ms to 500ms
-                  }}
-                  onScroll={(e) => {
-                    // Mark scrolling
-                    isScrollingRef.current = true;
-                    e.stopPropagation();
-                    
-                    // Clear any existing timeout
-                    if (scrollTimeoutRef.current) {
-                      clearTimeout(scrollTimeoutRef.current);
-                    }
-                    
-                    // Reset scrolling flag after scroll ends
-                    scrollTimeoutRef.current = setTimeout(() => {
-                      isScrollingRef.current = false;
-                    }, 150);
-                  }}
-                  onTouchStart={(e) => {
-                    // Mark scrolling on touch start
-                    console.log("🔒 Card onTouchStart - marking as scrolling");
-                    isScrollingRef.current = true;
-                    e.preventDefault(); // Prevent default touch behavior
-                    e.stopPropagation();
-                    
-                    // Clear any existing timeout
-                    if (scrollTimeoutRef.current) {
-                      clearTimeout(scrollTimeoutRef.current);
-                    }
-                  }}
-                  onTouchEnd={(e) => {
-                    // Reset scrolling flag after touch ends - INCREASED DELAY to prevent click conversion
-                    console.log("🔒 Card onTouchEnd - keeping isScrollingRef true for longer");
-                    e.preventDefault(); // Prevent default touch behavior
-                    e.stopPropagation();
-                    if (scrollTimeoutRef.current) {
-                      clearTimeout(scrollTimeoutRef.current);
-                    }
-                    // Increase timeout to 500ms to prevent touch-to-click conversion
-                    scrollTimeoutRef.current = setTimeout(() => {
-                      console.log("🔒 Resetting isScrollingRef to false after touch end");
-                      isScrollingRef.current = false;
-                    }, 500); // Increased from 150ms to 500ms
-                  }}
-                  onMouseDown={(e) => {
-                    // Prevent mouse down during active scrolling
-                    if (isScrollingRef.current) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }
-                  }}
-                  onClick={(e) => {
-                    // TEMPORARILY DISABLED FOR SCROLL TESTING
-                    console.log("🔒 Card container onClick called - BLOCKED for testing");
-                    console.log("  isScrollingRef.current:", isScrollingRef.current);
-                    console.trace("Call stack:");
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                    
-                    // Prevent clicks during scrolling
-                    if (isScrollingRef.current) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return;
-                    }
-                    // Prevent clicks from bubbling
-                    e.stopPropagation();
-                  }}
-                >
-                      {/* Header with drag and buttons - fully transparent for glow */}
-                      <div
-                        className={`flex h-12 flex-shrink-0 items-center justify-between px-6 relative ${
-                          isDragging ? "cursor-grabbing" : "cursor-grab"
-                        }`}
-                        onPointerDown={handleDragStart}
-                      >
-                        {/* Transparent overlay to let glow through */}
-                        <div 
-                          className="absolute inset-0" 
-                          style={{ 
-                            backgroundColor: "rgba(12, 14, 22, 0)",
-                            backdropFilter: "none"
-                          }}
-                        />
-                        {/* Border that respects padding */}
-                        <div className="absolute bottom-0 left-6 right-6 h-px bg-white/10" />
-                        <span 
-                          className="text-sm font-semibold tracking-wide relative z-10"
-                          style={{
-                            background: "linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)",
-                            backgroundSize: "200% 100%",
-                            animation: "glowShift 8s linear infinite",
-                            WebkitBackgroundClip: "text",
-                            backgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                            filter: "drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(99, 102, 241, 0.4))",
-                          }}
-                        >
-                          Select a token
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            closeDropdown();
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-[#ff5f57]/15 hover:text-[#ff5f57] relative z-10"
-                          style={{ 
-                            lineHeight: "0",
-                            paddingBottom: "2px"
-                          }}
-                          aria-label="Close token selector"
-                        >
-                          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                      
-                      {/* Content area */}
-                      <div className="flex flex-col gap-4 p-6" style={{ height: "calc(100% - 48px)", overflow: "hidden", display: "flex" }}>
-                        <input
-                          type="text"
-                          value={searchTerm}
-                          onChange={(event) => setSearchTerm(event.target.value)}
-                          placeholder="Search token"
-                          className="w-full flex-shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-                        />
-                        <div 
-                          className="flex-1 min-h-0 overflow-y-auto"
-                          style={{ 
-                            overflowY: "auto",
-                            WebkitOverflowScrolling: "touch",
-                            maxHeight: "100%"
-                          }}
-                          onWheel={(e) => {
-                            // Mark scrolling immediately
-                            console.log("🔒 Scrollable area onWheel - allowing scroll to work");
-                            isScrollingRef.current = true;
-                            // DON'T stop propagation - we want the scroll to work!
-                            // DON'T prevent default - we want native scrolling!
-                            // Clear any existing timeout
-                            if (scrollTimeoutRef.current) {
-                              clearTimeout(scrollTimeoutRef.current);
-                            }
-                            // Reset scrolling flag after scroll ends (increased delay)
-                            scrollTimeoutRef.current = setTimeout(() => {
-                              isScrollingRef.current = false;
-                            }, 500);
-                          }}
-                          onScroll={(e) => {
-                            const target = e.currentTarget;
-                            const currentScrollTop = target.scrollTop;
-                            const now = Date.now();
-                            
-                            // Track scroll position changes (Uniswap approach)
-                            if (scrollPositionRef.current) {
-                              const scrollDelta = Math.abs(currentScrollTop - scrollPositionRef.current.top);
-                              // If scroll position changed significantly, user is actively scrolling
-                              if (scrollDelta > 1) {
-                                isScrollingRef.current = true;
-                              }
-                            }
-                            
-                            scrollPositionRef.current = {
-                              top: currentScrollTop,
-                              timestamp: now
-                            };
-                            
-                            // Stop scroll events from propagating
-                            e.stopPropagation();
-                            
-                            // Clear any existing timeout
-                            if (scrollTimeoutRef.current) {
-                              clearTimeout(scrollTimeoutRef.current);
-                            }
-                            
-                            // Reset scrolling flag after scroll ends (150ms after last scroll event)
-                            scrollTimeoutRef.current = setTimeout(() => {
-                              isScrollingRef.current = false;
-                              scrollPositionRef.current = null;
-                            }, 150);
-                          }}
-                          onTouchMove={(e) => {
-                            // Mark scrolling immediately for touch
-                            console.log("🔒 Scrollable area onTouchMove - marking as scrolling");
-                            isScrollingRef.current = true;
-                            e.preventDefault(); // Prevent default touch behavior
-                            e.stopPropagation();
-                            
-                            // Clear any existing timeout
-                            if (scrollTimeoutRef.current) {
-                              clearTimeout(scrollTimeoutRef.current);
-                            }
-                            
-                            // Reset scrolling flag after touch ends - INCREASED DELAY
-                            scrollTimeoutRef.current = setTimeout(() => {
-                              console.log("🔒 Resetting isScrollingRef to false after scrollable touch move");
-                              isScrollingRef.current = false;
-                            }, 500); // Increased from 150ms to 500ms
-                          }}
-                          onTouchStart={(e) => {
-                            // Mark scrolling on touch start
-                            console.log("🔒 Scrollable area onTouchStart - marking as scrolling");
-                            isScrollingRef.current = true;
-                            e.preventDefault(); // Prevent default touch behavior
-                            e.stopPropagation();
-                            
-                            // Clear any existing timeout
-                            if (scrollTimeoutRef.current) {
-                              clearTimeout(scrollTimeoutRef.current);
-                            }
-                          }}
-                          onTouchEnd={(e) => {
-                            // Reset scrolling flag after touch ends - INCREASED DELAY
-                            console.log("🔒 Scrollable area onTouchEnd - keeping isScrollingRef true for longer");
-                            e.preventDefault(); // Prevent default touch behavior
-                            e.stopPropagation();
-                            if (scrollTimeoutRef.current) {
-                              clearTimeout(scrollTimeoutRef.current);
-                            }
-                            scrollTimeoutRef.current = setTimeout(() => {
-                              console.log("🔒 Resetting isScrollingRef to false after scrollable touch end");
-                              isScrollingRef.current = false;
-                            }, 500); // Increased from 150ms to 500ms
-                          }}
-                          onMouseDown={(e) => {
-                            // Prevent mouse down during active scrolling
-                            if (isScrollingRef.current) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
-                          onClick={(e) => {
-                            // TEMPORARILY DISABLED FOR SCROLL TESTING
-                            console.log("🔒 Scrollable area onClick called - BLOCKED for testing");
-                            console.log("  isScrollingRef.current:", isScrollingRef.current);
-                            console.trace("Call stack:");
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return;
-                            
-                            // Prevent clicks during scrolling
-                            if (isScrollingRef.current) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              return;
-                            }
-                            // Prevent clicks from bubbling
-                            e.stopPropagation();
-                          }}
-                        >
-                          {renderList(tokensToDisplay)}
-                        </div>
-                      </div>
-                      
-                      {/* Resize handles */}
-                      <>
-                        <div className="absolute top-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('top', e)} />
-                        <div className="absolute bottom-0 left-4 right-4 h-1 cursor-ns-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('bottom', e)} />
-                        <div className="absolute top-4 bottom-4 left-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('left', e)} />
-                        <div className="absolute top-4 bottom-4 right-0 w-1 cursor-ew-resize z-50" onPointerDown={(e) => handleResizeSelectorStart('right', e)} />
-                        <div className="absolute top-0 left-0 h-4 w-4 cursor-nwse-resize z-50 rounded-tl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-left', e)} />
-                        <div className="absolute top-0 right-0 h-4 w-4 cursor-nesw-resize z-50 rounded-tr-[20px]" onPointerDown={(e) => handleResizeSelectorStart('top-right', e)} />
-                        <div className="absolute bottom-0 left-0 h-4 w-4 cursor-nesw-resize z-50 rounded-bl-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-left', e)} />
-                        <div className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize z-50 rounded-br-[20px]" onPointerDown={(e) => handleResizeSelectorStart('bottom-right', e)} />
-                      </>
-                    </div>
-              </div>,
-            document.body
-          )
-          :
-          shouldRender &&
-            createPortal(
-              <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-[${animateDuration}ms] ${
-                isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-              }`}>
-                <div
-                  className={`w-[70vw] max-w-sm rounded-3xl border border-white/10 bg-black/95 px-5 pb-5 pt-7 shadow-2xl transition-all duration-[${animateDuration}ms] ${
-                    isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-6"
-                  }`}
-                  style={{ maxHeight: "80vh" }}
-                >
-                  <div className="relative mb-5 flex items-center justify-center text-xs text-white/60">
-                    <span className="bg-gradient-to-r from-[#38bdf8] via-[#6366f1] to-[#ec4899] bg-clip-text text-xl font-semibold tracking-wide text-transparent">
-                      Select a token
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Only close if not scrolling
-                        if (!isScrollingRef.current) {
-                          closeDropdown();
-                        }
-                      }}
-                      className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-3xl text-white/70 transition hover:bg-white/10 hover:text-white"
-                      style={{ 
-                        top: "-2px",
-                        lineHeight: "0",
-                        paddingBottom: "3px"
-                      }}
-                      aria-label="Close token selector"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search token"
-                    className="mb-5 w-full rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-                  />
-                  <div className="max-h-[60vh] overflow-hidden">
-                    {renderList(tokensToDisplay)}
-                  </div>
-                </div>
-              </div>,
-              document.body
-            )}
-      </div>
-    );
-  }
+  // TokenSelector is now imported from components
 
   return (
     <div className="min-h-screen text-white" style={{ width: "100vw", overflowX: "hidden", margin: 0, padding: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0, backgroundColor: "transparent" }}>
@@ -4489,11 +3636,6 @@ export default function SwapPage() {
                       <span className="text-sm text-white/60">You pay</span>
                     </div>
                     <div className="flex items-center gap-3 h-full">
-                      <TestScrollCard
-                        isLimitSelected={orderType === "Limit"}
-                        onClose={() => setOrderType("Swap")}
-                        cardRect={cardRect}
-                      />
                       <TokenSelector
                         selected={direction === "a-to-b" ? tokenA : tokenB}
                         tokens={tokens}
@@ -4589,7 +3731,7 @@ export default function SwapPage() {
                   </div>
 
                   {/* You receive card - ALWAYS on bottom */}
-                  <div className="rounded-2xl bg-white/5 p-4 md:p-4" style={{ 
+                  <div ref={receiveCardRef} className="rounded-2xl bg-white/5 p-4 md:p-4" style={{ 
                     minHeight: "120px", 
                     height: "auto",
                     position: "relative",
@@ -4657,7 +3799,7 @@ export default function SwapPage() {
                           }
                         }}
                         side="right"
-                        cardRect={cardRect}
+                        cardRect={receiveCardRect}
                         swapTitleRect={swapTitleRect}
                         swapCardRect={swapCardRect}
                       />
@@ -4674,7 +3816,7 @@ export default function SwapPage() {
         {/* Dynamic section container - Positioned absolutely relative to fixed section wrapper */}
         <div
           ref={dynamicSectionRef}
-          className="w-full max-w-md md:max-w-[524px] mx-auto px-2 md:px-4 flex flex-col"
+          className="w-full max-w-md md:max-w-[524px] mx-auto px-0 md:px-4 flex flex-col"
           style={{
             position: "absolute",
             top: "100%",
@@ -4687,12 +3829,12 @@ export default function SwapPage() {
         >
             {/* Exchange Rate Display - Always reserves space to prevent flickering */}
             {(amountIn || amountOutValue) && (
-            <div className="rounded-xl bg-white/5 overflow-hidden" style={{ minHeight: "48px" }}>
+            <div className="px-0 md:px-4">
+            <div className="rounded-xl bg-white/5 overflow-hidden p-4 md:p-4">
                     <button
                       onClick={() => quote && amountIn && amountOutValue && setShowDetails(!showDetails)}
                       disabled={!quote || !amountIn || !amountOutValue}
-                      className="w-full px-4 py-3 md:py-3 flex items-center justify-between text-xs md:text-xs hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-default touch-manipulation min-h-[48px] md:min-h-0"
-                      style={{ minHeight: "48px" }}
+                      className="w-full flex items-center justify-between text-xs md:text-xs hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-default touch-manipulation"
                     >
                       <div className="text-xs font-medium flex-1 text-left">
                         <span 
@@ -4819,6 +3961,7 @@ export default function SwapPage() {
                       </div>
                     )}
                   </div>
+            </div>
                   )}
 
             {/* Error messages */}
@@ -4841,11 +3984,18 @@ export default function SwapPage() {
               </div>
             )}
 
-            {connectError && (
-              <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {connectError?.message || "Connection error"}
-              </div>
-            )}
+            {connectError && !isConnected && (() => {
+              const errorMessage = connectError?.message || "Connection error";
+              // Suppress "already pending" errors - they're not user-actionable and cause UI glitches
+              if (errorMessage.includes("already pending") || errorMessage.includes("Request of type")) {
+                return null; // Don't show this error
+              }
+              return (
+                <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  {errorMessage}
+                </div>
+              );
+            })()}
 
             {/* Loading Animation */}
             {isLoadingChartData && (
@@ -4874,14 +4024,16 @@ export default function SwapPage() {
 
             {/* Approve button */}
             {!isNativeInput && needsApproval && isConnected && effectiveWalletClient && isCorrectChain && (
-              <button
-                onClick={handleApprove}
-                disabled={isApproving || isFetchingAllowance || !configReady}
-                className="rounded-full border border-white/20 px-3 md:px-3 py-2 md:py-2 text-sm md:text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
-                style={{ minHeight: "48px" }}
-              >
-                {isApproving ? "Approving..." : `Approve ${amountInSymbol}`}
-              </button>
+              <div className="px-0 md:px-4 mt-4 mb-4">
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving || isFetchingAllowance || !configReady}
+                  className="rounded-full border border-white/20 px-4 md:px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
+                  style={{ minHeight: "48px", height: "48px" }}
+                >
+                  {isApproving ? "Approving..." : `Approve ${amountInSymbol}`}
+                </button>
+              </div>
             )}
 
             {/* Wallet connection error for approval */}
@@ -4898,15 +4050,27 @@ export default function SwapPage() {
                     {isRetryingWalletClient ? "Retrying..." : "Retry Wallet Client"}
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      if (isConnectingRef.current || isConnecting || isConnectPending) {
+                        return; // Prevent duplicate connection attempts
+                      }
                       disconnect();
-                      setTimeout(() => {
-                        if (connectors[0]) {
-                          connect({ connector: connectors[0] });
+                      setTimeout(async () => {
+                        if (connectors[0] && !isConnectingRef.current) {
+                          isConnectingRef.current = true;
+                          try {
+                            await connect({ connector: connectors[0] });
+                          } catch (error) {
+                            // Ignore connection errors
+                          } finally {
+                            setTimeout(() => {
+                              isConnectingRef.current = false;
+                            }, 1000);
+                          }
                         }
                       }, 100);
                     }}
-                    disabled={isConnecting || isConnectPending}
+                    disabled={isConnecting || isConnectPending || isConnectingRef.current}
                     className="rounded-full border border-yellow-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
                     style={{ minHeight: "48px" }}
                   >
@@ -4920,10 +4084,21 @@ export default function SwapPage() {
             <div className="px-0 md:px-4 pb-4">
               {/* Swap/Connect Wallet button */}
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!isConnected) {
-                    if (connectors[0]) {
-                      connect({ connector: connectors[0] });
+                    // Prevent duplicate connection attempts
+                    if (isConnectingRef.current || isConnecting || isConnectPending || !connectors[0]) {
+                      return;
+                    }
+                    isConnectingRef.current = true;
+                    try {
+                      await connect({ connector: connectors[0] });
+                    } catch (error) {
+                      // Ignore connection errors
+                    } finally {
+                      setTimeout(() => {
+                        isConnectingRef.current = false;
+                      }, 1000);
                     }
                   } else {
                     handleSwap();
@@ -4937,6 +4112,7 @@ export default function SwapPage() {
                   (isConnected && (!parsedAmountIn || parsedAmountIn === 0n)) ||
                   isConnecting ||
                   isConnectPending ||
+                  isConnectingRef.current ||
                   (!isConnected && !connectors[0])
                 }
                 className="rounded-full border border-white/20 px-4 md:px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
@@ -4950,8 +4126,6 @@ export default function SwapPage() {
                   ? "Swapping..."
                   : !parsedAmountIn || parsedAmountIn === 0n
                   ? "Enter amount"
-                  : requiresApproval && needsApproval
-                  ? "Approve first"
                   : "Swap"}
               </button>
 
@@ -5008,6 +4182,7 @@ export default function SwapPage() {
           </div>
         </div>
       </main>
+
 
       <style jsx global>{`
         /* Hide scrollbar for time range buttons on mobile */
