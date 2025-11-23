@@ -52,6 +52,7 @@ export function MobileTokenSelectorCard({
   // iOS-like drag gesture tracking
   const dragStartRef = useRef<{ y: number; initialTranslateY: number; startTime: number } | null>(null);
   const cardTranslateYRef = useRef(0);
+  const [backdropOpacity, setBackdropOpacity] = useState(0);
   const touchPointsRef = useRef<number[]>([]); // Track last 20 touch points (y coordinates)
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -83,6 +84,33 @@ export function MobileTokenSelectorCard({
         cardTranslateYRef.current = translateY;
         // Use translate3d for GPU acceleration
         mobileCardRef.current.style.transform = `translate3d(0, ${translateY}px, 0)`;
+        
+        // Update backdrop opacity based on card position
+        // Card is 92vh tall, positioned from bottom with bottom: 0
+        // When translateY = 0, card is fully up
+        // Card top position = window.innerHeight - cardHeight - translateY
+        // When card top is at or below 30vh from top, backdrop should be 0
+        if (typeof window !== 'undefined') {
+          const cardHeight = window.innerHeight * 0.92; // 92vh
+          const thresholdTop = window.innerHeight * 0.3; // 30vh from top
+          
+          // Calculate card top position
+          const cardTop = window.innerHeight - cardHeight - translateY;
+          
+          if (translateY <= 0) {
+            setBackdropOpacity(0.6); // Fully up - 60% opacity
+          } else if (cardTop <= thresholdTop) {
+            setBackdropOpacity(0); // Card top at or below 30vh - 0% opacity (fully transparent)
+          } else {
+            // Calculate card top when fully up (translateY = 0)
+            const cardTopWhenUp = window.innerHeight - cardHeight;
+            // Calculate how much translateY is needed to reach threshold
+            const translateYAtThreshold = cardTopWhenUp - thresholdTop;
+            // Linear interpolation between 0.6 and 0
+            const opacity = 0.6 * (1 - translateY / translateYAtThreshold);
+            setBackdropOpacity(Math.max(0, opacity));
+          }
+        }
       }
     });
   }, []);
@@ -249,6 +277,7 @@ export function MobileTokenSelectorCard({
               if (mobileCardRef.current) {
                 cardTranslateYRef.current = 0;
                 mobileCardRef.current.style.transform = 'translate3d(0, 0, 0)';
+                updateCardPosition(0); // Update backdrop opacity
               }
             });
           }
@@ -282,6 +311,7 @@ export function MobileTokenSelectorCard({
               if (mobileCardRef.current) {
                 cardTranslateYRef.current = targetTranslateY;
                 mobileCardRef.current.style.transform = `translate3d(0, ${targetTranslateY}px, 0)`;
+                updateCardPosition(targetTranslateY); // Update backdrop opacity
               }
             });
           }
@@ -320,14 +350,20 @@ export function MobileTokenSelectorCard({
               if (mobileCardRef.current) {
                 cardTranslateYRef.current = 0;
                 mobileCardRef.current.style.transform = 'translate3d(0, 0, 0)';
+                updateCardPosition(0); // Update backdrop opacity
               }
             });
           }
         });
+        
+        setTimeout(() => {
+          setIsAnimating(false);
+        }, animationDurationMs);
+      } else {
+        setTimeout(() => {
+          setIsAnimating(false);
+        }, animationDurationMs);
       }
-      setTimeout(() => {
-        setIsAnimating(false);
-      }, animationDurationMs);
     }
     
     dragStartRef.current = null;
@@ -414,6 +450,7 @@ export function MobileTokenSelectorCard({
       // Reset animation flag after animation completes
       setTimeout(() => {
         setIsAnimating(false);
+        setBackdropOpacity(0); // Reset backdrop when closed
       }, animationDurationMs);
     }
   }, [phase, isAnimating, isDragging]);
@@ -462,7 +499,7 @@ export function MobileTokenSelectorCard({
               mobileCardRef.current.style.transition = `transform ${animationDurationMs}ms cubic-bezier(0.32, 0.72, 0, 1)`; // Ease-out for open
               cardTranslateYRef.current = 0;
               mobileCardRef.current.style.transform = 'translate3d(0, 0, 0)';
-              // Set backdrop to 30% opacity when card reaches top
+              updateCardPosition(0); // Update backdrop opacity
               
               // Mark animation complete after it finishes
               setTimeout(() => {
@@ -646,6 +683,20 @@ export function MobileTokenSelectorCard({
         }
       }}
     >
+        {/* Backdrop layer - adjusts opacity based on card position */}
+        {isOpen && backdropOpacity > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(0, 0, 0, 1.0)',
+              opacity: backdropOpacity,
+              zIndex: 0,
+              pointerEvents: 'none',
+              transition: 'opacity 0.1s ease-out',
+            }}
+          />
+        )}
         <div
           ref={mobileCardRef}
           className="w-full rounded-t-[35px] border-t border-l border-r border-white/15"
