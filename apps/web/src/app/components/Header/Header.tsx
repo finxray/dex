@@ -180,14 +180,16 @@ export function Header() {
           isHeaderHidden ? "-translate-y-full" : "translate-y-0"
         } ${showBorder ? "md:border-b" : ""}`}
         style={{
-          backgroundColor: isMobile 
-            ? "rgba(0, 0, 0, 0.2)" 
-            : "rgba(0, 0, 0, 0.4)",
-          backdropFilter: "blur(20px) saturate(180%)",
-          WebkitBackdropFilter: "blur(20px) saturate(180%)",
-          borderBottomWidth: showBorder && !isMobile ? "0.5px" : "0",
-          borderBottomStyle: showBorder && !isMobile ? "solid" : "none",
-          borderBottomColor: showBorder && !isMobile ? "rgba(255, 255, 255, 0.1)" : "transparent",
+          backgroundColor: isSwapPage 
+            ? "transparent"
+            : (isMobile 
+              ? "rgba(0, 0, 0, 0.2)" 
+              : "rgba(0, 0, 0, 0.4)"),
+          backdropFilter: isSwapPage ? "none" : "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: isSwapPage ? "none" : "blur(20px) saturate(180%)",
+          borderBottomWidth: showBorder && !isMobile && !isSwapPage ? "0.5px" : "0",
+          borderBottomStyle: showBorder && !isMobile && !isSwapPage ? "solid" : "none",
+          borderBottomColor: showBorder && !isMobile && !isSwapPage ? "rgba(255, 255, 255, 0.1)" : "transparent",
           width: "100vw",
         }}
         onMouseLeave={handleMenuLeave}
@@ -621,6 +623,17 @@ export function Header() {
         </div>
       ) : null}
       </header>
+      {/* Gradient blend from header into colorful background - only on swap page, desktop only */}
+      {isSwapPage && !isMobile && (
+        <div
+          className="fixed top-0 left-0 right-0 pointer-events-none z-40"
+          style={{
+            height: "150px",
+            background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.4) 15%, rgba(0, 0, 0, 0.25) 30%, rgba(0, 0, 0, 0.15) 50%, rgba(0, 0, 0, 0.08) 70%, rgba(0, 0, 0, 0.03) 85%, transparent 100%)",
+            marginTop: "44px",
+          }}
+        />
+      )}
     </>
   );
 }

@@ -42,12 +42,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check cache first
+    // Check if fresh data is requested (bypass cache)
+    const fresh = searchParams.get('fresh') === 'true';
+    
+    // Check cache first (unless fresh is requested)
     const cacheKey = coinIds;
     const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    if (!fresh && cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log(`✅ Cache hit for ${coinIds}`);
       return NextResponse.json(cached.data);
+    }
+    
+    if (fresh) {
+      console.log(`🔄 Fresh data requested for ${coinIds} - bypassing cache`);
     }
 
     // Rate limiting: ensure minimum time between requests

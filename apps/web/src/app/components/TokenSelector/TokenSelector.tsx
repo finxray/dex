@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, MutableRefObject } from "react";
 import { createPortal } from "react-dom";
 import { TokenSelectorButton } from "./TokenSelectorButton";
+import { MobileTokenSelectorCard } from "./MobileTokenSelectorCard";
 
 export type Token = {
   symbol: string;
@@ -172,6 +173,13 @@ export function TokenSelector({
       // Controlled mode - don't open internally
       return;
     }
+    
+    // Prevent opening if already opening/closing to avoid race conditions
+    // But allow opening if phase is "closed" (card fully closed)
+    if (phase === "opening" || (phase === "closing" && isOpen)) {
+      return;
+    }
+    
     setSearchTerm("");
     setShouldRender(true);
     setPhase("closed");
@@ -179,13 +187,29 @@ export function TokenSelector({
     const viewportHeight = window.innerHeight;
     const height70vh = viewportHeight * 0.7;
     setSelectorSize({ width: 360, height: height70vh });
+    
+    // For mobile, update state immediately but phase will be managed by mobile component
+    // For desktop, use the existing timing
+    const isMobileDevice = !isDesktop;
     setIsOpenInternal(true);
-    requestAnimationFrame(() => {
-      setPhase("opening");
-      setTimeout(() => {
-        setPhase("open");
-      }, 520);
-    });
+    
+    if (isMobileDevice) {
+      // Mobile handles its own animation timing
+      requestAnimationFrame(() => {
+        setPhase("opening");
+        setTimeout(() => {
+          setPhase("open");
+        }, 600); // Match mobile animation duration
+      });
+    } else {
+      // Desktop timing
+      requestAnimationFrame(() => {
+        setPhase("opening");
+        setTimeout(() => {
+          setPhase("open");
+        }, 520);
+      });
+    }
   };
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -309,14 +333,23 @@ export function TokenSelector({
     }
     
     setPhase("closing");
-    setIsOpenInternal(false);
+    
+    // For mobile, delay state update until animation completes (600ms for smooth animation)
+    // For desktop, use normal duration
+    const isMobileDevice = !isDesktop;
+    const closeDelay = isMobileDevice ? 600 : animateDuration;
+    
+    // Update internal state immediately for button, but keep rendering until animation completes
+    setIsOpenInternal(false); // Update button state immediately
+    
+    // Clean up rendering after animation completes - use exact timing
     setTimeout(() => {
       setShouldRender(false);
-      setPhase("closed");
+      setPhase("closed"); // Set to closed immediately after animation
       setSearchTerm("");
       isScrollingRef.current = false;
       scrollPositionRef.current = null;
-    }, animateDuration);
+    }, closeDelay);
   };
 
   useEffect(() => {
@@ -606,14 +639,23 @@ export function TokenSelector({
         <TokenSelectorButton
           selected={selected}
           onClick={() => {
+            // Prevent rapid clicking that causes desync
+            if (phase === "opening" || phase === "closing") {
+              return;
+            }
+            
             if (onOpenOverride) {
               onOpenOverride();
             } else if (controlledOpen === undefined) {
-              openDropdown();
+              if (isOpen) {
+                closeDropdown();
+              } else {
+                openDropdown();
+              }
             }
             // If controlledOpen is defined but no onOpenOverride, parent controls opening via open prop
           }}
-          isOpen={isOpen}
+          isOpen={isOpen && phase !== "closing"}
         />
       )}
       {shouldRender && isDesktop
@@ -737,16 +779,7 @@ export function TokenSelector({
                   />
                   <div className="flex items-center justify-between mb-4 relative z-10">
                     <span 
-                      className="text-sm font-semibold tracking-wide"
-                      style={{
-                        background: "linear-gradient(90deg, #38bdf8, #6366f1, #ec4899, #f472b6, #06b6d4, #3b82f6, #8b5cf6, #38bdf8)",
-                        backgroundSize: "200% 100%",
-                        animation: "glowShift 8s linear infinite",
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        filter: "drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(99, 102, 241, 0.4))",
-                      }}
+                      className="text-sm font-semibold tracking-wide text-white/60"
                     >
                       Select a token
                     </span>
@@ -893,103 +926,20 @@ export function TokenSelector({
             document.body
           )
         :
-        shouldRender &&
-          createPortal(
-            <div 
-              className={`fixed inset-0 z-[9999] flex justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-[${animateDuration}ms] ${
-                isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-              }`}
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100vw',
-                height: '100vh',
-                overflow: 'hidden'
-              }}
-              onClick={(e) => {
-                if (!isScrollingRef.current && mobileCardRef.current && !mobileCardRef.current.contains(e.target as Node)) {
-                  closeDropdown();
-                }
-              }}
-            >
-              <div
-                ref={mobileCardRef}
-                className={`w-[70vw] max-w-sm rounded-3xl border border-white/10 bg-black/95 pl-5 pb-5 shadow-2xl transition-all duration-[${animateDuration}ms] ${
-                  isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-6"
-                }`}
-                style={{ 
-                  marginTop: '5vh',
-                  maxHeight: "calc(95vh - 5vh)",
-                  position: 'relative',
-                  willChange: 'transform',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignSelf: 'flex-start'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-              >
-                <div className="relative flex flex-col flex-shrink-0" style={{ paddingTop: "10px", paddingLeft: "0", paddingRight: "0", paddingBottom: "20px" }}>
-                  <div className="flex items-center justify-between mb-4 relative z-10">
-                    <span className="bg-gradient-to-r from-[#38bdf8] via-[#6366f1] to-[#ec4899] bg-clip-text text-xl font-semibold tracking-wide text-transparent">
-                      Select a token
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!isScrollingRef.current) {
-                          closeDropdown();
-                        }
-                      }}
-                      className="flex items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white relative z-10"
-                      style={{ 
-                        width: "47.04px",
-                        height: "47.04px",
-                        marginTop: "-4px",
-                        marginRight: "10px",
-                        lineHeight: "0",
-                        fontSize: "40.32px"
-                      }}
-                      aria-label="Close token selector"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="relative z-10 pr-5">
-                    <input
-                      type="text"
-                      inputMode="search"
-                      value={searchTerm}
-                      onChange={(event) => setSearchTerm(event.target.value)}
-                      placeholder="Search token"
-                      className="w-full rounded-full border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-                      style={{ fontSize: '16px' }}
-                      onFocus={(e) => {
-                        // Prevent zoom on iOS
-                        e.target.style.fontSize = '16px';
-                      }}
-                    />
-                  </div>
-                  <div className="absolute bottom-0 right-0 h-px bg-white/10" style={{ left: "-20px" }} />
-                </div>
-                <div 
-                  className="overflow-y-auto flex-shrink"
-                  style={{ 
-                    maxHeight: "calc(95vh - 5vh - 180px)",
-                    paddingTop: "16px"
-                  }}
-                >
-                  {renderList(tokensToDisplay, false)}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
+        shouldRender && (
+          <MobileTokenSelectorCard
+            isOpen={isOpen}
+            onClose={closeDropdown}
+            selected={selected}
+            tokens={tokens}
+            onSelect={onSelect}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            filteredTokens={tokensToDisplay}
+            phase={phase}
+            animateDuration={animateDuration}
+          />
+        )}
     </>
   );
 }

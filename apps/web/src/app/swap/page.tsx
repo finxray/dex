@@ -30,6 +30,7 @@ import { erc20Abi } from "../../lib/abi/erc20";
 import LightweightChart from "./components/LightweightChart";
 import { Header } from "../components/Header/Header";
 import { TokenSelector, TokenSelectorButton, type Token } from "../components";
+import AnimatedBackground from "./components/AnimatedBackground";
 
 
 type Token = {
@@ -720,6 +721,7 @@ export default function SwapPage() {
   const [chartData, setChartData] = useState<AreaData[]>([]);
   const chartDataRef = useRef<AreaData[]>([]);
   const isChartOpenRef = useRef(false); // Track chart open state for interval callbacks
+  const previousChartTokensRef = useRef<{ tokenA: string; tokenB: string } | null>(null); // Track previous tokens when chart was opened
   const hasInitialChartData = chartData.length > 0;
   const [quote, setQuote] = useState<QuoteState | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -727,6 +729,16 @@ export default function SwapPage() {
   const [txStatus, setTxStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [swapDetails, setSwapDetails] = useState<{ amountIn: string; amountOut: string; tokenIn: string; tokenOut: string } | null>(null);
+  const [isAdvancedViewOpen, setIsAdvancedViewOpen] = useState(false);
+  const [mevProtection, setMevProtection] = useState<{
+    atomicExecution: boolean;
+    atomicExecutionMode: string;
+    commitReveal: boolean;
+  }>({
+    atomicExecution: false,
+    atomicExecutionMode: "0x00000100", // Session-only default
+    commitReveal: false,
+  });
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [allowanceError, setAllowanceError] = useState<string | null>(null);
@@ -849,7 +861,7 @@ export default function SwapPage() {
     }
   }, [isChartOpen, recomputeDefaultChartPosition]);
 
-  const handleOpenChart = () => {
+  const handleOpenChart = async () => {
     console.log("\n🔓 Opening Chart:");
     console.log("  Chart data available:", chartData.length, "points");
     console.log("  Current pair:", tokenA.symbol, "/", tokenB.symbol);
@@ -859,6 +871,95 @@ export default function SwapPage() {
     } else {
       console.log("  ⚠️ WARNING: No chart data available when opening chart!");
     }
+    
+    // Check if tokens changed from previous chart open
+    const currentTokenA = tokenA.address;
+    const currentTokenB = tokenB.address;
+    const previousTokens = previousChartTokensRef.current;
+    const tokensChanged = !previousTokens || 
+      previousTokens.tokenA !== currentTokenA || 
+      previousTokens.tokenB !== currentTokenB;
+    
+    if (tokensChanged) {
+      console.log("🔄 Tokens changed - fetching fresh price data:");
+      console.log("  Previous:", previousTokens ? `${previousTokens.tokenA}/${previousTokens.tokenB}` : "none");
+      console.log("  Current:", `${currentTokenA}/${currentTokenB}`);
+      
+      // Update previous tokens reference
+      previousChartTokensRef.current = {
+        tokenA: currentTokenA,
+        tokenB: currentTokenB,
+      };
+      
+      // Fetch fresh price data immediately (bypass cache)
+      try {
+        const symbolA = tokenA.symbol.toUpperCase();
+        const symbolB = tokenB.symbol.toUpperCase();
+        
+        // Coin mapping for CoinGecko API
+        const coins: Record<string, string> = {
+          ETH: "ethereum",
+          WETH: "ethereum",
+          SWETH: "ethereum",
+          BTC: "bitcoin",
+          WBTC: "wrapped-bitcoin",
+          USDC: "usd-coin",
+          SUSDC: "usd-coin",
+          DAI: "dai",
+          USDT: "tether",
+          LINK: "chainlink",
+          UNI: "uniswap",
+          MKR: "maker",
+          AAVE: "aave",
+          COMP: "compound-governance-token",
+          ARB: "arbitrum",
+        };
+        
+        const coinA = coins[symbolA];
+        const coinB = coins[symbolB];
+        
+        if (coinA && coinB) {
+          const combinedIds = `${coinA},${coinB}`;
+          const url = `/api/coingecko/price?ids=${combinedIds}&fresh=true`;
+          
+          console.log("🌐 Fetching fresh prices from CoinGecko (bypassing cache)...");
+          const response = await fetch(url);
+          
+          if (response.ok) {
+            const data = await response.json();
+            const priceA = data[coinA]?.usd;
+            const priceB = data[coinB]?.usd;
+            
+            if (priceA && priceB && priceB !== 0) {
+              const newValue = Number((priceA / priceB).toFixed(6));
+              const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+              
+              // Update chart data with fresh price immediately
+              if (chartDataRef.current.length > 0) {
+                const updatedData = [...chartDataRef.current];
+                const lastPoint = updatedData[updatedData.length - 1];
+                updatedData[updatedData.length - 1] = {
+                  time: lastPoint.time,
+                  value: newValue,
+                };
+                chartDataRef.current = updatedData;
+                setChartData(updatedData);
+                
+                console.log("✅ Fresh price updated immediately:");
+                console.log(`  ${symbolA}/${symbolB}: ${newValue.toFixed(6)}`);
+                console.log(`  ${symbolA} price: $${priceA.toFixed(6)} USD`);
+                console.log(`  ${symbolB} price: $${priceB.toFixed(6)} USD`);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error fetching fresh price:", error);
+      }
+    } else {
+      console.log("✅ Tokens unchanged - using existing chart data");
+    }
+    
     setChartPhase("closed");
     setIsChartOpen(true);
     isChartOpenRef.current = true; // Update ref immediately to start updates
@@ -1733,6 +1834,34 @@ export default function SwapPage() {
       console.log("\n⏳ Sending transaction...");
       const txStartTime = Date.now();
 
+      // Calculate traderProtection flags for simulation
+      let traderProtection = "0x00000000";
+      if (mevProtection.atomicExecution) {
+        traderProtection = mevProtection.atomicExecutionMode;
+      }
+      const useProtection = mevProtection.atomicExecution;
+      const simFunctionName = useProtection ? "swapWithProtection" : "swap";
+      const simArgs = useProtection
+        ? [
+            env.asset0,
+            env.asset1,
+            env.quoterAddress,
+            env.poolMarkings as `0x${string}`,
+            parsedAmountIn,
+            zeroForOne,
+            minAmountOut,
+            traderProtection as `0x${string}`,
+          ]
+        : [
+            env.asset0,
+            env.asset1,
+            env.quoterAddress,
+            env.poolMarkings as `0x${string}`,
+            parsedAmountIn,
+            zeroForOne,
+            minAmountOut,
+          ];
+
       // Simulate the transaction first to catch revert reasons
       if (publicClient) {
         try {
@@ -1740,16 +1869,8 @@ export default function SwapPage() {
           await publicClient.simulateContract({
             address: env.poolManagerAddress,
             abi: poolManagerAbi,
-            functionName: "swap",
-            args: [
-              env.asset0,
-              env.asset1,
-              env.quoterAddress,
-              env.poolMarkings as `0x${string}`,
-              parsedAmountIn,
-              zeroForOne,
-              minAmountOut,
-            ],
+            functionName: simFunctionName as "swap" | "swapWithProtection",
+            args: simArgs as any,
             account: address,
           });
           console.log("✅ Simulation successful");
@@ -1798,20 +1919,37 @@ export default function SwapPage() {
         }
       }
 
+      // Note: Commit-Reveal requires separate functions (commitSwap + executeCommittedSwap)
+      // For now, we only support AtomicExecution via swapWithProtection
+      // traderProtection is already calculated above for simulation
+      const functionName = useProtection ? "swapWithProtection" : "swap";
+      const args = useProtection
+        ? [
+            env.asset0,
+            env.asset1,
+            env.quoterAddress,
+            env.poolMarkings as `0x${string}`,
+            parsedAmountIn,
+            zeroForOne,
+            minAmountOut,
+            traderProtection as `0x${string}`,
+          ]
+        : [
+            env.asset0,
+            env.asset1,
+            env.quoterAddress,
+            env.poolMarkings as `0x${string}`,
+            parsedAmountIn,
+            zeroForOne,
+            minAmountOut,
+          ];
+
       const result = await effectiveWalletClient.writeContract({
         account: address!,
         address: env.poolManagerAddress,
         abi: poolManagerAbi,
-        functionName: "swap",
-        args: [
-          env.asset0, // Always use pool's asset0
-          env.asset1, // Always use pool's asset1
-          env.quoterAddress,
-          env.poolMarkings as `0x${string}`,
-          parsedAmountIn,
-          zeroForOne, // Determines direction: true = asset0->asset1, false = asset1->asset0
-          minAmountOut,
-        ],
+        functionName: functionName as "swap" | "swapWithProtection",
+        args: args as any,
         value: 0n,
         chain: null,
       });
@@ -3082,8 +3220,12 @@ export default function SwapPage() {
   // TokenSelector is now imported from components
 
   return (
-    <div className="min-h-screen text-white" style={{ width: "100vw", overflowX: "hidden", margin: 0, padding: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0, backgroundColor: "transparent" }}>
+    <div className="min-h-screen text-white" style={{ width: "100vw", overflowX: "hidden", margin: 0, padding: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0, backgroundColor: "#000000" }}>
       <Header />
+      {/* Background opacity control layer */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.15, pointerEvents: "none" }}>
+        <AnimatedBackground />
+      </div>
 
       {/* Global container with no padding - sections stack on each other */}
       <div className="relative" style={{ padding: 0, width: "100vw", margin: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0 }}>
@@ -3574,7 +3716,7 @@ export default function SwapPage() {
       {/* Main swap interface - section with its own padding */}
       <main className="relative z-10 flex min-h-screen flex-col" style={{ paddingTop: "15vh", width: "100vw", margin: 0, paddingLeft: 0, paddingRight: 0, paddingBottom: 0 }}>
         {/* Fixed section wrapper - Isolated from dynamic content to prevent centering shifts */}
-        <div ref={fixedSectionRef} className="w-full max-w-md md:max-w-[524px] mx-auto px-2 md:px-4" style={{ position: "relative", flexShrink: 0 }}>
+        <div ref={fixedSectionRef} className="w-full max-w-md md:max-w-[524px] mx-auto px-[15px] md:px-4" style={{ position: "relative", flexShrink: 0 }}>
           {/* Fixed section: Title through You receive card - Position doesn't change */}
           <div 
             ref={swapTitleRef}
@@ -3604,7 +3746,7 @@ export default function SwapPage() {
                 <div ref={cardRef}>
 
             <div className="mb-4 mt-6 md:mb-[11.2px] md:mt-[16.8px] flex items-center justify-between gap-4 text-xs text-white/60">
-              <span className="text-left pl-0 md:pl-4" style={{ fontSize: "0.75rem" }}>Order type</span>
+              <span className="text-left pl-[15px] md:pl-4" style={{ fontSize: "0.75rem" }}>Order type</span>
               <div className="flex items-center gap-[11.2px]">
               {(["Swap", "Limit", "Buy", "Sell"] as const).map((type) => (
                 <button
@@ -3631,7 +3773,18 @@ export default function SwapPage() {
                 {/* Cards container - Fixed position, doesn't shift */}
                 <div className="flex flex-col flex-shrink-0">
                   {/* You pay card - ALWAYS on top */}
-                  <div className="rounded-2xl bg-transparent border border-white/10 p-4 md:p-4 mb-[10px]" style={{ minHeight: "120px", height: "auto", position: "relative", zIndex: 1, width: "100%" }}>
+                  <div className="border border-white/15 p-[15px] md:p-4 mb-[10px]" style={{
+                    borderRadius: "18px", 
+                    minHeight: "120px", 
+                    height: "auto", 
+                    position: "relative", 
+                    zIndex: 1, 
+                    width: "100%",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                  }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You pay</span>
                     </div>
@@ -3703,7 +3856,7 @@ export default function SwapPage() {
                       backdropFilter: "blur(20px) saturate(180%)",
                       WebkitBackdropFilter: "blur(20px) saturate(180%)",
                       border: "1px solid rgba(255, 255, 255, 0.18)",
-                      boxShadow: "0 0 0 7px rgba(0, 0, 0, 0.7), 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)",
+                      boxShadow: "0 0 0 6px rgba(0, 0, 0, 0.4), 0 0 0 11px rgba(0, 0, 0, 0.2), 0 0 0 17px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.3)",
                       position: "relative",
                       width: "48px",
                       height: "48px",
@@ -3731,12 +3884,17 @@ export default function SwapPage() {
                   </div>
 
                   {/* You receive card - ALWAYS on bottom */}
-                  <div ref={receiveCardRef} className="rounded-2xl bg-white/5 p-4 md:p-4" style={{ 
+                  <div ref={receiveCardRef} className="border border-white/15 p-[15px] md:p-4" style={{
+                    borderRadius: "18px", 
                     minHeight: "120px", 
                     height: "auto",
                     position: "relative",
                     zIndex: 1,
                     width: "100%",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
                   }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You receive</span>
@@ -4081,7 +4239,7 @@ export default function SwapPage() {
             )}
 
             {/* Buttons container with padding matching cards */}
-            <div className="px-0 md:px-4 pb-4">
+            <div className="px-[15px] md:px-4 pb-4">
               {/* Swap/Connect Wallet button */}
               <button
                 onClick={async () => {
@@ -4163,7 +4321,7 @@ export default function SwapPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  console.log("⚙️ Advanced view clicked");
+                  setIsAdvancedViewOpen(true);
                 }}
                 onMouseDown={(e) => {
                   e.stopPropagation();
@@ -4183,6 +4341,145 @@ export default function SwapPage() {
         </div>
       </main>
 
+      {/* Advanced View Modal */}
+      {isAdvancedViewOpen && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setIsAdvancedViewOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-xl border border-white/15 bg-[#0c0e16] p-6 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setIsAdvancedViewOpen(false)}
+              className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
+              Advanced Settings - MEV Protection
+            </h2>
+
+            <div className="space-y-6">
+              {/* Atomic Execution Protection */}
+              <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1">Atomic Execution Protection</h3>
+                    <p className="text-sm text-white/60">
+                      Batches swaps within a time window to prevent front-running. Low gas overhead (~0.7%).
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mevProtection.atomicExecution}
+                      onChange={(e) =>
+                        setMevProtection((prev) => ({ ...prev, atomicExecution: e.target.checked }))
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                  </label>
+                </div>
+
+                {mevProtection.atomicExecution && (
+                  <div className="mt-4 space-y-2">
+                    <label className="block text-sm font-medium mb-2">Batch Window Mode</label>
+                    <select
+                      value={mevProtection.atomicExecutionMode}
+                      onChange={(e) =>
+                        setMevProtection((prev) => ({ ...prev, atomicExecutionMode: e.target.value }))
+                      }
+                      className="w-full rounded-full border border-white/15 bg-white/5 px-4 py-2 text-white focus:border-white/30 focus:outline-none"
+                    >
+                      <option value="0x00000100">Session-only (no batch window)</option>
+                      <option value="0x00000300">Every 2 blocks, settle in 1 block</option>
+                      <option value="0x00000500">Every 5 blocks, settle in 2 blocks</option>
+                      <option value="0x00000700">Every 10 blocks, settle in 3 blocks</option>
+                      <option value="0x00000900">Every 20 blocks, settle in 5 blocks</option>
+                    </select>
+                    <p className="text-xs text-white/50 mt-1">
+                      Higher batch windows provide more protection but delay settlement
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Commit-Reveal Protection */}
+              <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1">Commit-Reveal Protection</h3>
+                    <p className="text-sm text-white/60">
+                      Two-phase execution for perfect MEV immunity. Higher gas cost (~82% overhead).
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mevProtection.commitReveal}
+                      onChange={(e) =>
+                        setMevProtection((prev) => ({ ...prev, commitReveal: e.target.checked }))
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                  </label>
+                </div>
+
+                {mevProtection.commitReveal && (
+                  <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <p className="text-sm text-yellow-400">
+                      ⚠️ Commit-Reveal requires separate functions (commitSwap + executeCommittedSwap).
+                      This feature will be implemented in a future update.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Info Section */}
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                <h4 className="font-semibold mb-2 text-purple-300">How MEV Protection Works</h4>
+                <ul className="space-y-2 text-sm text-white/80">
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 mt-0.5">•</span>
+                    <span>
+                      <strong>Atomic Execution:</strong> Batches your swap with others in a time window, making it
+                      harder for MEV bots to front-run individual transactions.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 mt-0.5">•</span>
+                    <span>
+                      <strong>Commit-Reveal:</strong> Two-phase execution where you commit to a swap first, then reveal
+                      it later. Provides perfect MEV immunity but requires two transactions.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400 mt-0.5">•</span>
+                    <span>
+                      Protection is trader-controlled - you choose the level of security based on your trade size and
+                      risk tolerance.
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                onClick={() => setIsAdvancedViewOpen(false)}
+                className="w-full rounded-full border border-white/20 bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-medium text-white transition-all hover:from-purple-600 hover:to-pink-600"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
         /* Hide scrollbar for time range buttons on mobile */
