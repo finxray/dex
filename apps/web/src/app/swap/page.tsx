@@ -4239,7 +4239,7 @@ export default function SwapPage() {
               style={{
                 position: "relative",
                 zIndex: 10,
-                textShadow: "0 4px 16px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
+                textShadow: "0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
               }}
             >
               Swap tokens
@@ -4965,7 +4965,7 @@ export default function SwapPage() {
                     <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                     </svg>
-                    View live chart
+                    View chart
                   </>
                 )}
               </button>

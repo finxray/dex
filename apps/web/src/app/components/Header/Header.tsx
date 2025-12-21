@@ -257,7 +257,7 @@ export function Header() {
             zIndex: 0,
           }}
         />
-        <div className="mx-auto flex h-[55.2px] md:h-11 max-w-[980px] items-center justify-between px-4 md:px-6 relative z-10 w-full">
+        <div className="mx-auto flex h-[55.2px] md:h-11 max-w-[980px] items-center justify-between px-[15px] md:px-6 relative z-10 w-full">
           <div ref={logoRef}>
             <Link
               href="/"
@@ -301,7 +301,7 @@ export function Header() {
             </div>
           ))}
         </nav>
-        <div className="flex items-center gap-3 md:gap-6 flex-shrink-0">
+        <div className="flex items-center gap-2 md:gap-6 flex-shrink-0">
           {isConnected ? (
             <>
               <div className="hidden items-center gap-3 md:flex flex-shrink-0">
@@ -315,7 +315,7 @@ export function Header() {
                   Disconnect
                 </button>
               </div>
-              <div className="flex items-center gap-2 md:hidden">
+              <div className="flex items-center gap-4 md:hidden">
                 <span 
                   className="text-xs whitespace-nowrap"
                   style={{
@@ -327,30 +327,28 @@ export function Header() {
                 </span>
                 <button
                   onClick={() => disconnect()}
-                  className="rounded-full px-3 py-2 text-xs font-normal transition-all whitespace-nowrap"
+                  className="md:hidden rounded-full border border-white/15 px-3 py-2 text-xs font-normal transition-all touch-manipulation flex items-center justify-center whitespace-nowrap"
                   style={{
-                    minHeight: "36px",
-                    paddingTop: "8px",
-                    paddingBottom: "8px",
-                    border: isMobile && isOverWhiteSection ? "1px solid rgba(0, 0, 0, 0.2)" : "1px solid rgba(255, 255, 255, 0.2)",
-                    color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
+                    color: "#ffffff",
+                    opacity: 1,
+                    minWidth: "100px",
+                    width: "100px",
                     transition: "all 0.3s ease"
                   }}
                   onMouseEnter={(e) => {
-                    if (!isMobile || !isOverWhiteSection) {
-                      e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.3)";
-                      e.currentTarget.style.color = "#ffffff";
-                    } else {
-                      e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
-                      e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.3)";
-                      e.currentTarget.style.color = "#000000";
-                    }
+                    e.currentTarget.style.backgroundColor = "rgba(12, 14, 22, 0.5)";
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.3)";
+                    e.currentTarget.style.color = "#ffffff";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "";
-                    e.currentTarget.style.borderColor = "";
-                    e.currentTarget.style.color = "";
+                    e.currentTarget.style.backgroundColor = "rgba(12, 14, 22, 0.3)";
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
+                    e.currentTarget.style.color = "#ffffff";
+                    e.currentTarget.style.opacity = "1";
                   }}
                 >
                   Disconnect
@@ -409,30 +407,29 @@ export function Header() {
                   }
                 }}
                 disabled={isConnectPending || !hasConnector || isConnectingRef.current}
-                className="md:hidden rounded-full px-3 py-2 text-xs font-normal transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center whitespace-nowrap touch-manipulation"
+                className="md:hidden rounded-full border border-white/15 px-3 py-2 text-xs font-normal transition-all touch-manipulation flex items-center justify-center whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
-                  minHeight: "36px",
-                  paddingTop: "8px",
-                  paddingBottom: "8px",
-                  border: isMobile && isOverWhiteSection ? "1px solid rgba(0, 0, 0, 0.2)" : "1px solid rgba(255, 255, 255, 0.2)",
-                  color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
-                  transition: "all 0.3s ease"
+                  backgroundColor: "rgba(12, 14, 22, 0.3)",
+                  backdropFilter: "blur(20px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
+                  color: "#ffffff",
+                  opacity: 1,
+                  minWidth: "100px",
+                  width: "100px",
                 }}
                 onMouseEnter={(e) => {
-                  if (!isMobile || !isOverWhiteSection) {
-                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+                  if (!e.currentTarget.disabled) {
+                    e.currentTarget.style.backgroundColor = "rgba(12, 14, 22, 0.5)";
                     e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.3)";
                     e.currentTarget.style.color = "#ffffff";
-                  } else {
-                    e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
-                    e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.3)";
-                    e.currentTarget.style.color = "#000000";
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "";
-                  e.currentTarget.style.borderColor = "";
-                  e.currentTarget.style.color = "";
+                  e.currentTarget.style.backgroundColor = "rgba(12, 14, 22, 0.3)";
+                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
+                  e.currentTarget.style.color = "#ffffff";
+                  e.currentTarget.style.opacity = "1";
                 }}
               >
                 {isConnectPending ? "Connecting..." : connectError ? "No Wallet" : "Connect"}
@@ -450,10 +447,11 @@ export function Header() {
             aria-label="Toggle navigation"
             aria-expanded={isMenuOpen}
             onClick={toggleMenu}
-            className="group flex h-12 w-12 items-center justify-center transition-colors md:hidden touch-manipulation relative"
+            className="group flex h-[52.8px] w-[52.8px] items-center justify-center transition-colors md:hidden touch-manipulation relative"
             style={{ 
-              minWidth: "48px", 
-              minHeight: "48px",
+              minWidth: "52.8px", 
+              minHeight: "52.8px",
+              marginLeft: "auto",
               color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
               transition: "color 0.3s ease"
             }}
@@ -468,22 +466,22 @@ export function Header() {
               e.currentTarget.style.color = "";
             }}
           >
-            <div className="relative w-6 h-4 flex flex-col justify-center items-center">
+            <div className="relative w-[26.4px] h-[17.6px] flex flex-col justify-center items-center">
               <span
-                className="block h-0.5 w-full bg-current transition-all duration-300 ease-in-out absolute"
+                className="block h-[2.2px] w-full bg-current transition-all duration-300 ease-in-out absolute rounded-full"
                 style={{
                   transform: isMenuOpen 
                     ? "rotate(45deg) translateY(0)" 
-                    : "rotate(0deg) translateY(-4px)",
+                    : "rotate(0deg) translateY(-4.4px)",
                   transformOrigin: "center",
                 }}
               />
               <span
-                className="block h-0.5 w-full bg-current transition-all duration-300 ease-in-out absolute"
+                className="block h-[2.2px] w-full bg-current transition-all duration-300 ease-in-out absolute rounded-full"
                 style={{
                   transform: isMenuOpen 
                     ? "rotate(-45deg) translateY(0)" 
-                    : "rotate(0deg) translateY(4px)",
+                    : "rotate(0deg) translateY(4.4px)",
                   transformOrigin: "center",
                 }}
               />
