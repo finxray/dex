@@ -111,7 +111,7 @@ async function startHardhatNode() {
   console.log('🚀 Starting fresh Hardhat node...');
   
   return new Promise((resolve, reject) => {
-    const nodeProcess = spawn('npx', ['hardhat', 'node'], {
+    const nodeProcess = spawn('npx', ['hardhat', 'node', '--hostname', '0.0.0.0'], {
       env: { ...process.env, MAINNET_RPC: '' },
       stdio: 'pipe',
       shell: true

@@ -1,45 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type PointerEvent as ReactPointerEvent, type MutableRefObject } from "react";
-import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors, useChainId, useSwitchChain } from "wagmi";
-import { sepolia } from "wagmi/chains";
-import { defineChain } from "viem";
-
-// Define Hardhat chain with chain ID 31337
-const hardhat = defineChain({
-  id: 31337,
-  name: "Hardhat Local",
-  nativeCurrency: {
-    decimals: 18,
-    name: "Ether",
-    symbol: "ETH",
-  },
-  rpcUrls: {
-    default: {
-      http: ["http://127.0.0.1:8545"],
-    },
-  },
-});
-import { formatUnits, parseUnits, maxUint256, encodeFunctionData, decodeFunctionResult, createWalletClient, custom, decodeErrorResult } from "viem";
+import { createPortal } from "react-dom";
+import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient, useConnectors, useChainId, useSwitchChain, useConfig, useWriteContract } from "wagmi";
+import { getWalletClient } from "wagmi/actions";
+import type { Connector } from "wagmi";
+import { formatUnits, parseUnits, maxUint256, encodeFunctionData, decodeFunctionResult, createWalletClient, custom, decodeErrorResult, defineChain } from "viem";
+import { sepolia } from "viem/chains";
 import type { WalletClient } from "viem";
 import type { UTCTimestamp } from "lightweight-charts";
 
 import { poolManagerAbi } from "../../lib/abi/poolManager";
 import { quoterAbi } from "../../lib/abi/quoter";
 import { erc20Abi } from "../../lib/abi/erc20";
+import { isLocalRpc } from "../../lib/isLocalRpc";
+import { isMobileDevice } from "../../lib/isMobile";
 import LightweightChart from "./components/LightweightChart";
 import { Header } from "../components/Header/Header";
 import { TokenSelector, TokenSelectorButton, type Token } from "../components";
+import { WalletSelector } from "../components/WalletSelector";
+import { SpacedSection, SpacedItem } from "../components/Spacing";
 import AnimatedBackground from "./components/AnimatedBackground";
 
-
-type Token = {
-  symbol: string;
-  name: string;
-  address: `0x${string}`;
-  decimals: number;
-  icon?: string; // URL or public path
-};
 
 type SwapDirection = "a-to-b" | "b-to-a";
 
@@ -177,6 +159,7 @@ type QuoteState = {
 };
 
 export default function SwapPage() {
+  const wagmiConfig = useConfig();
   console.log("═══════════════════════════════════════════════════════");
   console.log("🚀 SWAP PAGE LOADED");
   console.log("═══════════════════════════════════════════════════════");
@@ -214,16 +197,145 @@ export default function SwapPage() {
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
   const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
+  const { writeContractAsync, isPending: isWriteContractPending } = useWriteContract();
   const [fallbackWalletClient, setFallbackWalletClient] = useState<WalletClient | undefined>(undefined);
   const [isRetryingWalletClient, setIsRetryingWalletClient] = useState(false);
+  const [isConnectorSheetOpen, setIsConnectorSheetOpen] = useState(false);
+  const [connectorError, setConnectorError] = useState<string | null>(null);
+  const [isMobileView, setIsMobileView] = useState(false);
 
-  // Determine target chain based on RPC URL
-  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "";
-  const isLocalhost = rpcUrl.includes("localhost") || rpcUrl.includes("127.0.0.1") || rpcUrl === "";
-  const targetChain = isLocalhost ? hardhat : sepolia;
+
+  // Memoize onClose callback to prevent re-renders
+  const handleWalletSelectorClose = useCallback(() => {
+    setIsConnectorSheetOpen(false);
+    setConnectorError(null);
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileView(typeof window !== "undefined" && window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Determine target chain based on RPC URL and device type
+  // MUST match providers.tsx exactly to ensure chain consistency
+  const isMobile = typeof window !== "undefined" && isMobileDevice();
+  const host = typeof window !== "undefined"
+    ? (window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname)
+    : "127.0.0.1";
+  const localRpcUrlFromEnv = process.env.NEXT_PUBLIC_LOCAL_RPC_URL;
+  const rpcUrl = localRpcUrlFromEnv || (isMobile ? `http://${host}:8545` : "http://127.0.0.1:8545");
+  const isLocalhost = isLocalRpc(rpcUrl);
+  
+  // Define Hardhat chain dynamically with correct RPC URL (matching providers.tsx)
+  const hardhatChain = useMemo(() => defineChain({
+    id: 31337,
+    name: "Hardhat Local",
+    nativeCurrency: {
+      decimals: 18,
+      name: "Ether",
+      symbol: "ETH",
+    },
+    rpcUrls: {
+      default: {
+        http: [rpcUrl],
+      },
+    },
+  }), [rpcUrl]);
+  
+  const targetChain = useMemo(() => isLocalhost ? hardhatChain : sepolia, [isLocalhost, hardhatChain]);
 
   // Check if connected to the correct chain
   const isCorrectChain = chainId === targetChain.id;
+
+  // Auto-switch to correct chain when connected to wrong network
+  // Use a ref to track if we've already attempted to switch to prevent loops
+  const hasAttemptedSwitchRef = useRef(false);
+  
+  useEffect(() => {
+    // Reset the switch attempt flag when disconnected
+    if (!isConnected) {
+      hasAttemptedSwitchRef.current = false;
+      setAllowance(null);
+      setAllowanceError(null);
+      return;
+    }
+    
+    if (isConnected && targetChain) {
+      setIsConnectorSheetOpen(false);
+      setConnectorError(null);
+      
+      // Reset allowance when connecting to ensure fresh check
+      // This prevents showing "Swap" when approval is actually needed
+      setAllowance(null);
+      setAllowanceError(null);
+      
+      // Auto-switch to correct chain if connected to wrong network
+      // Check if chainId matches targetChain.id (isCorrectChain logic)
+      const correctChain = chainId === targetChain.id;
+      if (!correctChain && !hasAttemptedSwitchRef.current) {
+        console.log(`🔄 Chain mismatch detected: Current Chain ID ${chainId}, Target Chain ID ${targetChain.id}`);
+        console.log("  Target Chain:", targetChain.name);
+        console.log("  Current Chain ID:", chainId);
+        console.log("  Target Chain ID:", targetChain.id);
+        console.log("  Connector:", connector?.id || connector?.name || "unknown");
+        console.log("  switchChain available:", !!switchChain);
+        
+        // Mark that we've attempted to switch to prevent loops
+        hasAttemptedSwitchRef.current = true;
+        
+        // Check if this is WalletConnect (which may not support auto-switch on mobile)
+        const isWalletConnect = connector?.id === "walletConnect" || connector?.name?.toLowerCase().includes("walletconnect");
+        
+        if (switchChain) {
+          // Add a small delay to ensure connector is ready
+          const switchTimeout = setTimeout(() => {
+            try {
+              console.log(`🔄 Attempting to auto-switch to Chain ID ${targetChain.id}...`);
+              // wagmi's switchChain() is not a Promise; it triggers the request and reports status via hook state.
+              switchChain({ chainId: targetChain.id });
+              console.log("✅ Chain switch requested");
+
+              // Reset the flag after giving the wallet time to process the switch request.
+              setTimeout(() => {
+                hasAttemptedSwitchRef.current = false;
+              }, 2000);
+            } catch (error: any) {
+              console.error("❌ Exception during chain switch:", error);
+              const errorMsg = error?.shortMessage || error?.message || String(error);
+              // Reset the flag
+              hasAttemptedSwitchRef.current = false;
+              if (isWalletConnect && isMobileView) {
+                setConnectorError(`Please switch to ${targetChain.name} (Chain ID ${targetChain.id}) manually in MetaMask. WalletConnect on mobile doesn't support automatic chain switching.`);
+              } else if (String(errorMsg).includes("user rejected") || String(errorMsg).includes("User rejected")) {
+                setConnectorError(`Please switch to ${targetChain.name} (Chain ID ${targetChain.id}) in MetaMask to continue.`);
+              } else {
+                setConnectorError(`Please switch to ${targetChain.name} (Chain ID ${targetChain.id}) in MetaMask to continue.`);
+              }
+            }
+          }, 500); // Small delay to ensure connector is ready
+          
+          return () => clearTimeout(switchTimeout);
+        } else {
+          // switchChain not available - show manual switch message
+          console.warn("⚠️ switchChain not available - user must switch manually");
+          hasAttemptedSwitchRef.current = false;
+          if (isWalletConnect && isMobileView) {
+            setConnectorError(`Please switch to ${targetChain.name} (Chain ID ${targetChain.id}) manually in MetaMask. WalletConnect on mobile doesn't support automatic chain switching.`);
+          } else {
+            setConnectorError(`Please switch to ${targetChain.name} (Chain ID ${targetChain.id}) in MetaMask to continue.`);
+          }
+        }
+      } else {
+        console.log(`✅ Connected to correct chain: ${targetChain.name} (Chain ID: ${chainId})`);
+        // Reset the flag when on correct chain
+        hasAttemptedSwitchRef.current = false;
+      }
+    }
+  }, [isConnected, chainId, switchChain, targetChain, connector, isMobileView]);
 
   // Function to manually retry getting wallet client
   const retryGetWalletClient = useCallback(async () => {
@@ -234,7 +346,7 @@ export default function SwapPage() {
 
     setIsRetryingWalletClient(true);
     try {
-      // Try method 1: Get from connector
+      // Try method 1: Get from connector (works for both injected and WalletConnect)
       if (connector) {
         console.log("🔄 Method 1: Trying to get wallet client from connector...");
         try {
@@ -249,9 +361,29 @@ export default function SwapPage() {
         }
       }
 
-      // Try method 2: Create directly from window.ethereum
+      // Try method 2: For WalletConnect, get provider from connector
+      if (connector && (connector.id === "walletConnect" || connector.name?.toLowerCase().includes("walletconnect"))) {
+        console.log("🔄 Method 2: Trying to get WalletConnect provider from connector...");
+        try {
+          const provider = await (connector as any).getProvider?.();
+          if (provider && publicClient?.chain) {
+            const client = createWalletClient({
+              account: address as `0x${string}`,
+              chain: publicClient.chain,
+              transport: custom(provider),
+            });
+            console.log("✅ Successfully created wallet client from WalletConnect provider");
+            setFallbackWalletClient(client);
+            return;
+          }
+        } catch (error) {
+          console.log("⚠️ WalletConnect provider method failed:", error);
+        }
+      }
+
+      // Try method 3: Create directly from window.ethereum (for injected wallets like MetaMask)
       if (typeof window !== "undefined" && (window as any).ethereum && address) {
-        console.log("🔄 Method 2: Creating wallet client directly from window.ethereum...");
+        console.log("🔄 Method 3: Creating wallet client directly from window.ethereum...");
         try {
           const provider = (window as any).ethereum;
           const chain = publicClient?.chain;
@@ -287,7 +419,7 @@ export default function SwapPage() {
   useEffect(() => {
     const getWalletClientFromConnector = async () => {
       if (isConnected && !walletClient && address) {
-        // Try method 1: Get from connector
+        // Try method 1: Get from connector (works for both injected and WalletConnect)
         if (connector) {
           try {
             console.log("🔄 Attempting to get wallet client from connector...");
@@ -302,7 +434,27 @@ export default function SwapPage() {
           }
         }
 
-        // Try method 2: Create directly from window.ethereum
+        // Try method 2: For WalletConnect, get provider from connector
+        if (connector && (connector.id === "walletConnect" || connector.name?.toLowerCase().includes("walletconnect"))) {
+          try {
+            console.log("🔄 Attempting to get WalletConnect provider from connector...");
+            const provider = await (connector as any).getProvider?.();
+            if (provider && publicClient?.chain) {
+              const client = createWalletClient({
+                account: address as `0x${string}`,
+                chain: publicClient.chain,
+                transport: custom(provider),
+              });
+              console.log("✅ Successfully created wallet client from WalletConnect provider");
+              setFallbackWalletClient(client);
+              return;
+            }
+          } catch (error) {
+            console.log("⚠️ WalletConnect provider method failed:", error);
+          }
+        }
+
+        // Try method 3: Create directly from window.ethereum (for injected wallets like MetaMask)
         if (typeof window !== "undefined" && (window as any).ethereum && publicClient?.chain) {
           try {
             console.log("🔄 Attempting to create wallet client from window.ethereum...");
@@ -327,171 +479,172 @@ export default function SwapPage() {
       }
     };
 
-    getWalletClientFromConnector();
+    // Add a small delay for WalletConnect to initialize its provider
+    const timeoutId = setTimeout(() => {
+      getWalletClientFromConnector();
+    }, isConnected && connector && (connector.id === "walletConnect" || connector.name?.toLowerCase().includes("walletconnect")) ? 500 : 0);
+
+    return () => clearTimeout(timeoutId);
   }, [isConnected, walletClient, connector, address, publicClient]);
 
   // Use walletClient if available, otherwise use fallback
   const effectiveWalletClient = walletClient || fallbackWalletClient;
 
-  // Track if auto-connect has been attempted to prevent repeated attempts
-  const autoConnectAttemptedRef = useRef(false);
-
-  // Auto-connect to previously connected wallet on mount and listen for account changes
-  useEffect(() => {
-    // Only attempt auto-connect once on mount
-    if (autoConnectAttemptedRef.current) {
-      return;
-    }
-
-    const autoConnect = async () => {
-      // Only try to auto-connect if not already connected and connectors are available
-      if (isConnected || isConnecting || isConnectPending || isConnectingRef.current || !connectors[0]) {
+  const connectUsing = useCallback(
+    async (connectorToUse: Connector) => {
+      if (!connectorToUse || isConnectingRef.current || isConnecting || isConnectPending) {
+        console.log("⏸️ Connection skipped - already connecting or connector unavailable");
         return;
       }
-
-      // Mark as attempted to prevent retries
-      autoConnectAttemptedRef.current = true;
-
-      // Check if wallet extension is available
-      if (typeof window !== "undefined" && (window as any).ethereum) {
+      isConnectingRef.current = true;
+      setConnectorError(null);
+      setIsConnectorSheetOpen(false);
+      
+      const isWalletConnectConnector = connectorToUse.id === "walletConnect" || connectorToUse.name?.toLowerCase().includes("walletconnect");
+      
+      console.log("🔌 Initiating connection...");
+      console.log("  Connector:", connectorToUse.id || connectorToUse.name);
+      console.log("  Is WalletConnect:", isWalletConnectConnector);
+      console.log("  Mobile view:", isMobileView);
+      
+      // For WalletConnect, ensure connector is ready before connecting
+      if (isWalletConnectConnector) {
+        console.log("⏳ Preparing WalletConnect connection...");
+        
+        // Clear stale sessions but don't clear active ones
         try {
-          // Check if wallet is already connected (has accounts)
-          const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
-          if (accounts && accounts.length > 0) {
-            console.log("🔗 Auto-connecting to previously connected wallet...");
-            console.log("  Account:", accounts[0]);
-            isConnectingRef.current = true;
-            try {
-              await connect({ connector: connectors[0] });
-            } catch (error: any) {
-              // Suppress "already pending" errors to prevent UI glitches
-              const errorMessage = error?.message || error?.toString() || "";
-              if (errorMessage.includes("already pending") || errorMessage.includes("Request of type")) {
-                console.log("⚠️ Connection already in progress, skipping auto-connect");
-              } else {
-                console.log("⚠️ Auto-connect error:", error);
-              }
-            } finally {
-              isConnectingRef.current = false;
+          const storage = window.localStorage;
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            if (key && (
+              key.startsWith("wc@2:core:") || // Only clear core keys, not active sessions
+              (key.startsWith("wc@2:") && key.includes("pending"))
+            )) {
+              keysToRemove.push(key);
             }
           }
-        } catch (error: any) {
-          // Suppress errors that might cause UI glitches
-          const errorMessage = error?.message || error?.toString() || "";
-          if (!errorMessage.includes("already pending") && !errorMessage.includes("Request of type")) {
-            console.log("⚠️ Auto-connect failed:", error);
-          }
-          isConnectingRef.current = false;
-        }
-      }
-    };
-
-    // Listen for account changes from wallet extension
-    const handleAccountsChanged = async (accounts: string[]) => {
-      console.log("🔔 Wallet accounts changed:", accounts);
-      if (accounts.length > 0 && !isConnected && !isConnectingRef.current && !isConnectPending) {
-        // Wallet connected externally - try to connect
-        console.log("🔗 Wallet connected externally, syncing...");
-        if (connectors[0]) {
-          isConnectingRef.current = true;
-          try {
-            await connect({ connector: connectors[0] });
-          } catch (error: any) {
-            // Suppress "already pending" errors
-            const errorMessage = error?.message || error?.toString() || "";
-            if (!errorMessage.includes("already pending") && !errorMessage.includes("Request of type")) {
-              console.log("⚠️ External connection sync failed:", error);
-            }
-          } finally {
-            isConnectingRef.current = false;
-          }
-        }
-      } else if (accounts.length === 0 && isConnected) {
-        // Wallet disconnected externally - disconnect from app
-        console.log("🔗 Wallet disconnected externally, syncing...");
-        disconnect();
-      }
-    };
-
-    // Small delay to ensure connectors are ready, but only run once
-    const timer = setTimeout(() => {
-      autoConnect();
-    }, 500); // Increased delay to avoid conflicts
-
-    // Listen for wallet account changes
-    if (typeof window !== "undefined" && (window as any).ethereum) {
-      (window as any).ethereum.on("accountsChanged", handleAccountsChanged);
-    }
-
-    return () => {
-      clearTimeout(timer);
-      if (typeof window !== "undefined" && (window as any).ethereum) {
-        (window as any).ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      }
-    };
-  }, []); // Only run once on mount - removed dependencies to prevent re-runs
-
-  // Sync connection state when wallet connects externally
-  // This effect watches for when the wallet has accounts but wagmi hasn't detected connection yet
-  useEffect(() => {
-    // Skip if already connected or connecting
-    if (isConnected || isConnecting || isConnectPending || isConnectingRef.current || !connectors[0]) {
-      return;
-    }
-
-    const checkAndSync = async () => {
-      // Double-check state hasn't changed
-      if (isConnected || isConnecting || isConnectPending || isConnectingRef.current) {
-        return;
-      }
-
-      if (typeof window !== "undefined" && (window as any).ethereum) {
-        try {
-          const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
-          if (accounts && accounts.length > 0 && !isConnected && !isConnectingRef.current) {
-            console.log("🔗 Wallet has accounts but app not connected, syncing...");
-            console.log("  Account:", accounts[0]);
-            isConnectingRef.current = true;
-            try {
-              await connect({ connector: connectors[0] });
-              console.log("✅ Successfully synced wallet connection");
-            } catch (error: any) {
-              const errorMessage = error?.message || error?.toString() || "";
-              if (!errorMessage.includes("already pending") && !errorMessage.includes("Request of type")) {
-                console.log("⚠️ Sync connection failed:", error);
-              }
-            } finally {
-              setTimeout(() => {
-                isConnectingRef.current = false;
-              }, 500);
-            }
+          if (keysToRemove.length > 0) {
+            keysToRemove.forEach((key) => storage.removeItem(key));
+            console.log(`🧹 Cleared ${keysToRemove.length} stale WalletConnect key(s) before connecting`);
           }
         } catch (error) {
-          // Silently fail - wallet might not be available
+          // Silently fail
+        }
+        
+        // Wait a moment for connector to be ready
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Verify connector is ready
+        try {
+          const provider = await (connectorToUse as any).getProvider?.();
+          if (provider) {
+            console.log("✅ WalletConnect provider is ready");
+          } else {
+            console.log("⚠️ WalletConnect provider not yet available, proceeding anyway...");
+          }
+        } catch (error) {
+          console.log("⚠️ Could not verify WalletConnect provider:", error);
         }
       }
-    };
+      
+      try {
+        console.log("📤 Calling connect()...");
+        const connectionPromise = connect({ connector: connectorToUse });
+        
+        // For WalletConnect on mobile, add a timeout to detect if connection request doesn't appear
+        if (isWalletConnectConnector && isMobileView) {
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error("Connection request timed out. MetaMask may not have opened. Please check MetaMask manually or try again."));
+            }, 15000); // 15 second timeout for connection
+          });
+          
+          await Promise.race([connectionPromise, timeoutPromise]);
+        } else {
+          await connectionPromise;
+        }
+        
+        console.log("✅ Connection successful!");
+      } catch (error: any) {
+        const errorMessage = error?.shortMessage || error?.message || "Connection failed. Please try again.";
+        const errorString = String(errorMessage).toLowerCase();
+        
+        console.error("❌ Connection failed:", errorMessage);
+        console.error("  Error type:", error?.constructor?.name);
+        console.error("  Error code:", error?.code);
+        
+        // Suppress WalletConnect internal session errors that don't affect user experience
+        const isWalletConnectSessionError = 
+          errorString.includes("no matching key") ||
+          errorString.includes("no matching key.") ||
+          errorString.includes("no matching key.session") ||
+          errorString.includes("pending session not found") ||
+          errorString.includes("session not found") ||
+          errorString.includes("session top") ||
+          errorString.includes("session topic") ||
+          errorString.includes("session.top") ||
+          errorString.includes("session.topic") ||
+          errorString.includes("matching key") ||
+          errorString.includes("emiting session_request") ||
+          errorString.includes("emitting session_request") ||
+          errorString.includes("without any listeners") ||
+          errorString.includes("without listeners") ||
+          errorString.includes("proposal") ||
+          (errorString.includes("key") && errorString.includes("session")) ||
+          (errorString.includes("session_request") && errorString.includes("listeners")) ||
+          (errorString.includes("topic") && (errorString.includes("walletconnect") || errorString.includes("wc@"))) ||
+          (errorString.includes("wc@") && errorString.includes("key"));
+        
+        // Handle user rejection gracefully (same for both MetaMask and WalletConnect)
+        const isUserRejection = 
+          errorString.includes("user rejected") ||
+          errorString.includes("user_rejected") ||
+          errorString.includes("rejected the request") ||
+          errorString.includes("connection request reset") ||
+          errorString.includes("request reset") ||
+          errorString.includes("rejected") && (errorString.includes("connection") || errorString.includes("request")) ||
+          error?.code === 4001 || // User rejected the request (EIP-1193)
+          error?.code === "ACTION_REJECTED"; // Wagmi rejection code
+        
+        // Don't show or reopen sheet for WalletConnect internal errors
+        // These are often transient and WalletConnect handles them internally
+        if (isWalletConnectSessionError) {
+          console.warn("WalletConnect session error (suppressed):", errorMessage);
+          // Don't reopen sheet or set error for these internal errors
+          isConnectingRef.current = false;
+          return;
+        }
+        
+        // Handle user rejection gracefully - don't show error, just close the sheet
+        if (isUserRejection) {
+          console.log("ℹ️ User rejected connection request - closing sheet");
+          setConnectorError(null);
+          setIsConnectorSheetOpen(false);
+          isConnectingRef.current = false;
+          return;
+        }
+        
+        // For timeout errors, show helpful message
+        if (errorString.includes("timeout") || errorString.includes("timed out")) {
+          setConnectorError("Connection request timed out. Please check MetaMask for a pending connection request, or try again.");
+          setIsConnectorSheetOpen(true);
+        } else {
+          // For other errors, show them and reopen the sheet
+          setConnectorError(errorMessage);
+          setIsConnectorSheetOpen(true);
+        }
+      } finally {
+        setTimeout(() => {
+          isConnectingRef.current = false;
+        }, 1000);
+      }
+    },
+    [connect, isConnecting, isConnectPending, isMobileView]
+  );
 
-    // Check periodically when not connected (but throttle it)
-    const interval = setInterval(checkAndSync, 2000); // Check every 2 seconds
-    
-    // Also check immediately
-    checkAndSync();
 
-    return () => clearInterval(interval);
-  }, [isConnected, address, isConnecting, isConnectPending, connectors, connect]); // Watch connection state
 
-  // Debug: Monitor connection state
-  useEffect(() => {
-    console.log("\n🔌 Connection State Changed:");
-    console.log("  Address:", address || "❌ Not connected");
-    console.log("  Is Connected:", isConnected ? "✅" : "❌");
-    console.log("  Is Connecting:", isConnecting ? "⏳" : "✅");
-    console.log("  Public Client:", publicClient ? "✅" : "❌");
-    console.log("  Wallet Client (hook):", walletClient ? "✅" : "❌");
-    console.log("  Wallet Client (fallback):", fallbackWalletClient ? "✅" : "❌");
-    console.log("  Effective Wallet Client:", effectiveWalletClient ? "✅" : "❌");
-  }, [address, isConnected, isConnecting, publicClient, walletClient, fallbackWalletClient, effectiveWalletClient]);
 
   const [amountIn, setAmountIn] = useState<string>("");
   const [amountOutValue, setAmountOutValue] = useState<string>("");
@@ -743,6 +896,112 @@ export default function SwapPage() {
   const [isApproving, setIsApproving] = useState(false);
   const [allowanceError, setAllowanceError] = useState<string | null>(null);
   const [isFetchingAllowance, setIsFetchingAllowance] = useState(false);
+
+  // Sync UI state with wallet state - ensure they stay in sync
+  useEffect(() => {
+    // Reset approval state when wallet disconnects
+    if (!isConnected) {
+      setIsApproving(false);
+      setAllowanceError(null);
+      setAllowance(null);
+    }
+  }, [isConnected]);
+
+  // Set up WalletConnect event listeners to sync state
+  useEffect(() => {
+    if (!isConnected || !connector) return;
+    
+    const isWalletConnect = connector.id === "walletConnect" || connector.name?.toLowerCase().includes("walletconnect");
+    if (!isWalletConnect) return;
+
+    let provider: any = null;
+    let cleanup: (() => void) | null = null;
+
+    const setupListeners = async () => {
+      try {
+        provider = await (connector as any).getProvider?.();
+        if (!provider) return;
+
+        const providerAny = provider as any;
+        
+        // Listen for WalletConnect session events to sync state
+        const handleSessionUpdate = () => {
+          console.log("🔄 WalletConnect session updated - syncing state");
+          // Force a refresh of wallet client when session updates
+          if (isConnected && address) {
+            retryGetWalletClient();
+          }
+        };
+
+        const handleSessionDelete = () => {
+          console.log("🔌 WalletConnect session deleted - wallet disconnected");
+          // State will be updated by wagmi's useAccount hook
+          // Don't do anything here - wagmi will handle the disconnect
+        };
+
+        const handleChainChanged = (chainId: string | number) => {
+          console.log("🔗 WalletConnect chain changed - syncing state");
+          console.log("  New chain ID:", chainId);
+          // Don't reload - just log the change
+          // Wagmi will update the chainId automatically
+        };
+
+        // Set up listeners on provider
+        if (providerAny.on) {
+          providerAny.on("session_update", handleSessionUpdate);
+          providerAny.on("session_delete", handleSessionDelete);
+          providerAny.on("chainChanged", handleChainChanged);
+        }
+
+        // Also set up listeners on internal client if available
+        if (providerAny.client || providerAny._client) {
+          const client = providerAny.client || providerAny._client;
+          if (client && client.on) {
+            client.on("session_update", handleSessionUpdate);
+            client.on("session_delete", handleSessionDelete);
+            client.on("chainChanged", handleChainChanged);
+          }
+        }
+
+        cleanup = () => {
+          if (providerAny && providerAny.off) {
+            providerAny.off("session_update", handleSessionUpdate);
+            providerAny.off("session_delete", handleSessionDelete);
+            providerAny.off("chainChanged", handleChainChanged);
+          }
+          if (providerAny.client || providerAny._client) {
+            const client = providerAny.client || providerAny._client;
+            if (client && client.off) {
+              client.off("session_update", handleSessionUpdate);
+              client.off("session_delete", handleSessionDelete);
+              client.off("chainChanged", handleChainChanged);
+            }
+          }
+        };
+      } catch (error) {
+        console.warn("⚠️ Could not set up WalletConnect event listeners:", error);
+      }
+    };
+
+    setupListeners();
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [isConnected, connector, address, retryGetWalletClient]);
+
+  // Debug: Monitor connection state
+  useEffect(() => {
+    console.log("\n🔌 Connection State Changed:");
+    console.log("  Address:", address || "❌ Not connected");
+    console.log("  Is Connected:", isConnected ? "✅" : "❌");
+    console.log("  Is Connecting:", isConnecting ? "⏳" : "✅");
+    console.log("  Public Client:", publicClient ? "✅" : "❌");
+    console.log("  Wallet Client (hook):", walletClient ? "✅" : "❌");
+    console.log("  Wallet Client (fallback):", fallbackWalletClient ? "✅" : "❌");
+    console.log("  Effective Wallet Client:", effectiveWalletClient ? "✅" : "❌");
+    console.log("  Is Approving:", isApproving ? "⏳" : "✅");
+  }, [address, isConnected, isConnecting, publicClient, walletClient, fallbackWalletClient, effectiveWalletClient, isApproving]);
   const [fiatCurrency, setFiatCurrency] = useState<"USD" | "EUR" | "GBP">("USD");
   const [orderType, setOrderType] = useState<"Swap" | "Limit" | "Buy" | "Sell">("Swap");
   
@@ -1171,19 +1430,55 @@ export default function SwapPage() {
 
       const quoterAddress = env.quoterAddress as `0x${string}`;
       
+      // Check chain ID first - must be 31337 for Hardhat local network
+      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "not set";
+      const isLocalhost = isLocalRpc(rpcUrl);
+      
+      if (isLocalhost && chainId !== 31337) {
+        console.error("❌ Chain ID mismatch. Expected 31337 (Hardhat), got:", chainId);
+        setQuoteError(`Wrong network. Expected Hardhat Local (Chain ID 31337), but connected to Chain ID ${chainId}. Switch MetaMask to Hardhat Local network.`);
+        setIsQuoting(false);
+        return;
+      }
+      
       // Verify quoter contract exists before calling
       try {
+        console.log("🔍 Verifying quoter contract...");
+        console.log("  Address:", quoterAddress);
+        console.log("  Chain ID:", chainId);
+        console.log("  RPC URL:", rpcUrl);
+        console.log("  Is Localhost:", isLocalhost);
+        
         const code = await publicClient.getBytecode({ address: quoterAddress });
         if (!code || code === "0x") {
           console.error("❌ Quoter contract does not exist at address:", quoterAddress);
-          setQuoteError(`Quoter contract not found at ${quoterAddress.substring(0, 10)}.... Ensure contracts are deployed.`);
+          const errorMsg = isLocalhost 
+            ? `Quoter contract not found at ${quoterAddress.substring(0, 10)}.... Ensure Hardhat node is running and contracts are deployed. Run: npm run deploy:local`
+            : `Quoter contract not found at ${quoterAddress.substring(0, 10)}.... Ensure contracts are deployed.`;
+          setQuoteError(errorMsg);
           setIsQuoting(false);
           return;
         }
         console.log("✅ Quoter contract verified at:", quoterAddress);
-      } catch (checkError) {
+      } catch (checkError: any) {
         console.error("❌ Failed to verify quoter contract:", checkError);
-        setQuoteError("Failed to verify quoter contract. Check network connection.");
+        const errorMessage = checkError?.message || checkError?.toString() || "Unknown error";
+        
+        // Provide more specific error messages
+        let userFriendlyError = "Failed to verify quoter contract. ";
+        if (errorMessage.includes("network") || errorMessage.includes("fetch") || errorMessage.includes("timeout")) {
+          if (isLocalhost) {
+            userFriendlyError += "Network error. Is Hardhat node running at " + rpcUrl + "? Ensure it's accessible from your device.";
+          } else {
+            userFriendlyError += "Network error. Check RPC connection: " + rpcUrl.substring(0, 50);
+          }
+        } else if (errorMessage.includes("chain") || errorMessage.includes("mismatch")) {
+          userFriendlyError += `Chain ID mismatch. Expected 31337 (Hardhat), got ${chainId}. Ensure MetaMask is connected to Hardhat Local network.`;
+        } else {
+          userFriendlyError += errorMessage.substring(0, 100);
+        }
+        
+        setQuoteError(userFriendlyError);
         setIsQuoting(false);
         return;
       }
@@ -1388,7 +1683,7 @@ export default function SwapPage() {
           
           const errorMessage = error?.message || error?.toString() || "Unknown error";
           const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
-          const isLocalhost = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
+          const isLocalhost = isLocalRpc(rpcUrl);
           let userFriendlyError = "Unable to fetch quote.";
           
           console.error("Full error object:", JSON.stringify(error, null, 2));
@@ -1432,7 +1727,7 @@ export default function SwapPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeField, amountIn, publicClient, inputDecimals, outputDecimals, tokenA, tokenB, zeroForOne, env.quoterAddress, amountInSymbol, amountOutSymbol, direction]);
+  }, [activeField, amountIn, publicClient, inputDecimals, outputDecimals, tokenA, tokenB, zeroForOne, env.quoterAddress, amountInSymbol, amountOutSymbol, direction, chainId]);
 
   // Reverse quote: amountOut -> amountIn
   useEffect(() => {
@@ -1711,7 +2006,7 @@ export default function SwapPage() {
         console.error("RPC URL:", process.env.NEXT_PUBLIC_RPC_URL || "default public RPC");
         const errorMessage = error?.message || error?.toString() || "Unknown error";
         const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
-        const isLocalhost = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
+        const isLocalhost = isLocalRpc(rpcUrl);
         
         // Provide more helpful error messages
         if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
@@ -1764,13 +2059,28 @@ export default function SwapPage() {
     txStatus,
   ]);
 
+  // Check if approval is needed
+  // Show approve button if:
+  // 1. Approval is required (not native token)
+  // 2. Amount is entered
+  // 3. Allowance is null (not fetched yet) OR allowance is less than amount needed
   const needsApproval = Boolean(
     requiresApproval &&
       parsedAmountIn &&
       parsedAmountIn > 0n &&
-      allowance !== null &&
-      allowance < parsedAmountIn
+      (allowance === null || allowance < parsedAmountIn)
   );
+  
+  // Log allowance state for debugging
+  if (requiresApproval && parsedAmountIn && parsedAmountIn > 0n) {
+    console.log("🔍 Approval check:", {
+      requiresApproval,
+      parsedAmountIn: parsedAmountIn.toString(),
+      allowance: allowance?.toString() || "null",
+      needsApproval,
+      isFetchingAllowance,
+    });
+  }
 
   const handleSwap = async () => {
     console.log("\n╔═══════════════════════════════════════════════════════╗");
@@ -1782,13 +2092,14 @@ export default function SwapPage() {
       (tokenA.address === env.asset1 && tokenB.address === env.asset0);
     
     console.log("Pre-flight checks:");
-    console.log("  Wallet Client:", effectiveWalletClient ? "✅" : "❌");
+    console.log("  writeContractAsync:", "✅ (wagmi hook)");
     console.log("  Public Client:", publicClient ? "✅" : "❌");
     console.log("  Pool Manager:", env.poolManagerAddress || "❌ NOT SET");
     console.log("  Pool Markings:", env.poolMarkings || "❌ NOT SET");
     console.log("  Pair Supported:", supportsPair ? "✅" : "❌");
     
-    if (!effectiveWalletClient || !publicClient || !env.poolManagerAddress || !env.poolMarkings || !supportsPair) {
+    // Note: We no longer require effectiveWalletClient because writeContractAsync handles this
+    if (!env.poolManagerAddress || !env.poolMarkings || !supportsPair) {
       console.log("❌ Swap aborted: Configuration incomplete");
       setQuoteError("Swap configuration is incomplete. Check environment variables.");
       return;
@@ -1803,6 +2114,15 @@ export default function SwapPage() {
       setQuoteError("Quote unavailable.");
       return;
     }
+    
+    // Check chain ID before attempting swap
+    if (chainId !== targetChain.id) {
+      const errorMsg = `Wrong network. You're on Chain ID ${chainId}, but need Chain ID ${targetChain.id} (${targetChain.name}). Please switch to ${targetChain.name} in MetaMask.`;
+      console.error("❌ Chain mismatch:", errorMsg);
+      setQuoteError(errorMsg);
+      return;
+    }
+    
     if (requiresApproval && needsApproval) {
       console.log("❌ Swap aborted: Approval required");
       setQuoteError("Please approve the token before swapping.");
@@ -1944,15 +2264,35 @@ export default function SwapPage() {
             minAmountOut,
           ];
 
-      const result = await effectiveWalletClient.writeContract({
-        account: address!,
-        address: env.poolManagerAddress,
+      // WalletConnect + Local Hardhat on mobile - log info but allow attempt
+      const isWalletConnect = connector?.id === "walletConnect" || connector?.name?.toLowerCase().includes("walletconnect");
+      const isMobileDevice = typeof window !== "undefined" && window.innerWidth < 768;
+      const isLocalHardhat = targetChain.id === 31337;
+      
+      if (isWalletConnect && isMobileDevice && isLocalHardhat) {
+        console.log("📱 WalletConnect + Local Hardhat on mobile - ensure MetaMask has network configured");
+      }
+
+      // Use wagmi's writeContractAsync hook - this is the PROPER way to send transactions
+      // that works correctly with WalletConnect on mobile.
+      const swapWriteParams = {
+        address: env.poolManagerAddress as `0x${string}`,
         abi: poolManagerAbi,
         functionName: functionName as "swap" | "swapWithProtection",
         args: args as any,
-        value: 0n,
-        chain: null,
+        value: 0n as const,
+        chainId: targetChain.id,
+      };
+      
+      console.log("📤 Swap transaction params (using wagmi writeContractAsync):", {
+        ...swapWriteParams,
+        args: swapWriteParams.args.map((arg: any) => typeof arg === 'bigint' ? arg.toString() : arg),
+        isWalletConnect,
+        isMobileDevice,
+        isLocalHardhat,
       });
+      
+      const result = await writeContractAsync(swapWriteParams);
 
       const txDuration = Date.now() - txStartTime;
 
@@ -1960,8 +2300,8 @@ export default function SwapPage() {
       console.log("  Transaction Hash:", result);
       console.log("  Time to Submit:", txDuration + "ms");
       const explorerUrl = process.env.NEXT_PUBLIC_EXPLORER_URL || "";
-      const isLocalhost = !explorerUrl || explorerUrl.includes("localhost") || explorerUrl.includes("127.0.0.1");
-      if (!isLocalhost) {
+      const isLocalExplorer = !explorerUrl || isLocalRpc(explorerUrl);
+      if (!isLocalExplorer) {
         console.log("  Explorer:", `${explorerUrl}/tx/${result}`);
       } else {
         console.log("  Note: Localhost transaction - no block explorer available");
@@ -2030,14 +2370,26 @@ export default function SwapPage() {
     console.log("╚═══════════════════════════════════════════════════════╝");
     
     console.log("Approval checks:");
+    console.log("  Is Connected:", isConnected);
+    console.log("  Address:", address);
+    console.log("  Chain ID:", chainId);
+    console.log("  Connector:", connector?.id || connector?.name || "none");
     console.log("  Wallet Client:", effectiveWalletClient ? "✅" : "❌");
     console.log("  Pool Manager:", env.poolManagerAddress || "❌ NOT SET");
     console.log("  Is Native Input:", isNativeInput ? "✅ (no approval needed)" : "❌");
     
-    if (!effectiveWalletClient) {
-      console.log("❌ Approval aborted: Wallet client not available");
-      setAllowanceError("Wallet client not available. Please reconnect your wallet.");
+    // Verify connection state first
+    if (!isConnected || !address) {
+      console.log("❌ Approval aborted: Wallet not connected");
+      setAllowanceError("Wallet not connected. Please connect your wallet first.");
       return;
+    }
+    
+    // Note: We no longer require effectiveWalletClient here because we use wagmi's
+    // writeContractAsync which handles getting the wallet client from the active connector.
+    // This is crucial for WalletConnect on mobile where manual wallet client creation often fails.
+    if (!effectiveWalletClient) {
+      console.log("⚠️ effectiveWalletClient not available, but will use writeContractAsync which handles this");
     }
     
     if (!env.poolManagerAddress) {
@@ -2053,12 +2405,13 @@ export default function SwapPage() {
 
     try {
       console.log("\n📝 Approval Parameters:");
+      console.log("  Account (from useAccount):", address);
       console.log("  Token:", amountInSymbol, `(${inputToken})`);
       console.log("  Spender:", env.poolManagerAddress);
       console.log("  Amount:", "Unlimited (maxUint256)");
       console.log("  Current Allowance:", allowance?.toString() || "unknown");
       
-      // Pre-flight check: Verify contract exists
+      // Pre-flight check: Verify contract exists (only if publicClient is available)
       if (publicClient) {
         try {
           const code = await publicClient.getBytecode({ address: inputToken });
@@ -2069,32 +2422,147 @@ export default function SwapPage() {
           console.log("✅ Token contract verified at:", inputToken);
         } catch (checkError) {
           console.log("⚠️ Could not verify contract:", checkError);
+          // Don't block on mobile - contract verification might fail due to RPC issues
         }
       }
       
       setIsApproving(true);
       setAllowanceError(null);
       
+      // Check chain ID before attempting transaction
+      console.log("🔍 Chain ID verification:");
+      console.log("  Current chainId (from wagmi):", chainId);
+      console.log("  Target chainId:", targetChain.id);
+      console.log("  Match:", chainId === targetChain.id);
+      
+      const isWalletConnectCheck = connector?.id === "walletConnect" || connector?.name?.toLowerCase().includes("walletconnect");
+      const isMobileCheck = typeof window !== "undefined" && window.innerWidth < 768;
+      
+      if (chainId !== targetChain.id) {
+        console.warn("⚠️ Chain mismatch detected!");
+        
+        // On mobile with WalletConnect, allow the transaction to proceed anyway
+        // WalletConnect might report chain ID with delay, but MetaMask knows the correct chain
+        if (isWalletConnectCheck && isMobileCheck) {
+          console.log("📱 Mobile WalletConnect: Proceeding despite chain mismatch");
+          console.log("   wagmi reports chainId:", chainId);
+          console.log("   Transaction will use chainId:", targetChain.id);
+          console.log("   MetaMask should handle the chain correctly");
+        } else {
+          const errorMsg = `Wrong network. You're on Chain ID ${chainId}, but need Chain ID ${targetChain.id} (${targetChain.name}). Please switch to ${targetChain.name} in MetaMask.`;
+          console.error("❌ Chain mismatch:", errorMsg);
+          setAllowanceError(errorMsg);
+          setIsApproving(false);
+          return;
+        }
+      }
+      
       console.log("\n⏳ Sending approval transaction...");
+      console.log("  Connector:", connector?.id || connector?.name || "unknown");
+      console.log("  Target Chain:", targetChain.name, `(ID: ${targetChain.id})`);
+      console.log("  Current Chain ID:", chainId);
       const approvalStartTime = Date.now();
       
-      const result = await effectiveWalletClient.writeContract({
-        account: address!,
-        address: inputToken,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [env.poolManagerAddress, maxUint256],
-        chain: null,
-      });
+      const isWalletConnect = connector?.id === "walletConnect" || connector?.name?.toLowerCase().includes("walletconnect");
+      const isMobileDevice = typeof window !== "undefined" && window.innerWidth < 768;
+      const isLocalHardhat = targetChain.id === 31337;
+
+      console.log("📤 Transaction details:");
+      console.log("  isWalletConnect:", isWalletConnect);
+      console.log("  isMobileDevice:", isMobileDevice);
+      console.log("  isLocalHardhat:", isLocalHardhat);
+      console.log("  Connector ID:", connector?.id);
+      console.log("  Connector Name:", connector?.name);
       
-      const approvalDuration = Date.now() - approvalStartTime;
+      // WalletConnect + Local Hardhat on mobile
+      if (isWalletConnect && isMobileDevice) {
+        console.log("📱 WalletConnect on mobile - sending transaction");
+        console.log("   Chain ID:", targetChain.id);
+      }
       
-      console.log("\n✅ APPROVAL TRANSACTION SUCCESS!");
-      console.log("  Transaction Hash:", result);
-      console.log("  Time to Submit:", approvalDuration + "ms");
-      console.log("  New Allowance:", maxUint256.toString());
-      
-      setAllowance(maxUint256);
+      try {
+        console.log("🚀 Calling writeContractAsync NOW...");
+        const result = await writeContractAsync({
+          address: inputToken,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [env.poolManagerAddress as `0x${string}`, maxUint256],
+          chainId: targetChain.id,
+        });
+        console.log("✅ writeContractAsync returned:", result);
+        
+        const approvalDuration = Date.now() - approvalStartTime;
+        
+        console.log("\n✅ APPROVAL TRANSACTION SUBMITTED!");
+        console.log("  Transaction Hash:", result);
+        console.log("  Time to Submit:", approvalDuration + "ms");
+        
+        // Wait for transaction to be mined, then refresh allowance from chain
+        if (publicClient) {
+          try {
+            console.log("⏳ Waiting for transaction to be mined...");
+            await publicClient.waitForTransactionReceipt({ hash: result });
+            console.log("✅ Transaction confirmed!");
+            
+            // Refresh allowance from chain to verify it was set correctly
+            console.log("🔄 Refreshing allowance from chain...");
+            const newAllowance = (await publicClient.readContract({
+              address: inputToken,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [address, env.poolManagerAddress],
+            })) as bigint;
+            console.log("✅ New allowance from chain:", newAllowance.toString());
+            setAllowance(newAllowance);
+          } catch (waitError) {
+            console.warn("⚠️ Could not wait for transaction receipt:", waitError);
+            setAllowance(maxUint256);
+          }
+        } else {
+          setAllowance(maxUint256);
+        }
+        
+        setIsApproving(false);
+        return;
+        
+      } catch (writeError: any) {
+        console.error("❌ writeContractAsync FAILED:", writeError);
+        console.error("  Full error object:", JSON.stringify(writeError, null, 2));
+        console.error("  Error message:", writeError?.message || writeError?.shortMessage || String(writeError));
+        console.error("  Error code:", writeError?.code);
+        console.error("  Error name:", writeError?.name);
+        console.error("  Error cause:", writeError?.cause);
+        
+        setIsApproving(false);
+        
+        // Check if user rejected
+        const errorMessage = writeError?.shortMessage || writeError?.message || String(writeError);
+        const errorLower = errorMessage.toLowerCase();
+        
+        // For WalletConnect + mobile, provide specific guidance
+        if (isWalletConnect && isMobileDevice) {
+          if (errorLower.includes("user rejected") || errorLower.includes("user denied") || errorLower.includes("rejected")) {
+            setAllowanceError("Transaction was rejected in MetaMask. Please try again.");
+          } else if (errorLower.includes("timeout") || errorLower.includes("no response")) {
+            setAllowanceError("MetaMask didn't respond. Please check the MetaMask app for a pending request, or ensure you're on the Hardhat network (chain 31337).");
+          } else {
+            setAllowanceError(`Transaction failed: ${errorMessage}. Make sure MetaMask is on Hardhat network (31337) and try again.`);
+          }
+          return;
+        }
+        
+        if (errorLower.includes("user rejected") || errorLower.includes("user denied") || errorLower.includes("rejected")) {
+          setAllowanceError("Transaction was rejected. Please try again.");
+        } else if (errorLower.includes("network") || errorLower.includes("fetch") || errorLower.includes("rpc")) {
+          setAllowanceError("Network error. Is Hardhat node running?");
+        } else if (isWalletConnect && isMobile) {
+          // WalletConnect on mobile - provide helpful guidance
+          setAllowanceError("Transaction not sent. Please check MetaMask app and try again. If using a local Hardhat network, try opening this site in MetaMask's in-app browser instead.");
+        } else {
+          setAllowanceError(`Transaction failed: ${errorMessage.substring(0, 100)}`);
+        }
+        return;
+      }
     } catch (error: any) {
       console.log("\n❌ APPROVAL TRANSACTION FAILED!");
       console.error("Error details:", error);
@@ -2123,6 +2591,16 @@ export default function SwapPage() {
         if ('data' in error) {
           console.log("Error data:", error.data);
         }
+      }
+      
+      // Check for chain mismatch errors from WalletConnect
+      const errorStr = String(errorMessage).toLowerCase();
+      if (errorStr.includes("current chain") && errorStr.includes("doesn't match") && errorStr.includes("target chain")) {
+        errorMessage = `Wrong network. You're on Chain ID ${chainId}, but need Chain ID ${targetChain.id} (${targetChain.name}). Please switch to ${targetChain.name} in MetaMask.`;
+      } else if (errorStr.includes("chain") && errorStr.includes("mismatch")) {
+        errorMessage = `Wrong network. You're on Chain ID ${chainId}, but need Chain ID ${targetChain.id} (${targetChain.name}). Please switch to ${targetChain.name} in MetaMask.`;
+      } else if (errorStr.includes("network") && (errorStr.includes("doesn't match") || errorStr.includes("mismatch"))) {
+        errorMessage = `Wrong network. You're on Chain ID ${chainId}, but need Chain ID ${targetChain.id} (${targetChain.name}). Please switch to ${targetChain.name} in MetaMask.`;
       }
       
       // Check if it's a network/RPC error
@@ -2419,9 +2897,39 @@ export default function SwapPage() {
         console.log("  B:", responseB.status, responseB.statusText);
         
         if (!responseA.ok || !responseB.ok) {
-          const errorTextA = await responseA.text().catch(() => "Unable to read error");
-          const errorTextB = await responseB.text().catch(() => "Unable to read error");
-          throw new Error(`API error: ${responseA.status}/${responseB.status} - ${errorTextA.substring(0, 100)} / ${errorTextB.substring(0, 100)}`);
+          const errorTextA = responseA.ok
+            ? ""
+            : await responseA.text().catch(() => "Unable to read error");
+          const errorTextB = responseB.ok
+            ? ""
+            : await responseB.text().catch(() => "Unable to read error");
+
+          const statusSummary = `${responseA.status}/${responseB.status}`;
+          const rateLimited = responseA.status === 429 || responseB.status === 429;
+
+          console.warn(
+            `⚠️ CoinGecko proxy responded ${statusSummary}. ${
+              rateLimited
+                ? "Rate limit hit – falling back to cached or synthetic data."
+                : "Falling back to cached or synthetic chart data."
+            }`,
+          );
+          if (!responseA.ok) {
+            console.warn("Coin A error:", errorTextA.substring(0, 200));
+          }
+          if (!responseB.ok) {
+            console.warn("Coin B error:", errorTextB.substring(0, 200));
+          }
+
+          if (chartDataRef.current.length > 0) {
+            console.log("📦 Using cached chart data from previous successful fetch.");
+            setChartData([...chartDataRef.current]);
+            setIsLoadingChartData(false);
+          } else {
+            console.log("🎲 No cached chart data available. Generating synthetic data.");
+            generateSyntheticData();
+          }
+          return;
         }
         
         const dataA = await responseA.json().catch(err => {
@@ -3220,10 +3728,10 @@ export default function SwapPage() {
   // TokenSelector is now imported from components
 
   return (
-    <div className="min-h-screen text-white" style={{ width: "100vw", overflowX: "hidden", margin: 0, padding: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0, backgroundColor: "#000000" }}>
+    <div className="min-h-screen text-white cross-texture" style={{ width: "100vw", overflowX: "hidden", margin: 0, padding: 0, boxSizing: "border-box", position: "relative", left: 0, right: 0, backgroundColor: "#000000" }}>
       <Header />
       {/* Background opacity control layer */}
-      <div style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.15, pointerEvents: "none" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.1725, pointerEvents: "none" }}>
         <AnimatedBackground />
       </div>
 
@@ -3657,7 +4165,7 @@ export default function SwapPage() {
                   {/* Transaction hash */}
                   {txHash && (() => {
                     const explorerUrl = process.env.NEXT_PUBLIC_EXPLORER_URL || "";
-                    const isLocalhost = !explorerUrl || explorerUrl.includes("localhost") || explorerUrl.includes("127.0.0.1");
+                    const isLocalExplorer = !explorerUrl || isLocalRpc(explorerUrl);
                     
                     const handleCopyHash = async () => {
                       try {
@@ -3690,7 +4198,7 @@ export default function SwapPage() {
                             )}
                           </button>
                         </div>
-                        {isLocalhost ? (
+                        {isLocalExplorer ? (
                           <code className="text-xs text-white/70 break-all pr-8">{txHash}</code>
                         ) : (
                           <a
@@ -3726,7 +4234,14 @@ export default function SwapPage() {
             }}
           >
             {/* Swap tokens title above card */}
-            <h1 className="text-4xl font-semibold text-white/60 mb-[25px] text-center">
+            <h1 
+              className="text-4xl font-semibold text-white/60 mb-[25px] text-center"
+              style={{
+                position: "relative",
+                zIndex: 10,
+                textShadow: "0 4px 16px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
+              }}
+            >
               Swap tokens
             </h1>
             
@@ -3753,14 +4268,18 @@ export default function SwapPage() {
                   key={type}
                   ref={type === "Swap" ? swapButtonRef : undefined}
                   onClick={() => setOrderType(type)}
-                  className={`order-type-button rounded-full border border-white/20 px-3 py-2 md:px-3 md:py-1 text-xs font-normal transition-all touch-manipulation flex items-center justify-center whitespace-nowrap ${
+                  className={`order-type-button rounded-full border border-white/15 px-3 py-2 md:px-3 md:py-1 text-xs font-normal transition-all touch-manipulation flex items-center justify-center whitespace-nowrap ${
                     orderType === type
-                      ? "bg-white/15 text-white hover:bg-white/10 hover:border-white/30 md:border-white/40"
+                      ? "text-white hover:bg-white/10 hover:border-white/30 md:border-white/40"
                       : "text-white/80 hover:bg-white/10 hover:border-white/30 hover:text-white md:border-white/20"
                   }`}
                   type="button"
                   style={{ 
-                    ...(orderButtonWidth && type !== "Swap" ? { width: `${orderButtonWidth}px`, minWidth: `${orderButtonWidth}px` } : {})
+                    ...(orderButtonWidth && type !== "Swap" ? { width: `${orderButtonWidth}px`, minWidth: `${orderButtonWidth}px` } : {}),
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
                   }}
                 >
                   {type}
@@ -3774,7 +4293,7 @@ export default function SwapPage() {
                 <div className="flex flex-col flex-shrink-0">
                   {/* You pay card - ALWAYS on top */}
                   <div className="border border-white/15 p-[15px] md:p-4 mb-[10px]" style={{
-                    borderRadius: "18px", 
+                    borderRadius: "24px", 
                     minHeight: "120px", 
                     height: "auto", 
                     position: "relative", 
@@ -3783,7 +4302,7 @@ export default function SwapPage() {
                     backgroundColor: "rgba(12, 14, 22, 0.3)",
                     backdropFilter: "blur(20px) saturate(180%)",
                     WebkitBackdropFilter: "blur(20px) saturate(180%)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
                   }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You pay</span>
@@ -3856,7 +4375,7 @@ export default function SwapPage() {
                       backdropFilter: "blur(20px) saturate(180%)",
                       WebkitBackdropFilter: "blur(20px) saturate(180%)",
                       border: "1px solid rgba(255, 255, 255, 0.18)",
-                      boxShadow: "0 0 0 6px rgba(0, 0, 0, 0.4), 0 0 0 11px rgba(0, 0, 0, 0.2), 0 0 0 17px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.3)",
+                      boxShadow: "0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
                       position: "relative",
                       width: "48px",
                       height: "48px",
@@ -3885,7 +4404,7 @@ export default function SwapPage() {
 
                   {/* You receive card - ALWAYS on bottom */}
                   <div ref={receiveCardRef} className="border border-white/15 p-[15px] md:p-4" style={{
-                    borderRadius: "18px", 
+                    borderRadius: "24px", 
                     minHeight: "120px", 
                     height: "auto",
                     position: "relative",
@@ -3894,7 +4413,7 @@ export default function SwapPage() {
                     backgroundColor: "rgba(12, 14, 22, 0.3)",
                     backdropFilter: "blur(20px) saturate(180%)",
                     WebkitBackdropFilter: "blur(20px) saturate(180%)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
                   }}>
                     <div className="mb-1">
                       <span className="text-sm text-white/60">You receive</span>
@@ -3987,12 +4506,24 @@ export default function SwapPage() {
         >
             {/* Exchange Rate Display - Always reserves space to prevent flickering */}
             {(amountIn || amountOutValue) && (
-            <div className="px-0 md:px-4">
-            <div className="rounded-xl bg-white/5 overflow-hidden p-4 md:p-4">
+            <SpacedItem hasBottomMargin>
+            <div className="border border-white/15 overflow-hidden" style={{
+              borderRadius: "24px",
+              backgroundColor: "rgba(12, 14, 22, 0.3)",
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+              minHeight: "48px",
+              height: showDetails ? "auto" : "48px",
+              display: "flex",
+              flexDirection: "column",
+              transition: "height 0.3s ease-out",
+            }}>
                     <button
                       onClick={() => quote && amountIn && amountOutValue && setShowDetails(!showDetails)}
                       disabled={!quote || !amountIn || !amountOutValue}
-                      className="w-full flex items-center justify-between text-xs md:text-xs hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-default touch-manipulation"
+                      className="w-full flex items-center justify-between px-4 md:px-3 py-2 text-xs md:text-xs disabled:opacity-50 disabled:cursor-default touch-manipulation focus:outline-none select-none"
+                      style={{ WebkitTapHighlightColor: 'transparent', minHeight: "48px", height: "48px", flexShrink: 0 }}
                     >
                       <div className="text-xs font-medium flex-1 text-left">
                         <span 
@@ -4061,17 +4592,24 @@ export default function SwapPage() {
                       </div>
                       {quote && amountIn && amountOutValue && (
                       <svg
-                        className={`h-4 w-4 text-white/60 transition-transform ${showDetails ? 'rotate-180' : ''}`}
+                        className={`h-4 w-4 text-white/60 transition-transform duration-300 ease-in-out ${showDetails ? 'rotate-180' : ''} pointer-events-none`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
+                        style={{ WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                       )}
                     </button>
-                    {showDetails && quote && amountIn && amountOutValue && (
-                      <div className="px-4 pb-3 space-y-2 border-t border-white/10 pt-3">
+                    <div 
+                      className={`px-4 md:px-3 pb-3 space-y-2 border-t border-white/10 pt-3 overflow-hidden transition-all duration-300 ease-out ${
+                        showDetails && quote && amountIn && amountOutValue 
+                          ? 'max-h-[500px] opacity-100 translate-y-0' 
+                          : 'max-h-0 opacity-0 -translate-y-2'
+                      }`}
+                      style={{ flexShrink: 0 }}
+                    >
                         <div className="flex justify-between items-center text-sm text-white/60">
                           <div className="flex items-center gap-1">
                             <span>Slippage tolerance</span>
@@ -4116,89 +4654,174 @@ export default function SwapPage() {
                           </div>
                           <span>—</span>
                         </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
-            </div>
+            </SpacedItem>
                   )}
 
-            {/* Error messages */}
-            {quoteError && (
-              <div className="w-full rounded-full bg-red-500/10 px-4 py-2 text-sm text-red-400">
-                {quoteError}
-              </div>
-            )}
+            {/* Error messages container - matches You receive card width and padding */}
+            <SpacedSection spacing="tight">
+              {quoteError && (
+                <SpacedItem>
+                  <div className="w-full border border-white/15 p-[15px] md:p-4 text-sm text-red-400" style={{
+                    borderRadius: "24px",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                  }}>
+                    {quoteError}
+                  </div>
+                </SpacedItem>
+              )}
 
-            {allowanceError && (
-              <div className="w-full rounded-full bg-red-500/10 px-4 py-2 text-sm text-red-400">
-                {allowanceError}
-              </div>
-            )}
+              {allowanceError && (
+                <SpacedItem>
+                  <div className="w-full border border-white/15 p-[15px] md:p-4 text-sm text-red-400" style={{
+                    borderRadius: "24px",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                  }}>
+                    {allowanceError}
+                  </div>
+                </SpacedItem>
+              )}
 
-            {/* Error messages */}
-            {!configReady && (
-              <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
-                Swap not configured. Check environment variables.
-              </div>
-            )}
+              {!configReady && (
+                <SpacedItem>
+                  <div className="w-full border border-white/15 p-[15px] md:p-4 text-sm text-yellow-200" style={{
+                    borderRadius: "24px",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                  }}>
+                    Swap not configured. Check environment variables.
+                  </div>
+                </SpacedItem>
+              )}
 
-            {connectError && !isConnected && (() => {
-              const errorMessage = connectError?.message || "Connection error";
-              // Suppress "already pending" errors - they're not user-actionable and cause UI glitches
-              if (errorMessage.includes("already pending") || errorMessage.includes("Request of type")) {
-                return null; // Don't show this error
-              }
-              return (
-                <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                  {errorMessage}
-                </div>
-              );
-            })()}
-
-            {/* Loading Animation */}
-            {isLoadingChartData && (
-              <div className="flex flex-col items-center justify-center gap-3 py-4">
-                <LoadingAnimation />
-                <p className="text-xs text-white/50 font-medium">Loading chart data...</p>
-              </div>
-            )}
+              {connectError && !isConnected && (() => {
+                const errorMessage = connectError?.message || "Connection error";
+                const errorString = errorMessage.toLowerCase();
+                
+                // Suppress WalletConnect session errors and "already pending" errors
+                const isWalletConnectSessionError = 
+                  errorString.includes("no matching key") ||
+                  errorString.includes("no matching key.") ||
+                  errorString.includes("no matching key.session") ||
+                  errorString.includes("pending session not found") ||
+                  errorString.includes("session not found") ||
+                  errorString.includes("session top") ||
+                  errorString.includes("session topic") ||
+                  errorString.includes("session.top") ||
+                  errorString.includes("session.topic") ||
+                  errorString.includes("matching key") ||
+                  errorString.includes("proposal") ||
+                  (errorString.includes("key") && errorString.includes("session")) ||
+                  (errorString.includes("topic") && (errorString.includes("walletconnect") || errorString.includes("wc@"))) ||
+                  (errorString.includes("wc@") && errorString.includes("key"));
+                
+                // Handle user rejection gracefully - don't show error
+                const isUserRejection = 
+                  errorString.includes("user rejected") ||
+                  errorString.includes("user_rejected") ||
+                  errorString.includes("rejected the request") ||
+                  errorString.includes("connection request reset") ||
+                  errorString.includes("request reset") ||
+                  (errorString.includes("rejected") && (errorString.includes("connection") || errorString.includes("request")));
+                
+                if (errorMessage.includes("already pending") || errorMessage.includes("Request of type") || isWalletConnectSessionError || isUserRejection) {
+                  return null; // Don't show these errors
+                }
+                return (
+                  <SpacedItem>
+                    <div className="w-full border border-white/15 p-[15px] md:p-4 text-sm text-red-400" style={{
+                      borderRadius: "24px",
+                      backgroundColor: "rgba(12, 14, 22, 0.3)",
+                      backdropFilter: "blur(20px) saturate(180%)",
+                      WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.3)",
+                    }}>
+                      {errorMessage}
+                    </div>
+                  </SpacedItem>
+                );
+              })()}
+            </SpacedSection>
 
             {/* Network mismatch warning */}
             {isConnected && !isCorrectChain && (
-              <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 space-y-3">
-                <div>
-                  Wrong network detected. Please switch to <strong>{targetChain.name}</strong> (Chain ID: {targetChain.id}).
+              <SpacedItem>
+                <div className="w-full rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 space-y-3">
+                  <div>
+                    Wrong network detected. You're on Chain ID <strong>{chainId}</strong>, but need <strong>{targetChain.name}</strong> (Chain ID: {targetChain.id}).
+                  </div>
+                  {isLocalhost && (
+                    <div className="text-xs text-red-300/80">
+                      Make sure you've added the Hardhat Local network to MetaMask with RPC URL: <code className="bg-black/30 px-1 rounded">{rpcUrl}</code>
+                    </div>
+                  )}
+                  <button
+                    onClick={async () => {
+                      try {
+                        await switchChain({ chainId: targetChain.id });
+                      } catch (error: any) {
+                        console.error("Failed to switch chain:", error);
+                        const errorMsg = error?.shortMessage || error?.message || "Failed to switch network";
+                        if (errorMsg.includes("user rejected") || errorMsg.includes("User rejected")) {
+                          // User rejected - don't show error
+                          return;
+                        }
+                        // Show error if network switch failed
+                        setConnectorError(`Failed to switch network: ${errorMsg}. Make sure the Hardhat Local network is added to MetaMask.`);
+                      }
+                    }}
+                    disabled={isSwitchingChain}
+                    className="rounded-full border border-red-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
+                    style={{ minHeight: "48px" }}
+                  >
+                    {isSwitchingChain ? "Switching..." : `Switch to ${targetChain.name}`}
+                  </button>
                 </div>
-                <button
-                  onClick={() => switchChain({ chainId: targetChain.id })}
-                  disabled={isSwitchingChain}
-                  className="rounded-full border border-red-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
-                  style={{ minHeight: "48px" }}
-                >
-                  {isSwitchingChain ? "Switching..." : `Switch to ${targetChain.name}`}
-                </button>
-              </div>
+              </SpacedItem>
             )}
 
             {/* Approve button */}
             {!isNativeInput && needsApproval && isConnected && effectiveWalletClient && isCorrectChain && (
-              <div className="px-0 md:px-4 mt-4 mb-4">
+              <SpacedItem hasTopMargin hasBottomMargin>
                 <button
                   onClick={handleApprove}
                   disabled={isApproving || isFetchingAllowance || !configReady}
-                  className="rounded-full border border-white/20 px-4 md:px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
-                  style={{ minHeight: "48px", height: "48px" }}
+                  className="rounded-full border border-white/15 px-4 md:px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
+                  style={{ 
+                    minHeight: "48px", 
+                    height: "48px",
+                    backgroundColor: "rgba(12, 14, 22, 0.3)",
+                    backdropFilter: "blur(20px) saturate(180%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(0, 0, 0, 0.1), 0 0 0 12px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.15)",
+                  }}
                 >
                   {isApproving ? "Approving..." : `Approve ${amountInSymbol}`}
                 </button>
-              </div>
+                {/* Mobile: Show helpful message when approving */}
+                {isApproving && isMobileView && (
+                  <div className="mt-3 text-xs text-white/50 text-center">
+                    Switch to MetaMask app manually to confirm the transaction.
+                  </div>
+                )}
+              </SpacedItem>
             )}
 
             {/* Wallet connection error for approval */}
             {!isNativeInput && needsApproval && isConnected && !effectiveWalletClient && (
-              <div className="rounded-xl bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400 space-y-3">
-                <div>Wallet client not available. Please try reconnecting your wallet.</div>
-                <div className="flex gap-2">
+              <SpacedItem>
+                <div className="w-full rounded-xl bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400 space-y-3">
+                  <div>Wallet client not available. Please try reconnecting your wallet.</div>
+                  <div className="flex gap-2">
                   <button
                     onClick={retryGetWalletClient}
                     disabled={isRetryingWalletClient}
@@ -4208,25 +4831,12 @@ export default function SwapPage() {
                     {isRetryingWalletClient ? "Retrying..." : "Retry Wallet Client"}
                   </button>
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       if (isConnectingRef.current || isConnecting || isConnectPending) {
-                        return; // Prevent duplicate connection attempts
+                        return;
                       }
-                      disconnect();
-                      setTimeout(async () => {
-                        if (connectors[0] && !isConnectingRef.current) {
-                          isConnectingRef.current = true;
-                          try {
-                            await connect({ connector: connectors[0] });
-                          } catch (error) {
-                            // Ignore connection errors
-                          } finally {
-                            setTimeout(() => {
-                              isConnectingRef.current = false;
-                            }, 1000);
-                          }
-                        }
-                      }, 100);
+                      setConnectorError(null);
+                      setIsConnectorSheetOpen(true);
                     }}
                     disabled={isConnecting || isConnectPending || isConnectingRef.current}
                     className="rounded-full border border-yellow-500/30 px-3 md:px-3 py-2 md:py-1.5 text-xs md:text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
@@ -4234,30 +4844,24 @@ export default function SwapPage() {
                   >
                     Reconnect Wallet
                   </button>
+                  </div>
                 </div>
-              </div>
+              </SpacedItem>
             )}
 
             {/* Buttons container with padding matching cards */}
-            <div className="px-[15px] md:px-4 pb-4">
+            <SpacedItem className="pb-4">
               {/* Swap/Connect Wallet button */}
               <button
                 onClick={async () => {
                   if (!isConnected) {
-                    // Prevent duplicate connection attempts
-                    if (isConnectingRef.current || isConnecting || isConnectPending || !connectors[0]) {
+                    if (isConnectingRef.current || isConnecting || isConnectPending) {
                       return;
                     }
-                    isConnectingRef.current = true;
-                    try {
-                      await connect({ connector: connectors[0] });
-                    } catch (error) {
-                      // Ignore connection errors
-                    } finally {
-                      setTimeout(() => {
-                        isConnectingRef.current = false;
-                      }, 1000);
-                    }
+                    // Always show wallet selector card (same as token selector)
+                    setConnectorError(null);
+                    setIsConnectorSheetOpen(true);
+                    return;
                   } else {
                     handleSwap();
                   }
@@ -4271,10 +4875,21 @@ export default function SwapPage() {
                   isConnecting ||
                   isConnectPending ||
                   isConnectingRef.current ||
-                  (!isConnected && !connectors[0])
+                  (!isConnected && connectors.length === 0)
                 }
-                className="rounded-full border border-white/20 px-4 md:px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:border-white/30 hover:text-white w-full touch-manipulation min-h-[48px] md:min-h-0"
-                style={{ minHeight: "48px", height: "48px" }}
+                className={`rounded-full px-4 md:px-3 py-2 text-sm font-medium transition-colors w-full touch-manipulation min-h-[57.6px] md:min-h-[48px] h-[57.6px] md:h-[48px] ${
+                  !isConnected 
+                    ? "bg-[#007AFF] hover:bg-[#0066CC] text-white border-0" 
+                    : "border border-white/15 text-white/80 hover:bg-white/10 hover:border-white/30 hover:text-white"
+                }`}
+                style={!isConnected ? {
+                  boxShadow: "0 0 0 6px rgba(0, 0, 0, 0.4), 0 0 0 11px rgba(0, 0, 0, 0.2), 0 0 0 17px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.3)",
+                } : { 
+                  backgroundColor: "rgba(12, 14, 22, 0.3)",
+                  backdropFilter: "blur(20px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 6px rgba(0, 0, 0, 0.4), 0 0 0 11px rgba(0, 0, 0, 0.2), 0 0 0 17px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.3)",
+                }}
               >
                 {!isConnected
                   ? isConnecting || isConnectPending
@@ -4286,6 +4901,13 @@ export default function SwapPage() {
                   ? "Enter amount"
                   : "Swap"}
               </button>
+
+              {/* Mobile: Show helpful message when swapping */}
+              {txStatus === "pending" && isMobileView && (
+                <div className="mt-3 text-xs text-white/50 text-center">
+                  Switch to MetaMask app manually to confirm the transaction.
+                </div>
+              )}
 
               {/* Error messages */}
               {txStatus === "error" && (
@@ -4307,13 +4929,45 @@ export default function SwapPage() {
                   e.stopPropagation();
                 }}
                 disabled={isLoadingChartData}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation min-h-[48px] md:min-h-0"
-                style={{ minHeight: "48px", height: "48px" }}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-100 disabled:cursor-not-allowed touch-manipulation min-h-[57.6px] md:min-h-[48px] h-[57.6px] md:h-[48px]"
+                style={{
+                  backgroundColor: "rgba(12, 14, 22, 0.3)",
+                  backdropFilter: "blur(20px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 6px rgba(0, 0, 0, 0.4), 0 0 0 11px rgba(0, 0, 0, 0.2), 0 0 0 17px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.3)",
+                }}
               >
-                <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-                </svg>
-                View live chart
+                {isLoadingChartData ? (
+                  <div className="flex items-center justify-center gap-1.5">
+                    <div 
+                      className="h-4 w-0.5 rounded-full bg-gradient-to-t from-blue-500/40 to-blue-400"
+                      style={{ animation: "loadingPulse 1.2s ease-in-out infinite" }}
+                    />
+                    <div 
+                      className="h-5 w-0.5 rounded-full bg-gradient-to-t from-purple-500/40 to-purple-400"
+                      style={{ animation: "loadingPulse 1.2s ease-in-out 0.15s infinite" }}
+                    />
+                    <div 
+                      className="h-6 w-0.5 rounded-full bg-gradient-to-t from-pink-500/40 to-pink-400"
+                      style={{ animation: "loadingPulse 1.2s ease-in-out 0.3s infinite" }}
+                    />
+                    <div 
+                      className="h-5 w-0.5 rounded-full bg-gradient-to-t from-cyan-500/40 to-cyan-400"
+                      style={{ animation: "loadingPulse 1.2s ease-in-out 0.45s infinite" }}
+                    />
+                    <div 
+                      className="h-4 w-0.5 rounded-full bg-gradient-to-t from-indigo-500/40 to-indigo-400"
+                      style={{ animation: "loadingPulse 1.2s ease-in-out 0.6s infinite" }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                    </svg>
+                    View live chart
+                  </>
+                )}
               </button>
               
               <button
@@ -4326,8 +4980,13 @@ export default function SwapPage() {
                 onMouseDown={(e) => {
                   e.stopPropagation();
                 }}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white touch-manipulation min-h-[48px] md:min-h-0"
-                style={{ minHeight: "48px", height: "48px" }}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white touch-manipulation min-h-[57.6px] md:min-h-[48px] h-[57.6px] md:h-[48px]"
+                style={{ 
+                  backgroundColor: "rgba(12, 14, 22, 0.3)",
+                  backdropFilter: "blur(20px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 6px rgba(0, 0, 0, 0.4), 0 0 0 11px rgba(0, 0, 0, 0.2), 0 0 0 17px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.3)",
+                }}
               >
                 <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
@@ -4336,7 +4995,7 @@ export default function SwapPage() {
                 Advanced view
               </button>
               </div>
-            </div>
+            </SpacedItem>
           </div>
         </div>
       </main>
@@ -4479,6 +5138,19 @@ export default function SwapPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Wallet Selector */}
+      {!isConnected && (
+        <WalletSelector
+          connectors={[...connectors]}
+          onSelect={connectUsing}
+          onClose={handleWalletSelectorClose}
+          isOpen={isConnectorSheetOpen && !isConnectingRef.current && !isConnecting && !isConnectPending}
+          cardRect={receiveCardRect}
+          swapTitleRect={swapTitleRect}
+          swapCardRect={swapCardRect}
+        />
       )}
 
       <style jsx global>{`

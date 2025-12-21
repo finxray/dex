@@ -327,8 +327,11 @@ export function Header() {
                 </span>
                 <button
                   onClick={() => disconnect()}
-                  className="rounded-full px-2 py-1 text-xs font-normal transition-all whitespace-nowrap"
+                  className="rounded-full px-3 py-2 text-xs font-normal transition-all whitespace-nowrap"
                   style={{
+                    minHeight: "36px",
+                    paddingTop: "8px",
+                    paddingBottom: "8px",
                     border: isMobile && isOverWhiteSection ? "1px solid rgba(0, 0, 0, 0.2)" : "1px solid rgba(255, 255, 255, 0.2)",
                     color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
                     transition: "all 0.3s ease"

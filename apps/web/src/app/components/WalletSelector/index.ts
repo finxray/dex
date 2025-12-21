@@ -1,0 +1,2 @@
+export { WalletSelector } from "./WalletSelector";
+

@@ -5,6 +5,7 @@ import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient
 import { formatUnits, parseUnits, maxUint256 } from "viem";
 
 import { useSwapModal } from "../../../lib/swap-modal-context";
+import { isLocalRpc } from "../../../lib/isLocalRpc";
 import { poolManagerAbi } from "../../../lib/abi/poolManager";
 import { quoterAbi } from "../../../lib/abi/quoter";
 import { erc20Abi } from "../../../lib/abi/erc20";
@@ -204,13 +205,13 @@ export function SwapModal() {
         console.error("Failed to fetch allowance after retries", error);
         const errorMessage = error?.message || error?.toString() || "Unknown error";
         const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "default public RPC";
-        const isLocalhost = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
+        const isLocalRpcNode = isLocalRpc(rpcUrl);
         
         // Provide more helpful error messages
         if (errorMessage.includes("revert") || errorMessage.includes("execution reverted")) {
           setAllowanceError("Token contract error. Check token address.");
         } else if (errorMessage.includes("network") || errorMessage.includes("fetch") || errorMessage.includes("timeout")) {
-          if (isLocalhost) {
+          if (isLocalRpcNode) {
             setAllowanceError("Network error. Is Hardhat node running? Start with: npx hardhat node");
           } else {
             setAllowanceError(`Network error. Check RPC connection (${rpcUrl.substring(0, 30)}...).`);
@@ -219,18 +220,17 @@ export function SwapModal() {
           // Check if this might be a localhost address on Sepolia network
           const isLocalhostAddress = inputToken.startsWith("0x5FbDB") || inputToken.startsWith("0xe7f17");
           const isPlaceholderAddress = /^0x000000000000000000000000000000000000000[0-9a-f]$/i.test(inputToken);
-          const isLocalhostRpc = rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
           
           if (isPlaceholderAddress) {
             setAllowanceError("This token doesn't exist on localhost. Only sWETH and sUSDC are available.");
           } else if (isLocalhostAddress && rpcUrl.includes("sepolia")) {
             setAllowanceError(`Contract not found. Token ${inputToken.substring(0, 10)}... is a localhost address. Switch to localhost RPC or deploy to Sepolia.`);
-          } else if (isLocalhostAddress && isLocalhostRpc) {
+          } else if (isLocalhostAddress && isLocalRpcNode) {
             setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Ensure Hardhat node is running and contracts are deployed.`);
-          } else if (!isLocalhostRpc && !rpcUrl.includes("sepolia")) {
+          } else if (!isLocalRpcNode && !rpcUrl.includes("sepolia")) {
             setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not exist on this network. Check token address and network match.`);
           } else {
-            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not be deployed or doesn't exist on ${isLocalhostRpc ? "localhost" : "this network"}.`);
+            setAllowanceError(`Contract not found at ${inputToken.substring(0, 10)}.... Token may not be deployed or doesn't exist on ${isLocalRpcNode ? "localhost" : "this network"}.`);
           }
         } else {
           setAllowanceError(`Unable to fetch allowance: ${errorMessage.substring(0, 50)}`);

@@ -141,7 +141,7 @@ export default function AnimatedBackground() {
       const baseAngle = Math.random() * Math.PI * 2; // Completely random direction
       const driftAngle = baseAngle + (Math.random() - 0.5) * 0.3; // Slight drift variation
       
-      const speed = (0.2 + Math.random() * 0.3) * 0.39; // 30% faster movement (0.3 * 1.3 = 0.39)
+      const speed = (0.2 + Math.random() * 0.3) * 0.468; // 20% faster movement (0.39 * 1.2 = 0.468)
       const baseVx = Math.cos(driftAngle) * speed;
       const baseVy = Math.sin(driftAngle) * speed;
       
@@ -535,7 +535,7 @@ export default function AnimatedBackground() {
         const baseAngle = Math.random() * Math.PI * 2;
         const driftAngle = baseAngle + (Math.random() - 0.5) * 0.3;
         
-        const speed = (0.2 + Math.random() * 0.3) * 0.39; // 30% faster movement (0.3 * 1.3 = 0.39)
+        const speed = (0.2 + Math.random() * 0.3) * 0.468; // 20% faster movement (0.39 * 1.2 = 0.468)
         const baseVx = Math.cos(driftAngle) * speed;
         const baseVy = Math.sin(driftAngle) * speed;
         
@@ -603,7 +603,7 @@ export default function AnimatedBackground() {
         const r = shape.color.r;
         const g = shape.color.g;
         const b = shape.color.b;
-        const baseOpacity = (0.5 + shape.z * 0.5) * shape.opacity * 0.829; // Increased by another 20% (0.691 * 1.2 = 0.829)
+        const baseOpacity = (0.5 + shape.z * 0.5) * shape.opacity * 0.953; // 15% brighter (0.829 * 1.15 = 0.953)
 
         // Softer gradient stops for increased blur effect (20% more gradual falloff)
         gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${baseOpacity * 1.0})`);
