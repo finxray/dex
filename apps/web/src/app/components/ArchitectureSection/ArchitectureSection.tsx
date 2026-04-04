@@ -3,9 +3,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CodeBlock } from "../CodeBlock/CodeBlock";
 
+/** Delay between starting each code card’s typewriter when multiple are in view (by page order). */
+const CARD_TYPING_STAGGER_MS = 2000;
+
 export function ArchitectureSection() {
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
+  const card0Ref = useRef<HTMLDivElement>(null);
+  const card1Ref = useRef<HTMLDivElement>(null);
+  const card2Ref = useRef<HTMLDivElement>(null);
+  const cardVisibleRef = useRef<[boolean, boolean, boolean]>([false, false, false]);
+  const [typingStaggerMs, setTypingStaggerMs] = useState<[number, number, number]>([0, 0, 0]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -22,6 +30,39 @@ export function ArchitectureSection() {
     }
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const cardRefs = [card0Ref, card1Ref, card2Ref];
+    const recomputeStagger = () => {
+      const v = cardVisibleRef.current;
+      const visibleIndices = [0, 1, 2].filter((i) => v[i]);
+      const next: [number, number, number] = [0, 0, 0];
+      visibleIndices.forEach((cardIdx, rank) => {
+        next[cardIdx] = rank * CARD_TYPING_STAGGER_MS;
+      });
+      setTypingStaggerMs((prev) =>
+        prev[0] === next[0] && prev[1] === next[1] && prev[2] === next[2] ? prev : next
+      );
+    };
+
+    const cardObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const idx = cardRefs.findIndex((r) => r.current === entry.target);
+          if (idx === -1) continue;
+          cardVisibleRef.current[idx] = entry.isIntersecting;
+        }
+        recomputeStagger();
+      },
+      { threshold: 0.15, rootMargin: "0px" }
+    );
+
+    cardRefs.forEach((r) => {
+      if (r.current) cardObserver.observe(r.current);
+    });
+
+    return () => cardObserver.disconnect();
   }, []);
 
   const poolManagerCode = `// Create a new ETH/USDC pool
@@ -55,8 +96,8 @@ const tx = await poolManager.swap(
     >
       <div className="mx-auto max-w-6xl px-4 md:px-6">
         <div
-          className={`mb-20 text-center transition-all duration-1000 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          className={`mb-20 transform-gpu text-center transition-[opacity,transform] duration-1000 ease-out ${
+            isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
           }`}
         >
           <h2 className="text-5xl md:text-6xl font-semibold text-white mb-6">
@@ -71,8 +112,9 @@ const tx = await poolManager.swap(
         <div className="grid gap-16">
           {/* Pool Manager */}
           <div
-            className={`transition-all duration-1000 delay-100 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+            ref={card0Ref}
+            className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out delay-100 ${
+              isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
           >
             <div className="mb-8 text-center">
@@ -81,13 +123,20 @@ const tx = await poolManager.swap(
                 Initialize liquidity pools with custom parameters.
               </p>
             </div>
-            <CodeBlock code={poolManagerCode} language="typescript" title="Pool Manager" typingDemo />
+            <CodeBlock
+              code={poolManagerCode}
+              language="typescript"
+              title="Pool Manager"
+              typingDemo
+              typingStartDelayMs={typingStaggerMs[0]}
+            />
           </div>
 
           {/* Quoter */}
           <div
-            className={`transition-all duration-1000 delay-200 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+            ref={card1Ref}
+            className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out delay-200 ${
+              isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
           >
             <div className="mb-8 text-center">
@@ -96,13 +145,20 @@ const tx = await poolManager.swap(
                 Inventory-aware pricing with the Stoicov model.
               </p>
             </div>
-            <CodeBlock code={quoterCode} language="typescript" title="Stoicov Quoter" typingDemo />
+            <CodeBlock
+              code={quoterCode}
+              language="typescript"
+              title="Stoicov Quoter"
+              typingDemo
+              typingStartDelayMs={typingStaggerMs[1]}
+            />
           </div>
 
           {/* Risk Engine */}
           <div
-            className={`transition-all duration-1000 delay-300 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+            ref={card2Ref}
+            className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out delay-300 ${
+              isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
           >
             <div className="mb-8 text-center">
@@ -111,7 +167,13 @@ const tx = await poolManager.swap(
                 Trade execution with built-in risk validation.
               </p>
             </div>
-            <CodeBlock code={riskEngineCode} language="typescript" title="Swap Execution" typingDemo />
+            <CodeBlock
+              code={riskEngineCode}
+              language="typescript"
+              title="Swap Execution"
+              typingDemo
+              typingStartDelayMs={typingStaggerMs[2]}
+            />
           </div>
         </div>
 

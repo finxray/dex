@@ -19,7 +19,7 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("Deploying to get target addresses...");
   console.log("Deployer:", deployer.address);
-  
+3  
   const nonce = await deployer.provider.getTransactionCount(deployer.address);
   console.log("Current nonce:", nonce);
   

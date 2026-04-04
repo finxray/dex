@@ -31,8 +31,8 @@ export function ProtocolSection() {
       className="min-h-screen space-y-12 py-24"
     >
       <div
-        className={`text-center mb-20 transition-all duration-1000 ${
-          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        className={`mb-20 transform-gpu text-center transition-[opacity,transform] duration-1000 ease-out ${
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         }`}
       >
         <h2 className="text-5xl md:text-6xl font-semibold text-white mb-6">
@@ -96,8 +96,8 @@ export function ProtocolSection() {
         ].map((feature, idx) => (
           <div
             key={feature.title}
-            className={`space-y-4 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 md:p-10 transition-all duration-1000 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            className={`space-y-4 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 md:p-10 transform-gpu transition-[opacity,transform] duration-1000 ease-out ${
+              isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
             }`}
             style={{ transitionDelay: `${feature.delay}ms` }}
           >

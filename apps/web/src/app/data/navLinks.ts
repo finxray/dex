@@ -87,6 +87,12 @@ export const navLinks: NavLink[] = [
         ],
       },
       {
+        heading: "Guidance",
+        items: [
+          { title: "Architecture & codebase map", href: "/docs/architecture" },
+        ],
+      },
+      {
         heading: "Guides",
         items: [
           { title: "Integration guide", href: "#resources" },

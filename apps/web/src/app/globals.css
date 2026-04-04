@@ -88,6 +88,16 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background-color: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  transition: background-color 180ms ease, border-color 180ms ease,
+    box-shadow 180ms ease, transform 180ms ease;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -142,15 +152,6 @@ a:hover {
 @media (min-width: 1024px) {
   .btn-lg { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 }
-  width: 40px;
-  height: 40px;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background-color: rgba(255, 255, 255, 0.04);
-  color: inherit;
-  transition: background-color 180ms ease, border-color 180ms ease,
-    box-shadow 180ms ease, transform 180ms ease;
-}
 
 .apple-icon-button:hover {
   background-color: rgba(255, 255, 255, 0.14);
@@ -197,7 +198,7 @@ a:hover {
   .btn--lg { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 }
 
-/* Shimmer animation for metallic lighting effect */
+/* Shimmer animation for metallic lighting effect (toolbar logo, swap UI, etc.) */
 @keyframes shimmer {
   0% {
     background-position: 200% 0;

@@ -27,7 +27,7 @@ export function ResourcesSection() {
   return (
     <section id="resources" ref={sectionRef} className="min-h-screen space-y-12 py-32">
       <div
-        className={`text-center transition-all duration-1000 ${
+        className={`text-center transform-gpu transition-[opacity,transform] duration-1000 ease-out ${
           isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         }`}
       >
@@ -39,4 +39,3 @@ export function ResourcesSection() {
     </section>
   );
 }
-

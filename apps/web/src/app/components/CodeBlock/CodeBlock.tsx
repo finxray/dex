@@ -1,12 +1,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { CodeWindowFrame } from "./CodeWindowFrame";
 
 interface CodeBlockProps {
   code: string;
   language?: string;
   title?: string;
   typingDemo?: boolean;
+  /** When typingDemo: extra ms after in-view before the typing loop starts (used for staggered cards). */
+  typingStartDelayMs?: number;
+  /** When false, render only highlighted code (use inside an outer CodeWindowFrame). */
+  showChrome?: boolean;
 }
 
 function highlightCode(code: string): React.ReactNode[] {
@@ -107,7 +112,14 @@ function highlightCode(code: string): React.ReactNode[] {
   });
 }
 
-export function CodeBlock({ code, language = "typescript", title, typingDemo = false }: CodeBlockProps) {
+export function CodeBlock({
+  code,
+  language = "typescript",
+  title,
+  typingDemo = false,
+  typingStartDelayMs = 0,
+  showChrome = true,
+}: CodeBlockProps) {
   const [displayedCode, setDisplayedCode] = useState(typingDemo ? "" : code);
   const [isVisible, setIsVisible] = useState(false);
   const [isTypingComplete, setIsTypingComplete] = useState(!typingDemo);
@@ -131,64 +143,70 @@ export function CodeBlock({ code, language = "typescript", title, typingDemo = f
   }, []);
 
   useEffect(() => {
-    if (!typingDemo || !isVisible || isTypingComplete) return;
+    if (!typingDemo) return;
 
-    // Small delay before starting typing
-    const startDelay = setTimeout(() => {
+    if (!isVisible) {
+      setDisplayedCode("");
+      setIsTypingComplete(false);
+      return;
+    }
+
+    setDisplayedCode("");
+    setIsTypingComplete(false);
+
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const startDelay = window.setTimeout(() => {
       let currentIndex = 0;
-      const typingInterval = setInterval(() => {
+      intervalId = window.setInterval(() => {
         if (currentIndex <= code.length) {
           setDisplayedCode(code.substring(0, currentIndex));
           currentIndex++;
         } else {
           setIsTypingComplete(true);
-          clearInterval(typingInterval);
+          if (intervalId !== undefined) {
+            window.clearInterval(intervalId);
+            intervalId = undefined;
+          }
         }
       }, 25);
+    }, 300 + typingStartDelayMs);
 
-      return () => clearInterval(typingInterval);
-    }, 300);
-
-    return () => clearTimeout(startDelay);
-  }, [code, typingDemo, isVisible, isTypingComplete]);
+    return () => {
+      window.clearTimeout(startDelay);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    };
+  }, [code, typingDemo, isVisible, typingStartDelayMs]);
 
   const highlightedCode = highlightCode(displayedCode);
+
+  const preInner = (
+    <pre
+      className="overflow-auto p-4 font-mono text-[13px] leading-relaxed md:p-6"
+      style={{ minHeight: showChrome ? "180px" : "100px", maxHeight: showChrome ? "300px" : "220px" }}
+    >
+      <code>
+        {highlightedCode}
+        {typingDemo && !isTypingComplete && (
+          <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-white/80 align-middle" />
+        )}
+      </code>
+    </pre>
+  );
 
   return (
     <div
       ref={containerRef}
-      className={`relative transition-all duration-700 ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+      className={`relative transform-gpu transition-[opacity,transform] duration-700 ease-out ${
+        isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
       }`}
     >
-      {title && (
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium text-white/50">{title}</span>
-          <span className="text-xs font-medium text-white/30 uppercase tracking-wider">{language}</span>
-        </div>
+      {showChrome ? (
+        <CodeWindowFrame title={title} label={language} contentClassName="!p-0">
+          {preInner}
+        </CodeWindowFrame>
+      ) : (
+        preInner
       )}
-      <div className="relative rounded-2xl overflow-hidden bg-white/5 backdrop-blur-xl border border-white/10">
-        {/* Header bar */}
-        <div className="flex items-center gap-2 px-5 py-3 bg-white/5 border-b border-white/10">
-          <div className="flex gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#FF5F57]" />
-            <div className="w-3 h-3 rounded-full bg-[#FEBC2E]" />
-            <div className="w-3 h-3 rounded-full bg-[#28C840]" />
-          </div>
-        </div>
-
-        {/* Code content */}
-        <div className="relative bg-black/20">
-          <pre className="p-4 md:p-6 font-mono text-[13px] leading-relaxed overflow-hidden" style={{ minHeight: '180px', maxHeight: '300px' }}>
-            <code>
-              {highlightedCode}
-              {typingDemo && !isTypingComplete && (
-                <span className="inline-block w-1.5 h-4 bg-white/80 ml-0.5 animate-pulse align-middle" />
-              )}
-            </code>
-          </pre>
-        </div>
-      </div>
     </div>
   );
 }

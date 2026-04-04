@@ -26,7 +26,10 @@ export default function Home() {
     <div className="relative min-h-screen bg-black overflow-hidden" style={{ width: "100vw", margin: 0, padding: 0 }}>
       <Header />
 
-      <main className="relative z-10 md:pt-20" style={{ width: "100vw", margin: 0, padding: 0, paddingTop: isMobile ? "3.645rem" : undefined }}>
+      <main
+        className="relative z-10 md:pt-[4.795rem]"
+        style={{ width: "100vw", margin: 0, padding: 0, paddingTop: isMobile ? "3.645rem" : undefined }}
+      >
         <div className="mx-auto max-w-[980px] px-4 md:px-6">
           <Hero />
         </div>

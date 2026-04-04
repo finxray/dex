@@ -7,6 +7,7 @@ export { ResourcesSection } from "./ResourcesSection/ResourcesSection";
 export { CompanySection } from "./CompanySection/CompanySection";
 export { Footer } from "./Footer/Footer";
 export { CodeBlock } from "./CodeBlock/CodeBlock";
+export { CodeWindowFrame } from "./CodeBlock/CodeWindowFrame";
 export { ArchitectureSection } from "./ArchitectureSection/ArchitectureSection";
 export { SwapModal } from "./Swap/SwapModal";
 export { TestScrollCard } from "./TestScrollCard/TestScrollCard";

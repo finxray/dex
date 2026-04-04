@@ -13,7 +13,7 @@ export function Hero() {
   return (
     <section className="min-h-[85vh] flex flex-col items-center justify-center text-center relative px-6">
       <div
-        className={`transition-all duration-1000 transform ${
+        className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out ${
           isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         }`}
       >
@@ -21,7 +21,7 @@ export function Hero() {
           Stoix Protocol
         </h1>
         <p
-          className="mx-auto max-w-3xl text-3xl md:text-4xl font-semibold leading-tight text-white/90 mb-4 transition-all duration-1000 delay-100"
+          className="mx-auto max-w-3xl text-3xl md:text-4xl font-semibold leading-tight text-white/90 mb-4 transform-gpu transition-[opacity,transform] duration-1000 delay-100 ease-out"
           style={{
             opacity: isVisible ? 1 : 0,
             transform: isVisible ? "translateY(0)" : "translateY(20px)",
@@ -30,7 +30,7 @@ export function Hero() {
           Institutional-grade liquidity coordination.
         </p>
         <p
-          className="mx-auto max-w-2xl text-xl leading-relaxed text-white/60 transition-all duration-1000 delay-200"
+          className="mx-auto max-w-2xl text-xl leading-relaxed text-white/60 transform-gpu transition-[opacity,transform] duration-1000 delay-200 ease-out"
           style={{
             opacity: isVisible ? 1 : 0,
             transform: isVisible ? "translateY(0)" : "translateY(20px)",
@@ -41,7 +41,7 @@ export function Hero() {
       </div>
 
       <div
-        className="mt-12 flex flex-col sm:flex-row gap-4 transition-all duration-1000 delay-400"
+        className="mt-12 flex transform-gpu flex-col gap-4 transition-[opacity,transform] duration-1000 delay-400 ease-out sm:flex-row"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "translateY(0)" : "translateY(20px)",

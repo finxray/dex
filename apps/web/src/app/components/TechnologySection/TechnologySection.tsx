@@ -27,7 +27,7 @@ export function TechnologySection() {
   return (
     <section id="technology" ref={sectionRef} className="min-h-screen space-y-12 py-32">
       <div
-        className={`text-center mb-20 transition-all duration-1000 ${
+        className={`text-center mb-20 transform-gpu transition-[opacity,transform] duration-1000 ease-out ${
           isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         }`}
       >
@@ -59,7 +59,7 @@ export function TechnologySection() {
         ].map((item, idx) => (
           <div
             key={item.title}
-            className={`space-y-4 rounded-3xl border border-black/10 bg-white p-6 md:p-10 transition-all duration-1000 ${
+            className={`space-y-4 rounded-3xl border border-black/10 bg-white p-6 md:p-10 transition-[opacity,transform] duration-1000 ease-out transform-gpu ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}
             style={{ transitionDelay: `${item.delay}ms` }}

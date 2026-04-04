@@ -317,7 +317,7 @@ export default function PoolsPage() {
   return (
     <>
       <Header />
-      <div className="min-h-screen bg-black text-white pt-24 pb-12">
+      <div className="min-h-screen bg-black text-white pt-[6rem] pb-12">
         <div className="mx-auto max-w-[1200px] px-4 md:px-6">
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
