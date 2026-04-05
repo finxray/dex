@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import styles from "./Hero.module.css";
 
 export function Hero() {
   const [isVisible, setIsVisible] = useState(false);
@@ -41,7 +40,7 @@ export function Hero() {
       </div>
 
       <div
-        className="mt-12 flex transform-gpu flex-col gap-4 transition-[opacity,transform] duration-1000 delay-400 ease-out sm:flex-row"
+        className="mt-12 flex transform-gpu flex-col gap-4 transition-[opacity,transform] duration-1000 delay-400 ease-out sm:flex-row md:gap-[0.8rem]"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "translateY(0)" : "translateY(20px)",
@@ -49,15 +48,13 @@ export function Hero() {
       >
         <a
           href="#architecture"
-          className="px-8 py-3 md:py-3 bg-[#007AFF] hover:bg-[#0066CC] rounded-full font-normal text-[17px] text-white transition-all touch-manipulation min-h-[48px] md:min-h-0 flex items-center justify-center"
-          style={{ minHeight: "48px" }}
+          className="flex min-h-[48px] touch-manipulation items-center justify-center rounded-full bg-[#007AFF] px-8 py-3 font-normal text-[17px] text-white transition-all hover:bg-[#0066CC] md:min-h-[38.4px] md:px-[1.6rem] md:py-[0.6rem] md:text-[13.6px]"
         >
           Explore Architecture
         </a>
         <a
           href="#code"
-          className="px-8 py-3 md:py-3 border border-white/30 hover:bg-white/10 hover:border-white/40 rounded-full font-normal text-[17px] text-white transition-all touch-manipulation min-h-[48px] md:min-h-0 flex items-center justify-center"
-          style={{ minHeight: "48px" }}
+          className="flex min-h-[48px] touch-manipulation items-center justify-center rounded-full border border-white/30 px-8 py-3 font-normal text-[17px] text-white transition-all hover:border-white/40 hover:bg-white/10 md:min-h-[38.4px] md:px-[1.6rem] md:py-[0.6rem] md:text-[13.6px]"
         >
           View Code Examples
         </a>

@@ -4,18 +4,91 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CodeBlock, CodeWindowFrame } from "../../components";
 import { MermaidBlock } from "./MermaidBlock";
 
-const SECTIONS = [
-  { id: "overview", label: "Overview" },
-  { id: "repo-layout", label: "Repository layout" },
-  { id: "core-contracts", label: "On-chain core" },
-  { id: "swap-flow", label: "Swap path" },
-  { id: "liquidity-flow", label: "Liquidity path" },
-  { id: "quotes-oracles", label: "Quotes & data bridges" },
-  { id: "flash-mev", label: "Flash accounting & MEV" },
-  { id: "web-app", label: "Web application" },
-  { id: "deploy-dev", label: "Deploy & local dev" },
-  { id: "internal-notes", label: "Internal notes" },
-] as const;
+const SCROLL_SPY_OFFSET = 130;
+
+type NavNode = {
+  key: string;
+  label: string;
+  id?: string;
+  children?: NavNode[];
+};
+
+/** Cursor/VS Code–style tree: folders fold open, leaves link to #anchors. */
+const DOC_NAV: NavNode[] = [
+  { key: "overview", label: "Overview", id: "overview" },
+  {
+    key: "repository",
+    label: "Repository",
+    children: [{ key: "repo-layout", label: "Repository layout", id: "repo-layout" }],
+  },
+  {
+    key: "on-chain",
+    label: "On-chain",
+    children: [
+      { key: "core-contracts", label: "On-chain core", id: "core-contracts" },
+      { key: "swap-flow", label: "Swap path", id: "swap-flow" },
+      { key: "liquidity-flow", label: "Liquidity path", id: "liquidity-flow" },
+      { key: "quotes-oracles", label: "Quotes & data bridges", id: "quotes-oracles" },
+      { key: "flash-mev", label: "Flash accounting & MEV", id: "flash-mev" },
+    ],
+  },
+  {
+    key: "web",
+    label: "apps/web",
+    children: [{ key: "web-app", label: "Web application", id: "web-app" }],
+  },
+  {
+    key: "operations",
+    label: "Operations",
+    children: [
+      { key: "deploy-dev", label: "Deploy & local dev", id: "deploy-dev" },
+      { key: "internal-notes", label: "Internal notes", id: "internal-notes" },
+    ],
+  },
+];
+
+function collectSectionIds(nodes: NavNode[]): string[] {
+  const out: string[] = [];
+  for (const n of nodes) {
+    if (n.id) out.push(n.id);
+    if (n.children) out.push(...collectSectionIds(n.children));
+  }
+  return out;
+}
+
+const SECTION_IDS = collectSectionIds(DOC_NAV);
+
+function findParentFolderKeys(nodes: NavNode[], targetId: string, parents: string[] = []): string[] | null {
+  for (const n of nodes) {
+    if (n.id === targetId) return parents;
+    if (n.children) {
+      const hit = findParentFolderKeys(n.children, targetId, [...parents, n.key]);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+function subtreeContainsId(node: NavNode, targetId: string): boolean {
+  if (node.id === targetId) return true;
+  if (!node.children) return false;
+  return node.children.some((c) => subtreeContainsId(c, targetId));
+}
+
+function folderKeysDeep(nodes: NavNode[]): string[] {
+  const k: string[] = [];
+  for (const n of nodes) {
+    if (n.children?.length) {
+      k.push(n.key, ...folderKeysDeep(n.children));
+    }
+  }
+  return k;
+}
+
+/** Match landing architecture: section titles centered, generous vertical rhythm. */
+const SECTION_HEAD = "mb-8 text-center";
+const H2 = "text-3xl font-semibold text-white md:text-4xl";
+const LEAD = "mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-white/50";
 
 function SubTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -33,7 +106,7 @@ function Prose({ children }: { children: React.ReactNode }) {
 
 function CodeInline({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded-md bg-white/12 px-2 py-0.5 font-mono text-sm text-white/95 md:text-base">{children}</code>
+    <code className="rounded-md bg-white/10 px-2 py-0.5 font-mono text-sm text-white/95 md:text-base">{children}</code>
   );
 }
 
@@ -50,11 +123,11 @@ function Expandable({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/[0.06] md:px-5 md:py-4"
+        className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.07] md:px-6 md:py-5"
         aria-expanded={open}
       >
         <span>
@@ -66,7 +139,7 @@ function Expandable({
         </span>
       </button>
       {open ? (
-        <div className="border-t border-white/10 px-4 py-3 text-base text-white/80 md:px-5 md:py-4 md:text-lg">
+        <div className="border-t border-white/10 px-5 py-4 text-base text-white/80 md:px-6 md:py-5 md:text-lg">
           {children}
         </div>
       ) : null}
@@ -107,7 +180,7 @@ function RepoLegendCard() {
     },
   ];
   return (
-    <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-6 md:px-7 md:py-8">
+    <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-5 py-6 backdrop-blur-xl md:px-7 md:py-8">
       <p className="text-base font-medium text-white md:text-lg">What each top-level folder is for</p>
       <p className="mt-2 text-sm text-white/60 md:text-base">
         Colors align with the diagram above. Use this table when you jump back into the repo after time away.
@@ -116,7 +189,7 @@ function RepoLegendCard() {
         {items.map((item) => (
           <li
             key={item.title}
-            className="rounded-xl border px-4 py-4 md:px-5 md:py-5"
+            className="rounded-2xl border px-4 py-4 md:px-5 md:py-5"
             style={{ backgroundColor: item.color, borderColor: item.border }}
           >
             <p className="font-mono text-base font-semibold text-white md:text-lg">{item.title}</p>
@@ -133,19 +206,328 @@ function RepoLegendCard() {
   );
 }
 
+function ContentCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl md:p-6 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+/** Heroicons 20 solid–style chevrons (same geometry as tailwindlabs/heroicons). */
+function NavChevronRight({ className = "h-4 w-4 shrink-0 text-white/45" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+      <path
+        fillRule="evenodd"
+        d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function NavChevronDown({ className = "h-4 w-4 shrink-0 text-white/45" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+      <path
+        fillRule="evenodd"
+        d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+/** `w-3.5` (0.875rem) × 1.2 — icon + column share this size; trunk offsets by half width. */
+const DOC_NAV_CHEVRON_SIZE = "h-[1.05rem] w-[1.05rem]";
+const DOC_NAV_CHEVRON_COL = "flex h-[1.05rem] w-[1.05rem] shrink-0 items-center justify-center";
+/** Pull nested trunk up (tightens space under folder chevron; ~2× previous pull → gap ~½). */
+const DOC_TREE_UL_PULLUP = "-mt-[5.6px]";
+/** Rail center under chevron tip: half of `1.05rem`, minus half of 1px rail. */
+const DOC_TREE_UL_INDENT = "ml-[calc(0.525rem-0.5px)]";
+const DOC_TREE_RAIL_X = "left-0";
+/** Depth-0 folder rail: same x as `DOC_TREE_UL_INDENT` so the trunk lines up under the chevron into nested rows. */
+const DOC_TREE_RAIL_LEFT_ROOT = "left-[calc(0.525rem-0.5px)]";
+/** Lit trunk / stub / dot: softer white so 1px rails don’t read as heavy as title text. */
+const DOC_TREE_RAIL_LIT = "w-px min-w-px shrink-0 bg-white/40";
+/** 1px rail width without color — use `DOC_TREE_ACTIVE_STROKE_RGB` in `style`. */
+const DOC_TREE_RAIL_ACTIVE_W = "w-px min-w-px shrink-0";
+const DOC_TREE_STROKE_RGB = "rgba(255,255,255,0.4)";
+const DOC_TREE_ACTIVE_STROKE_RGB = "rgba(255,255,255,0.58)";
+/** `pl-4` (1rem) + 40% → 1.4rem; stub / negative margin use the same inset. */
+const DOC_TREE_LEAF_PAD = "pl-[1.4rem]";
+const DOC_TREE_LEAF_SPACER = "-ml-[1.4rem] inline-block w-[1.4rem] shrink-0";
+
+/**
+ * Match desktop top-bar nav links in `Header.tsx` (`text-white/80`, `hover:text-white`, active `#fff` via `text-white`) —
+ * same inactive tone for section titles and subtitles (`visited` stays dim so links don’t read brighter than folders).
+ */
+const DOC_NAV_ITEM_BASE =
+  "flex w-full min-w-0 cursor-pointer items-center gap-2 py-[4.4px] text-left text-[0.825rem] font-normal leading-snug text-white/80 no-underline outline-none transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none focus-visible:ring-0 active:outline-none visited:text-white/80 [&_svg]:text-current";
+const DOC_NAV_ITEM_ACTIVE =
+  "flex w-full min-w-0 cursor-pointer items-center gap-2 py-[4.4px] text-left text-[0.825rem] font-semibold leading-snug text-white no-underline outline-none transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none focus-visible:ring-0 active:outline-none visited:text-white [&_svg]:text-current";
+
+/** Active-dot diameter (px). */
+const DOC_TREE_ACTIVE_DOT_PX = 3.5;
+/** Rounded elbow radius (px) for the active connector. */
+const DOC_TREE_ACTIVE_CORNER_RADIUS_PX = 4.5;
+/** Lift horizontal stub slightly so it optically matches the elbow border pixel row. */
+const DOC_TREE_ACTIVE_STUB_Y_ADJUST_PX = 1;
+/** Stub endpoint (px from left in the active-curve box). */
+const DOC_TREE_ACTIVE_STUB_END_PX = 14;
+const DOC_TREE_ACTIVE_DOT_GAP_PX = 3;
+/**
+ * Folder active dot: horizontal center = chevron column center (`1.05rem` / 2). Vertical center sits below the
+ * chevron (`50%` row center + half chevron + gap + half dot), matching `items-center` folder rows.
+ */
+const DOC_TREE_FOLDER_DOT_LEFT = "0.525rem";
+const DOC_TREE_FOLDER_DOT_TOP = `calc(50% + 0.525rem + ${DOC_TREE_ACTIVE_DOT_GAP_PX + DOC_TREE_ACTIVE_DOT_PX / 2}px)`;
+/** Trunk resumes below dot (chevron bottom + gap + dot + gap). */
+const DOC_TREE_FOLDER_TRUNK_TOP = `calc(50% + 0.525rem + ${2 * DOC_TREE_ACTIVE_DOT_GAP_PX + DOC_TREE_ACTIVE_DOT_PX}px)`;
+const DOC_TREE_ACTIVE_DOT_CENTER_PX =
+  DOC_TREE_ACTIVE_STUB_END_PX + DOC_TREE_ACTIVE_DOT_GAP_PX + DOC_TREE_ACTIVE_DOT_PX / 2;
+
+/**
+ * Pure CSS 1px geometry (vertical + rounded elbow + horizontal) keeps visual thickness consistent at the turn.
+ * Mixing stretched SVG curves + separate strokes caused anti-aliasing weight shifts around the elbow.
+ */
+function ActiveSubtitleTreeCurve() {
+  const vStemH = `calc(50% - ${DOC_TREE_ACTIVE_CORNER_RADIUS_PX}px)`;
+  const hStubW = DOC_TREE_ACTIVE_STUB_END_PX - DOC_TREE_ACTIVE_CORNER_RADIUS_PX;
+  return (
+    <div
+      className="pointer-events-none absolute left-0 top-0 h-full w-[3.75rem] overflow-visible"
+      aria-hidden
+    >
+      <span
+        className="absolute left-0 top-0 w-px min-w-px shrink-0"
+        style={{ height: vStemH, backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB }}
+      />
+      <span
+        className="absolute left-0 box-border border-b border-l"
+        style={{
+          top: vStemH,
+          width: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
+          height: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
+          borderColor: DOC_TREE_ACTIVE_STROKE_RGB,
+          borderBottomLeftRadius: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
+        }}
+      />
+      <span
+        className="absolute h-px min-h-px max-h-px"
+        style={{
+          top: `calc(50% - ${DOC_TREE_ACTIVE_STUB_Y_ADJUST_PX}px)`,
+          left: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
+          width: hStubW,
+          backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB,
+        }}
+      />
+      <span
+        className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+        style={{
+          left: DOC_TREE_ACTIVE_DOT_CENTER_PX,
+          width: DOC_TREE_ACTIVE_DOT_PX,
+          height: DOC_TREE_ACTIVE_DOT_PX,
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Docs sidebar: vertical rails render only on the active path (ancestor folders + prefix rows + active leaf above the tee).
+ * No dim/suffix verticals. Active subtitle uses one curved SVG path (bend + stub + dot) instead of a sharp tee.
+ */
+function IdeExplorerNav({
+  activeId,
+  expanded,
+  toggleFolder,
+  onNavigate,
+}: {
+  activeId: string;
+  expanded: Set<string>;
+  toggleFolder: (key: string) => void;
+  onNavigate?: () => void;
+}) {
+  const renderNodes = (nodes: NavNode[], depth: number): React.ReactNode => {
+    const pathIndex = nodes.findIndex((n) => subtreeContainsId(n, activeId));
+
+    const rowGap = depth > 0 ? "gap-0" : "gap-[4.4px]";
+
+    return (
+      <ul
+        className={`flex list-none flex-col ${rowGap} ${
+          depth > 0 ? `mt-0 ${DOC_TREE_UL_PULLUP} ${DOC_TREE_UL_INDENT}` : ""
+        }`}
+      >
+        {nodes.map((node, i) => {
+          const hasChildren = !!node.children?.length;
+          const isOpen = expanded.has(node.key);
+          const isActiveLeaf = node.id === activeId;
+          const folderOnActivePath = hasChildren && subtreeContainsId(node, activeId);
+          const showTreeRail = depth > 0;
+          const hasActiveInList = pathIndex >= 0;
+          const isPrefixRow = hasActiveInList && i < pathIndex;
+          const isPathRow = hasActiveInList && i === pathIndex;
+          const isLast = i === nodes.length - 1;
+
+          if (hasChildren) {
+            const folderRailLeft = depth === 0 ? DOC_TREE_RAIL_LEFT_ROOT : DOC_TREE_RAIL_X;
+            const folderRow = (
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => toggleFolder(node.key)}
+                className={folderOnActivePath ? DOC_NAV_ITEM_ACTIVE : DOC_NAV_ITEM_BASE}
+              >
+                <span className={DOC_NAV_CHEVRON_COL}>
+                  {isOpen ? (
+                    <NavChevronDown className={DOC_NAV_CHEVRON_SIZE} />
+                  ) : (
+                    <NavChevronRight className={DOC_NAV_CHEVRON_SIZE} />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">{node.label}</span>
+              </button>
+            );
+
+            return (
+              <li key={node.key} className={`min-w-0 ${showTreeRail ? DOC_TREE_LEAF_PAD : ""}`}>
+                <div className="relative w-full min-w-0">
+                  {folderOnActivePath ? (
+                    <>
+                      <span
+                        className={`pointer-events-none absolute ${folderRailLeft} bottom-0 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
+                        style={{
+                          top: DOC_TREE_FOLDER_TRUNK_TOP,
+                          backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB,
+                        }}
+                        aria-hidden
+                      />
+                      <span
+                        className="pointer-events-none absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+                        style={{
+                          left: DOC_TREE_FOLDER_DOT_LEFT,
+                          top: DOC_TREE_FOLDER_DOT_TOP,
+                          width: DOC_TREE_ACTIVE_DOT_PX,
+                          height: DOC_TREE_ACTIVE_DOT_PX,
+                        }}
+                        aria-hidden
+                      />
+                    </>
+                  ) : null}
+                  <div className="relative z-[1]">{folderRow}</div>
+                </div>
+                {isOpen ? renderNodes(node.children!, depth + 1) : null}
+              </li>
+            );
+          }
+
+          return (
+            <li key={node.key} className={`relative min-w-0 ${showTreeRail ? DOC_TREE_LEAF_PAD : ""}`}>
+              {showTreeRail ? (
+                isPathRow ? (
+                  <ActiveSubtitleTreeCurve />
+                ) : !isPathRow && isLast && isPrefixRow ? (
+                  <span
+                    className={`pointer-events-none absolute ${DOC_TREE_RAIL_X} top-0 bottom-1/2 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
+                    style={{ backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB }}
+                    aria-hidden
+                  />
+                ) : !isPathRow && !isLast && isPrefixRow ? (
+                  <span
+                    className={`pointer-events-none absolute ${DOC_TREE_RAIL_X} top-0 bottom-0 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
+                    style={{ backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB }}
+                    aria-hidden
+                  />
+                ) : null
+              ) : null}
+              <a
+                href={`#${node.id}`}
+                onClick={onNavigate}
+                aria-current={isActiveLeaf ? "location" : undefined}
+                className={`${isActiveLeaf ? DOC_NAV_ITEM_ACTIVE : DOC_NAV_ITEM_BASE} ${
+                  isActiveLeaf ? "!text-white" : ""
+                } ${showTreeRail ? "gap-1.5" : ""}`}
+              >
+                {depth === 0 ? (
+                  <span className={DOC_NAV_CHEVRON_COL} aria-hidden />
+                ) : isActiveLeaf ? (
+                  <span className={DOC_TREE_LEAF_SPACER} aria-hidden />
+                ) : (
+                  <span className={DOC_TREE_LEAF_SPACER} aria-hidden />
+                )}
+                <span className="min-w-0 flex-1">{node.label}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
+  return (
+    <nav
+      className="select-none text-white/80 origin-top scale-95 [-webkit-font-smoothing:antialiased]"
+      aria-label="Documentation structure"
+    >
+      {renderNodes(DOC_NAV, 0)}
+    </nav>
+  );
+}
+
+function DocSection({
+  id,
+  title,
+  subtitle,
+  children,
+}: {
+  id: string;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className={`scroll-mt-28 md:scroll-mt-32 ${SECTION_HEAD}`}>
+      <h2 className={H2}>{title}</h2>
+      {subtitle ? <p className={LEAD}>{subtitle}</p> : null}
+      <div className="mt-10 space-y-8">{children}</div>
+    </section>
+  );
+}
+
 export function ArchitectureDocContent() {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [activeId, setActiveId] = useState<string>(SECTIONS[0].id);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(folderKeysDeep(DOC_NAV)));
+  const [activeId, setActiveId] = useState<string>(SECTION_IDS[0] ?? "overview");
+
+  const toggleFolder = useCallback((key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const parents = findParentFolderKeys(DOC_NAV, activeId);
+    if (parents?.length) {
+      setExpanded((prev) => new Set([...prev, ...parents]));
+    }
+  }, [activeId]);
 
   const onScrollSpy = useCallback(() => {
-    const positions = SECTIONS.map(({ id }) => {
+    const positions = SECTION_IDS.map((id) => {
       const el = document.getElementById(id);
       if (!el) return { id, top: Infinity };
       const rect = el.getBoundingClientRect();
-      return { id, top: Math.abs(rect.top - 120) };
+      return { id, top: Math.abs(rect.top - SCROLL_SPY_OFFSET) };
     });
     positions.sort((a, b) => a.top - b.top);
-    setActiveId(positions[0].id);
+    const best = positions[0];
+    setActiveId(best.top === Infinity ? SECTION_IDS[0] ?? "overview" : best.id);
   }, []);
 
   useEffect(() => {
@@ -239,338 +621,376 @@ export function ArchitectureDocContent() {
   );
 
   return (
-    <div className="relative z-10 min-h-screen w-full pt-[4.5rem] md:pt-[6rem]">
-      <div className="mx-auto flex max-w-[1240px] flex-col gap-8 px-4 pb-28 md:flex-row md:items-start md:gap-10 md:px-6">
-        {/* Mobile section jump — same window chrome as landing */}
-        <div className="w-full md:hidden">
-          <CodeWindowFrame title="On this page" label="SECTIONS" contentClassName="!p-0">
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left text-base text-white md:px-6 md:py-4"
-            >
-              <span>Jump to section</span>
-              <span className="text-white/45">{mobileNavOpen ? "▲" : "▼"}</span>
-            </button>
-            {mobileNavOpen ? (
-              <nav className="max-h-[50vh] overflow-y-auto border-t border-white/10 py-1">
-                {SECTIONS.map(({ id, label }) => (
-                  <a
-                    key={id}
-                    href={`#${id}`}
-                    className={`block px-4 py-3 text-base ${
-                      activeId === id ? "bg-white/10 text-white" : "text-white/75 hover:bg-white/8"
-                    }`}
-                    onClick={() => setMobileNavOpen(false)}
-                  >
-                    {label}
-                  </a>
-                ))}
-              </nav>
-            ) : null}
-          </CodeWindowFrame>
+    <div className="relative z-10 min-h-screen w-full pt-[60.72px] md:pt-[48.4px]">
+      {/* Mobile: dim content when explorer open */}
+      {sidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-[44] bg-black/55 md:hidden"
+          aria-label="Close documentation menu"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+
+      {/* Open tab when sidebar hidden (all breakpoints) */}
+      {!sidebarOpen ? (
+        <button
+          type="button"
+          className="fixed z-[52] flex h-24 w-7 items-center justify-center rounded-r-lg border border-l-0 border-white/15 bg-black text-lg text-white/80 shadow-lg transition-colors hover:bg-white/[0.06] hover:text-white"
+          style={{
+            top: `max(6rem, calc(50vh - 3rem))`,
+            left: 0,
+          }}
+          aria-label="Open documentation menu"
+          onClick={() => setSidebarOpen(true)}
+        >
+          ›
+        </button>
+      ) : null}
+
+      <aside
+        id="arch-docs-sidebar"
+        className={`fixed left-0 z-[45] flex w-[300px] min-h-0 flex-col border-r border-white/10 bg-black shadow-none transition-transform duration-200 ease-out top-[60.72px] h-[calc(100dvh-60.72px)] md:top-[48.4px] md:h-[calc(100dvh-48.4px)] ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-11 shrink-0 items-center justify-between border-b border-white/10 px-[10px] md:px-[13.2px]">
+          <span className="truncate pl-[3.2px] text-[0.825rem] font-medium uppercase tracking-wide text-white/60">
+            architecture / docs
+          </span>
+          <button
+            type="button"
+            className="flex h-8 w-8 shrink-0 items-center justify-center text-white/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-0 active:outline-none"
+            aria-label="Hide documentation menu"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <svg className="h-[1.3rem] w-[1.3rem]" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+              <path
+                fillRule="evenodd"
+                d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-[10px] py-3 md:px-[13.2px]">
+          <IdeExplorerNav
+            activeId={activeId}
+            expanded={expanded}
+            toggleFolder={toggleFolder}
+            onNavigate={() => {
+              if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+                setSidebarOpen(false);
+              }
+            }}
+          />
+        </div>
+      </aside>
 
-        <aside className="hidden w-60 shrink-0 lg:w-[17rem] md:block">
-          <CodeWindowFrame className="sticky top-[7.7rem]" title="Navigate" label="SECTIONS" contentClassName="!p-3 md:!p-4">
-            <nav className="flex flex-col gap-0.5">
-              {SECTIONS.map(({ id, label }) => (
-                <a
-                  key={id}
-                  href={`#${id}`}
-                  className={`block rounded-lg px-3 py-2.5 text-sm transition-colors md:text-base ${
-                    activeId === id ? "bg-white/12 text-white" : "text-white/65 hover:bg-white/8 hover:text-white/95"
-                  }`}
-                >
-                  {label}
-                </a>
-              ))}
-            </nav>
-          </CodeWindowFrame>
-        </aside>
-
-        <main className="min-w-0 flex-1 space-y-10 md:space-y-12">
-          <CodeWindowFrame sectionId="overview" title="Overview" label="REFERENCE">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-amber-500/45 bg-amber-500/20 px-3 py-1 text-xs font-medium uppercase tracking-wide text-amber-100 md:text-sm">
+      <div
+        className={`pb-28 pt-12 transition-[margin] duration-200 ease-out md:px-6 md:pt-16 ${
+          sidebarOpen ? "md:ml-[300px]" : "md:ml-0"
+        } px-4`}
+      >
+        <div className="mx-auto max-w-6xl">
+          <main className="min-w-0 space-y-20 md:space-y-24 lg:space-y-28">
+            {/* Overview — landing-style hero */}
+            <header id="overview" className="scroll-mt-28 text-center md:scroll-mt-32">
+              <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
+                <span className="rounded-full border border-amber-500/45 bg-amber-500/15 px-3 py-1 text-xs font-medium uppercase tracking-wide text-amber-100 md:text-sm">
                   Internal
                 </span>
                 <p className="text-sm text-white/55 md:text-base">Operator reference — restrict later if needed.</p>
               </div>
-              <h1 className="font-anita text-3xl font-normal tracking-tight text-white md:text-4xl lg:text-5xl">
+              <h1 className="text-5xl font-semibold tracking-tight text-white md:text-6xl">
                 Architecture &amp; codebase map
               </h1>
-              <p className="text-base leading-relaxed text-white/65 md:text-xl">
-                Same window chrome as the landing “Explore Architecture” section: traffic lights, captions, dark glass
-                body. Below: diagrams and collapsible detail.
+              <p className="mx-auto mt-6 max-w-4xl text-xl leading-relaxed text-white/60 md:text-2xl">
+                How Stoix fits together: on-chain core, periphery, web app, and scripts — same tone and spacing as the
+                marketing architecture section.
               </p>
-            </div>
-            <div className="mt-6 border-t border-white/10 pt-6">
+              <div className="mx-auto mt-10 max-w-3xl text-left">
+                <Prose>
+                  <p>
+                    Stoix is a <strong className="text-white/95">liquidity coordination</strong> stack: pools hold two
+                    assets in packed inventories, LPs receive <CodeInline>ERC6909</CodeInline> shares per pool id, and
+                    executable prices come from <strong className="text-white/95">pluggable quoters</strong> fed by
+                    optional <strong className="text-white/95">data bridges</strong> (oracles, UniV2/V3 reads, TWAPs).
+                    Settlement uses EIP-1153 <CodeInline>FlashAccounting</CodeInline> so single swaps, batch routes, and
+                    flash sessions share one consistent delta ledger.
+                  </p>
+                </Prose>
+                <div className="mt-8 space-y-3">
+                  <Expandable title="Mental model" summary="Pool id, inventory packing, and where trust sits." defaultOpen>
+                    <ul className="list-inside list-disc space-y-3 marker:text-sky-400/80">
+                      <li>
+                        <CodeInline>poolID = keccak256(sort(a,b), quoter, markings)</CodeInline> — canonical pair order; UI
+                        env vars must match the same pool key.
+                      </li>
+                      <li>
+                        Inventory is two <CodeInline>uint128</CodeInline> balances in one storage word per pool (gas-optimized
+                        reads in the swap hot path).
+                      </li>
+                      <li>
+                        The quoter is in the trust zone for <CodeInline>amountOut</CodeInline>; bridges are advisory; users
+                        still need <CodeInline>minAmountOut</CodeInline> and sane pool configs.
+                      </li>
+                    </ul>
+                  </Expandable>
+                </div>
+              </div>
+            </header>
+
+            <DocSection
+              id="repo-layout"
+              title="Repository layout"
+              subtitle="Monorepo folders, Hardhat at root, Next app under apps/web."
+            >
               <Prose>
                 <p>
-                  Stoix is a <strong className="text-white/95">liquidity coordination</strong> stack: pools hold two
-                  assets in packed inventories, LPs receive <CodeInline>ERC6909</CodeInline> shares per pool id, and
-                  executable prices come from <strong className="text-white/95">pluggable quoters</strong> fed by
-                  optional <strong className="text-white/95">data bridges</strong> (oracles, UniV2/V3 reads, TWAPs).
-                  Settlement uses EIP-1153 <CodeInline>FlashAccounting</CodeInline> so single swaps, batch routes, and
-                  flash sessions share one consistent delta ledger.
+                  The Solidity project lives at the <strong className="text-white/90">repo root</strong> (Hardhat). The
+                  customer-facing app is <CodeInline>apps/web</CodeInline>. Integration tests live in root{" "}
+                  <CodeInline>test/</CodeInline>, not inside the Next app.
                 </p>
               </Prose>
-              <div className="mt-6 space-y-3">
-                <Expandable title="Mental model" summary="Pool id, inventory packing, and where trust sits." defaultOpen>
-                  <ul className="list-inside list-disc space-y-3 marker:text-sky-400/80">
+              <div className="mt-8">
+                <CodeWindowFrame title="Pool id" label="TYPESCRIPT" contentClassName="!p-0">
+                  <CodeBlock code={poolIdSnippet} language="typescript" showChrome={false} />
+                </CodeWindowFrame>
+              </div>
+              <ContentCard className="mt-8 overflow-hidden !p-0">
+                <MermaidBlock id="repo" chart={repoDiagram} />
+              </ContentCard>
+              <RepoLegendCard />
+              <div className="mt-6 space-y-4">
+                <Expandable title="Paths worth memorizing" summary="Where to edit when something breaks." defaultOpen>
+                  <ul className="list-inside list-disc space-y-3 marker:text-emerald-400/70">
                     <li>
-                      <CodeInline>poolID = keccak256(sort(a,b), quoter, markings)</CodeInline> — canonical pair order; UI
-                      env vars must match the same pool key.
+                      <CodeInline>contracts/Core/</CodeInline> — PoolManager, LiquidityManager entrypoints, QuoteRouter
+                      mixin, ERC6909, PoolManagerLib, flash + MEV libs, transient helpers.
                     </li>
                     <li>
-                      Inventory is two <CodeInline>uint128</CodeInline> balances in one storage word per pool (gas-optimized
-                      reads in the swap hot path).
+                      <CodeInline>contracts/Peripheral/</CodeInline> — Real/dummy data bridges,{" "}
+                      <CodeInline>StoixQuoter</CodeInline>, alias registries, adapter stack for external protocols.
                     </li>
                     <li>
-                      The quoter is in the trust zone for <CodeInline>amountOut</CodeInline>; bridges are advisory; users
-                      still need <CodeInline>minAmountOut</CodeInline> and sane pool configs.
+                      <CodeInline>apps/web/src/app/swap/page.tsx</CodeInline> — main trading surface (quotes, approvals,
+                      chart overlay, mobile layout) — large file by design.
+                    </li>
+                    <li>
+                      <CodeInline>scripts/deployStoixTestPool.js</CodeInline> — seeds local PoolManager / tokens / quoter
+                      for <CodeInline>npx hardhat node</CodeInline>.
                     </li>
                   </ul>
                 </Expandable>
               </div>
-            </div>
-          </CodeWindowFrame>
+            </DocSection>
 
-          <CodeWindowFrame sectionId="repo-layout" title="Repository layout" label="TREE">
-            <Prose>
-              <p>
-                The Solidity project lives at the <strong className="text-white/90">repo root</strong> (Hardhat). The
-                customer-facing app is <CodeInline>apps/web</CodeInline>. Integration tests live in root{" "}
-                <CodeInline>test/</CodeInline>, not inside the Next app.
-              </p>
-            </Prose>
-            <div className="mt-8">
-              <CodeWindowFrame title="Pool id" label="TYPESCRIPT" contentClassName="!p-0">
-                <CodeBlock code={poolIdSnippet} language="typescript" showChrome={false} />
-              </CodeWindowFrame>
-            </div>
-            <MermaidBlock id="repo" chart={repoDiagram} />
-            <RepoLegendCard />
-            <div className="mt-6 space-y-4">
-              <Expandable title="Paths worth memorizing" summary="Where to edit when something breaks." defaultOpen>
-                <ul className="list-inside list-disc space-y-3 marker:text-emerald-400/70">
+            <DocSection id="core-contracts" title="On-chain core" subtitle="PoolManager, LiquidityManager, and QuoteRouter.">
+              <ContentCard className="overflow-hidden !p-0">
+                <MermaidBlock id="core" chart={coreDiagram} />
+              </ContentCard>
+              <Prose>
+                <p>
+                  <strong className="text-white/95">PoolManager</strong> is the singleton users and routers hit: swaps,
+                  batch swaps, flash sessions, commit-reveal execution, and governance/config for bridge slots. It inherits{" "}
+                  <CodeInline>QuoteRouter</CodeInline> so <CodeInline>getQuote</CodeInline> shares the same storage-backed
+                  bridge/data wiring.
+                </p>
+                <p>
+                  <strong className="text-white/95">LiquidityManager</strong> outsources add/remove math and bytecode size;
+                  only it may call <CodeInline>executeLiquidityAdd</CodeInline> /{" "}
+                  <CodeInline>executeLiquidityRemove</CodeInline> on the pool manager.
+                </p>
+              </Prose>
+              <div className="mt-6 space-y-4">
+                <Expandable title="PoolManager internals" summary="Reentrancy, libraries, and fee hooks.">
+                  <ul className="list-inside list-disc space-y-3">
+                    <li>
+                      Transient reentrancy guards and flash session keys avoid traditional storage mutex costs on hot
+                      paths.
+                    </li>
+                    <li>
+                      <CodeInline>PoolManagerLib</CodeInline> centralizes hop execution, inventory updates, and settlement
+                      helpers; review there when changing batch semantics.
+                    </li>
+                    <li>
+                      Protocol fee / profit baseline helpers exist in the library — confirm they are invoked in your
+                      deployment branch before assuming fee revenue.
+                    </li>
+                  </ul>
+                </Expandable>
+                <Expandable title="Liquidity math" summary="First mint vs joins.">
+                  <p>
+                    Initial mint uses geometric mean with a small permanent liquidity lock (Uniswap-style dust). Subsequent
+                    joins are proportional to packed inventory; a skewed pool can consult the quoter for an implied rate
+                    when inventory ratio alone is ambiguous.
+                  </p>
+                </Expandable>
+              </div>
+            </DocSection>
+
+            <DocSection id="swap-flow" title="Swap path" subtitle="Quotes, markings, and settlement.">
+              <ContentCard className="overflow-hidden !p-0">
+                <MermaidBlock id="swap-seq" chart={swapDiagram} />
+              </ContentCard>
+              <Prose>
+                <p>
+                  <CodeInline>bytes3 markings</CodeInline> select behaviour: protocol-only pools, pause flags, atomic
+                  execution requirements, optional institutional access control paths. Multi-hop swaps use{" "}
+                  <CodeInline>Hop[]</CodeInline>; when a hop carries multiple markings for one quoter, the router may
+                  batch-quote to keep state consistent across sub-steps.
+                </p>
+              </Prose>
+              <div className="mt-6 space-y-4">
+                <Expandable title="Parameter assembly" summary="Canonical ordering and SwapParams.">
+                  <p>
+                    Every external call passes user-supplied asset addresses; pool id assembly sorts them before hashing so
+                    mixed argument order still resolves to one pool.
+                  </p>
+                </Expandable>
+                <Expandable title="Inventory checks" summary="Solvency before settlement.">
+                  <p>
+                    Output is validated against live pool balances before deltas are written; failures revert before tokens
+                    move.
+                  </p>
+                </Expandable>
+                <Expandable title="Settlement" summary="Deltas and ERC20/ETH paths.">
+                  <p>
+                    Negative delta → collect via <CodeInline>transferFrom</CodeInline> (or ETH{" "}
+                    <CodeInline>msg.value</CodeInline>); positive → <CodeInline>transfer</CodeInline> out. Same pattern for
+                    flash session reconciliation across many tokens.
+                  </p>
+                </Expandable>
+              </div>
+            </DocSection>
+
+            <DocSection id="liquidity-flow" title="Liquidity path" subtitle="LP flows through LiquidityManager.">
+              <ContentCard className="overflow-hidden !p-0">
+                <MermaidBlock id="liquidity" chart={liquidityDiagram} />
+              </ContentCard>
+              <Prose>
+                <p>
+                  Adds march through the liquidity manager so LP-facing validation stays out of the swap-sized contract.
+                  Removes burn ERC6909 from the beneficiary, shrink inventory, credit withdrawals as positive deltas, then
+                  settle unless a session defers payment.
+                </p>
+              </Prose>
+              <Expandable title="ERC6909 LP shares" summary="IDs, operators, allowances.">
+                <p>
+                  Pool id doubles as the ERC6909 token id. Integrators can use operators/allowances like nft-ish LP;{" "}
+                  <CodeInline>ERC6909Claims</CodeInline> adds allowance-aware burns for chained workflows.
+                </p>
+              </Expandable>
+            </DocSection>
+
+            <DocSection
+              id="quotes-oracles"
+              title="Quotes & data bridges"
+              subtitle="Bridges, packed dx, and StoixQuoter."
+            >
+              <SubTitle>Data flow</SubTitle>
+              <Prose>
+                <p>
+                  Bridge addresses can be immutables + configurable slots set by governance. Transient caching on the
+                  bridge contract address prevents duplicate external calls when multiple markings hit the same bridge in
+                  one tx.
+                </p>
+                <p>
+                  The consolidated bridge returns a packed <CodeInline>dx</CodeInline> structure (Q64.64 fields + masks).{" "}
+                  <CodeInline>StoixQuoter</CodeInline> averages enabled components, rescales for token decimals, and returns
+                  a single <CodeInline>uint256</CodeInline> output amount for the router.
+                </p>
+              </Prose>
+              <Expandable title="Adapter layer" summary="Where Chainlink / RedStone / Uni attach.">
+                <p>
+                  Adapters live under <CodeInline>contracts/Peripheral/quoters/adapters/</CodeInline>; pairing them with{" "}
+                  <CodeInline>TokenAliasRegistry</CodeInline> and real bridges lets staging mirror mainnet wiring while
+                  dummy bridges keep CI deterministic.
+                </p>
+              </Expandable>
+            </DocSection>
+
+            <DocSection id="flash-mev" title="Flash accounting & MEV" subtitle="Sessions, deltas, and markings.">
+              <Prose>
+                <p>
+                  Flash sessions set an active beneficiary, run arbitrary callback code, then enforce token deltas net-zero
+                  per declared tokens — the Uniswap V4-style mental model, scoped to your PoolManager address.
+                </p>
+                <p>
+                  Commit-reveal and atomic-access libraries sit beside the core; markings determine whether a pool
+                  participates. Keep governance-controlled relay/trader lists in sync with product expectations when
+                  enabling those bits.
+                </p>
+              </Prose>
+            </DocSection>
+
+            <DocSection id="web-app" title="Web application" subtitle="Next.js app, providers, and navigation.">
+              <Prose>
+                <p>
+                  The web app uses the same Geist sans stack as the rest of the product; docs and marketing routes share
+                  the header chrome. CSP in <CodeInline>next.config.ts</CodeInline> whitelists RPC + chart CDNs; adjust if you
+                  add new third-party origins.
+                </p>
+                <p>
+                  <CodeInline>providers.tsx</CodeInline> wires wagmi connectors; localhost uses a custom Hardhat chain
+                  definition with id <CodeInline>31337</CodeInline> and JSON-RPC from env or LAN IP for mobile testing.
+                </p>
+              </Prose>
+              <Expandable title="Navigation sources" summary="Marketing vs app chrome.">
+                <p>
+                  <CodeInline>data/navLinks.ts</CodeInline> defines mega-menu columns; app pages swap in condensed trading
+                  links. This documentation route stays on the marketing header so you can reach it without connecting a
+                  wallet.
+                </p>
+              </Expandable>
+            </DocSection>
+
+            <DocSection id="deploy-dev" title="Deploy & local dev" subtitle="Hardhat node and env wiring.">
+              <Prose>
+                <p>
+                  Bring up <CodeInline>hardhat node</CodeInline> (optionally <CodeInline>--hostname 0.0.0.0</CodeInline>),
+                  deploy via <CodeInline>deployStoixTestPool.js</CodeInline>, copy printed{" "}
+                  <CodeInline>NEXT_PUBLIC_*</CodeInline> values into <CodeInline>apps/web/.env.local</CodeInline>, then run
+                  the web dev server from <CodeInline>apps/web</CodeInline> with webpack flag parity to production
+                  experiments.
+                </p>
+                <p>
+                  <CodeInline>deployToTargetAddresses.js</CodeInline> and <CodeInline>restartAndDeploy.js</CodeInline>{" "}
+                  automate node lifecycle when iterating on deterministic addresses.
+                </p>
+              </Prose>
+            </DocSection>
+
+            <DocSection id="internal-notes" title="Internal notes" subtitle="Risks and backlog reminders.">
+              <Prose>
+                <p
+                  className="rounded-2xl border border-amber-500/35 px-4 py-3 text-amber-50 md:text-lg"
+                  style={{ backgroundColor: "rgba(120, 53, 15, 0.25)" }}
+                >
+                  Engineering backlog / risk reminders — not a substitute for audit or threat modeling.
+                </p>
+                <ul className="list-inside list-disc space-y-3 marker:text-amber-400/80 md:mt-2">
                   <li>
-                    <CodeInline>contracts/Core/</CodeInline> — PoolManager, LiquidityManager entrypoints, QuoteRouter
-                    mixin, ERC6909, PoolManagerLib, flash + MEV libs, transient helpers.
+                    Confirm protocol fee code paths are actually wired for your branch before relying on treasury revenue.
                   </li>
                   <li>
-                    <CodeInline>contracts/Peripheral/</CodeInline> — Real/dummy data bridges,{" "}
-                    <CodeInline>StoixQuoter</CodeInline>, alias registries, adapter stack for external protocols.
+                    Investigate removing or hard-gating the batch hop quote fallback that substitutes a constant price when
+                    quotes return zero.
                   </li>
                   <li>
-                    <CodeInline>apps/web/src/app/swap/page.tsx</CodeInline> — main trading surface (quotes, approvals,
-                    chart overlay, mobile layout) — large file by design.
+                    ERC20 transfers assume standard semantics — rebasing / FoT assets need bespoke handling or blocking at
+                    the pool level.
                   </li>
                   <li>
-                    <CodeInline>scripts/deployStoixTestPool.js</CodeInline> — seeds local PoolManager / tokens / quoter
-                    for <CodeInline>npx hardhat node</CodeInline>.
+                    Before external launch, move internal env disclosure and this amber section behind auth or a separate
+                    deployment.
                   </li>
                 </ul>
-              </Expandable>
-            </div>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="core-contracts" title="On-chain core" label="CONTRACTS">
-            <MermaidBlock id="core" chart={coreDiagram} />
-            <Prose>
-              <p>
-                <strong className="text-white/95">PoolManager</strong> is the singleton users and routers hit: swaps,
-                batch swaps, flash sessions, commit-reveal execution, and governance/config for bridge slots. It inherits{" "}
-                <CodeInline>QuoteRouter</CodeInline> so <CodeInline>getQuote</CodeInline> shares the same storage-backed
-                bridge/data wiring.
-              </p>
-              <p>
-                <strong className="text-white/95">LiquidityManager</strong> outsources add/remove math and bytecode size;
-                only it may call <CodeInline>executeLiquidityAdd</CodeInline> /{" "}
-                <CodeInline>executeLiquidityRemove</CodeInline> on the pool manager.
-              </p>
-            </Prose>
-            <div className="mt-6 space-y-4">
-              <Expandable title="PoolManager internals" summary="Reentrancy, libraries, and fee hooks.">
-                <ul className="list-inside list-disc space-y-3">
-                  <li>
-                    Transient reentrancy guards and flash session keys avoid traditional storage mutex costs on hot
-                    paths.
-                  </li>
-                  <li>
-                    <CodeInline>PoolManagerLib</CodeInline> centralizes hop execution, inventory updates, and settlement
-                    helpers; review there when changing batch semantics.
-                  </li>
-                  <li>
-                    Protocol fee / profit baseline helpers exist in the library — confirm they are invoked in your
-                    deployment branch before assuming fee revenue.
-                  </li>
-                </ul>
-              </Expandable>
-              <Expandable title="Liquidity math" summary="First mint vs joins.">
-                <p>
-                  Initial mint uses geometric mean with a small permanent liquidity lock (Uniswap-style dust). Subsequent
-                  joins are proportional to packed inventory; a skewed pool can consult the quoter for an implied rate
-                  when inventory ratio alone is ambiguous.
-                </p>
-              </Expandable>
-            </div>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="swap-flow" title="Swap path" label="SEQUENCE">
-            <MermaidBlock id="swap-seq" chart={swapDiagram} />
-            <Prose>
-              <p>
-                <CodeInline>bytes3 markings</CodeInline> select behaviour: protocol-only pools, pause flags, atomic
-                execution requirements, optional institutional access control paths. Multi-hop swaps use{" "}
-                <CodeInline>Hop[]</CodeInline>; when a hop carries multiple markings for one quoter, the router may
-                batch-quote to keep state consistent across sub-steps.
-              </p>
-            </Prose>
-            <div className="mt-6 space-y-4">
-              <Expandable title="Parameter assembly" summary="Canonical ordering and SwapParams.">
-                <p>
-                  Every external call passes user-supplied asset addresses; pool id assembly sorts them before hashing so
-                  mixed argument order still resolves to one pool.
-                </p>
-              </Expandable>
-              <Expandable title="Inventory checks" summary="Solvency before settlement.">
-                <p>
-                  Output is validated against live pool balances before deltas are written; failures revert before tokens
-                  move.
-                </p>
-              </Expandable>
-              <Expandable title="Settlement" summary="Deltas and ERC20/ETH paths.">
-                <p>
-                  Negative delta → collect via <CodeInline>transferFrom</CodeInline> (or ETH{" "}
-                  <CodeInline>msg.value</CodeInline>); positive → <CodeInline>transfer</CodeInline> out. Same pattern for
-                  flash session reconciliation across many tokens.
-                </p>
-              </Expandable>
-            </div>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="liquidity-flow" title="Liquidity path" label="SEQUENCE">
-            <MermaidBlock id="liquidity" chart={liquidityDiagram} />
-            <Prose>
-              <p>
-                Adds march through the liquidity manager so LP-facing validation stays out of the swap-sized contract.
-                Removes burn ERC6909 from the beneficiary, shrink inventory, credit withdrawals as positive deltas, then
-                settle unless a session defers payment.
-              </p>
-            </Prose>
-            <Expandable title="ERC6909 LP shares" summary="IDs, operators, allowances.">
-              <p>
-                Pool id doubles as the ERC6909 token id. Integrators can use operators/allowances like nft-ish LP;{" "}
-                <CodeInline>ERC6909Claims</CodeInline> adds allowance-aware burns for chained workflows.
-              </p>
-            </Expandable>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="quotes-oracles" title="Quotes & data bridges" label="ORACLES">
-            <SubTitle>Data flow</SubTitle>
-            <Prose>
-              <p>
-                Bridge addresses can be immutables + configurable slots set by governance. Transient caching on the
-                bridge contract address prevents duplicate external calls when multiple markings hit the same bridge in
-                one tx.
-              </p>
-              <p>
-                The consolidated bridge returns a packed <CodeInline>dx</CodeInline> structure (Q64.64 fields + masks).{" "}
-                <CodeInline>StoixQuoter</CodeInline> averages enabled components, rescales for token decimals, and returns
-                a single <CodeInline>uint256</CodeInline> output amount for the router.
-              </p>
-            </Prose>
-            <Expandable title="Adapter layer" summary="Where Chainlink / RedStone / Uni attach.">
-              <p>
-                Adapters live under <CodeInline>contracts/Peripheral/quoters/adapters/</CodeInline>; pairing them with{" "}
-                <CodeInline>TokenAliasRegistry</CodeInline> and real bridges lets staging mirror mainnet wiring while
-                dummy bridges keep CI deterministic.
-              </p>
-            </Expandable>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="flash-mev" title="Flash accounting & MEV" label="FLASH">
-            <Prose>
-              <p>
-                Flash sessions set an active beneficiary, run arbitrary callback code, then enforce token deltas net-zero
-                per declared tokens — the Uniswap V4-style mental model, scoped to your PoolManager address.
-              </p>
-              <p>
-                Commit-reveal and atomic-access libraries sit beside the core; markings determine whether a pool
-                participates. Keep governance-controlled relay/trader lists in sync with product expectations when
-                enabling those bits.
-              </p>
-            </Prose>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="web-app" title="Web application" label="NEXT.JS">
-            <Prose>
-              <p>
-                Styling uses Geist sans, Anita display for hero titles, cross-texture overlay, and animated gradient blobs
-                identical to Swap. CSP in <CodeInline>next.config.ts</CodeInline> whitelists RPC + chart CDNs; adjust if
-                you add new third-party origins.
-              </p>
-              <p>
-                <CodeInline>providers.tsx</CodeInline> wires wagmi connectors; localhost uses a custom Hardhat chain
-                definition with id <CodeInline>31337</CodeInline> and JSON-RPC from env or LAN IP for mobile testing.
-              </p>
-            </Prose>
-            <Expandable title="Navigation sources" summary="Marketing vs app chrome.">
-              <p>
-                <CodeInline>data/navLinks.ts</CodeInline> defines mega-menu columns; app pages swap in condensed trading
-                links. This documentation route stays on the marketing header so you can reach it without connecting a
-                wallet.
-              </p>
-            </Expandable>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="deploy-dev" title="Deploy & local dev" label="SCRIPTS">
-            <Prose>
-              <p>
-                Bring up <CodeInline>hardhat node</CodeInline> (optionally <CodeInline>--hostname 0.0.0.0</CodeInline>),
-                deploy via <CodeInline>deployStoixTestPool.js</CodeInline>, copy printed{" "}
-                <CodeInline>NEXT_PUBLIC_*</CodeInline> values into <CodeInline>apps/web/.env.local</CodeInline>, then run
-                the web dev server from <CodeInline>apps/web</CodeInline> with webpack flag parity to production
-                experiments.
-              </p>
-              <p>
-                <CodeInline>deployToTargetAddresses.js</CodeInline> and <CodeInline>restartAndDeploy.js</CodeInline>{" "}
-                automate node lifecycle when iterating on deterministic addresses.
-              </p>
-            </Prose>
-          </CodeWindowFrame>
-
-          <CodeWindowFrame sectionId="internal-notes" title="Internal notes" label="RISKS">
-            <Prose>
-              <p
-                className="rounded-xl border border-amber-500/35 px-4 py-3 text-amber-50 md:text-lg"
-                style={{ backgroundColor: "rgba(120, 53, 15, 0.25)" }}
-              >
-                Engineering backlog / risk reminders — not a substitute for audit or threat modeling.
-              </p>
-              <ul className="list-inside list-disc space-y-3 marker:text-amber-400/80 md:mt-2">
-                <li>
-                  Confirm protocol fee code paths are actually wired for your branch before relying on treasury revenue.
-                </li>
-                <li>
-                  Investigate removing or hard-gating the batch hop quote fallback that substitutes a constant price when
-                  quotes return zero.
-                </li>
-                <li>
-                  ERC20 transfers assume standard semantics — rebasing / FoT assets need bespoke handling or blocking at
-                  the pool level.
-                </li>
-                <li>
-                  Before external launch, move internal env disclosure and this amber section behind auth or a separate
-                  deployment.
-                </li>
-              </ul>
-            </Prose>
-          </CodeWindowFrame>
-        </main>
+              </Prose>
+            </DocSection>
+          </main>
+        </div>
       </div>
     </div>
   );

@@ -1,19 +1,18 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { CodeBlock } from "../CodeBlock/CodeBlock";
+import { CodeBlock, type TypingSequencePhase } from "../CodeBlock/CodeBlock";
 
-/** Delay between starting each code card’s typewriter when multiple are in view (by page order). */
-const CARD_TYPING_STAGGER_MS = 2000;
+const CARD_COUNT = 3;
 
 export function ArchitectureSection() {
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
-  const card0Ref = useRef<HTMLDivElement>(null);
-  const card1Ref = useRef<HTMLDivElement>(null);
-  const card2Ref = useRef<HTMLDivElement>(null);
-  const cardVisibleRef = useRef<[boolean, boolean, boolean]>([false, false, false]);
-  const [typingStaggerMs, setTypingStaggerMs] = useState<[number, number, number]>([0, 0, 0]);
+  const firstCodeCardRef = useRef<HTMLDivElement>(null);
+  /** Latched: first code card has intersected — sequence runs in order without resetting on scroll-away. */
+  const [typingChainReady, setTypingChainReady] = useState(false);
+  /** Number of cards finished typing (0…3). Next card index equals this while it types. */
+  const [completedTypingCards, setCompletedTypingCards] = useState(0);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -33,43 +32,30 @@ export function ArchitectureSection() {
   }, []);
 
   useEffect(() => {
-    const cardRefs = [card0Ref, card1Ref, card2Ref];
-    const recomputeStagger = () => {
-      const v = cardVisibleRef.current;
-      const visibleIndices = [0, 1, 2].filter((i) => v[i]);
-      const next: [number, number, number] = [0, 0, 0];
-      visibleIndices.forEach((cardIdx, rank) => {
-        next[cardIdx] = rank * CARD_TYPING_STAGGER_MS;
-      });
-      setTypingStaggerMs((prev) =>
-        prev[0] === next[0] && prev[1] === next[1] && prev[2] === next[2] ? prev : next
-      );
-    };
-
-    const cardObserver = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const idx = cardRefs.findIndex((r) => r.current === entry.target);
-          if (idx === -1) continue;
-          cardVisibleRef.current[idx] = entry.isIntersecting;
-        }
-        recomputeStagger();
+    const el = firstCodeCardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setTypingChainReady(true);
       },
       { threshold: 0.15, rootMargin: "0px" }
     );
-
-    cardRefs.forEach((r) => {
-      if (r.current) cardObserver.observe(r.current);
-    });
-
-    return () => cardObserver.disconnect();
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
+
+  const phaseForCard = (index: number): TypingSequencePhase => {
+    if (!typingChainReady) return "queued";
+    if (index < completedTypingCards) return "done";
+    if (index === completedTypingCards && completedTypingCards < CARD_COUNT) return "typing";
+    return "queued";
+  };
 
   const poolManagerCode = `// Create a new ETH/USDC pool
 const poolId = await poolManager.createPool(
   ETH_ADDRESS,
   USDC_ADDRESS,
-  3000,  // 0.3% fee
+ 3000,  // 0.3% fee
   60     // tick spacing
 );`;
 
@@ -112,7 +98,7 @@ const tx = await poolManager.swap(
         <div className="grid gap-16">
           {/* Pool Manager */}
           <div
-            ref={card0Ref}
+            ref={firstCodeCardRef}
             className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out delay-100 ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
@@ -128,13 +114,15 @@ const tx = await poolManager.swap(
               language="typescript"
               title="Pool Manager"
               typingDemo
-              typingStartDelayMs={typingStaggerMs[0]}
+              typingSequencePhase={phaseForCard(0)}
+              onTypingSequenceComplete={() =>
+                setCompletedTypingCards((c) => Math.min(c + 1, CARD_COUNT))
+              }
             />
           </div>
 
           {/* Quoter */}
           <div
-            ref={card1Ref}
             className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out delay-200 ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
@@ -150,13 +138,15 @@ const tx = await poolManager.swap(
               language="typescript"
               title="Stoicov Quoter"
               typingDemo
-              typingStartDelayMs={typingStaggerMs[1]}
+              typingSequencePhase={phaseForCard(1)}
+              onTypingSequenceComplete={() =>
+                setCompletedTypingCards((c) => Math.min(c + 1, CARD_COUNT))
+              }
             />
           </div>
 
           {/* Risk Engine */}
           <div
-            ref={card2Ref}
             className={`transform-gpu transition-[opacity,transform] duration-1000 ease-out delay-300 ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"
             }`}
@@ -172,7 +162,10 @@ const tx = await poolManager.swap(
               language="typescript"
               title="Swap Execution"
               typingDemo
-              typingStartDelayMs={typingStaggerMs[2]}
+              typingSequencePhase={phaseForCard(2)}
+              onTypingSequenceComplete={() =>
+                setCompletedTypingCards((c) => Math.min(c + 1, CARD_COUNT))
+              }
             />
           </div>
         </div>
@@ -181,4 +174,3 @@ const tx = await poolManager.swap(
     </section>
   );
 }
-

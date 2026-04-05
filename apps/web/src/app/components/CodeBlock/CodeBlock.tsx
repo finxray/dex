@@ -1,60 +1,61 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { CodeWindowFrame } from "./CodeWindowFrame";
+
+/** ~2× faster than the original 25ms/char (~80 → ~160 chars/s). */
+const TYPING_MS_PER_CHAR = 12.5;
+
+export type TypingSequencePhase = "queued" | "typing" | "done";
 
 interface CodeBlockProps {
   code: string;
   language?: string;
   title?: string;
   typingDemo?: boolean;
-  /** When typingDemo: extra ms after in-view before the typing loop starts (used for staggered cards). */
+  /** When typingDemo: extra ms before the first character (default path only). */
   typingStartDelayMs?: number;
+  /** When set with typingDemo, typing is driven by this phase instead of internal in-view logic. */
+  typingSequencePhase?: TypingSequencePhase;
+  /** Fired once when a sequential typing run finishes (last character). */
+  onTypingSequenceComplete?: () => void;
   /** When false, render only highlighted code (use inside an outer CodeWindowFrame). */
   showChrome?: boolean;
 }
 
 function highlightCode(code: string): React.ReactNode[] {
-  const lines = code.split('\n');
+  const lines = code.split("\n");
   return lines.map((line, lineIdx) => {
     const tokens: React.ReactNode[] = [];
     let currentPos = 0;
 
-    // Keywords
     const keywordRegex = /\b(const|let|var|await|async|import|from|export|function|return|if|else|true|false|null|undefined)\b/g;
-    // Strings
     const stringRegex = /(["'`])((?:\\.|(?!\1)[^\\])*)\1/g;
-    // Comments
     const commentRegex = /(\/\/.*$)/g;
-    // Numbers
     const numberRegex = /\b(\d+\.?\d*)\b/g;
-    // Functions
     const functionRegex = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g;
 
-    // Combine all matches
     const allMatches: Array<{ start: number; end: number; type: string; text: string }> = [];
 
     let match;
     while ((match = commentRegex.exec(line)) !== null) {
-      allMatches.push({ start: match.index, end: match.index + match[0].length, type: 'comment', text: match[0] });
+      allMatches.push({ start: match.index, end: match.index + match[0].length, type: "comment", text: match[0] });
     }
     while ((match = stringRegex.exec(line)) !== null) {
-      allMatches.push({ start: match.index, end: match.index + match[0].length, type: 'string', text: match[0] });
+      allMatches.push({ start: match.index, end: match.index + match[0].length, type: "string", text: match[0] });
     }
     while ((match = keywordRegex.exec(line)) !== null) {
-      allMatches.push({ start: match.index, end: match.index + match[0].length, type: 'keyword', text: match[0] });
+      allMatches.push({ start: match.index, end: match.index + match[0].length, type: "keyword", text: match[0] });
     }
     while ((match = numberRegex.exec(line)) !== null) {
-      allMatches.push({ start: match.index, end: match.index + match[0].length, type: 'number', text: match[0] });
+      allMatches.push({ start: match.index, end: match.index + match[0].length, type: "number", text: match[0] });
     }
     while ((match = functionRegex.exec(line)) !== null) {
-      allMatches.push({ start: match.index, end: match.index + match[1].length, type: 'function', text: match[1] });
+      allMatches.push({ start: match.index, end: match.index + match[1].length, type: "function", text: match[1] });
     }
 
-    // Sort by position
     allMatches.sort((a, b) => a.start - b.start);
 
-    // Remove overlaps (prioritize earlier matches)
     const filtered: typeof allMatches = [];
     let lastEnd = 0;
     for (const m of allMatches) {
@@ -64,10 +65,8 @@ function highlightCode(code: string): React.ReactNode[] {
       }
     }
 
-    // Build colored tokens
     let pos = 0;
     filtered.forEach((m, idx) => {
-      // Add plain text before this match
       if (m.start > pos) {
         tokens.push(
           <span key={`plain-${lineIdx}-${idx}`} className="text-white/80">
@@ -76,17 +75,16 @@ function highlightCode(code: string): React.ReactNode[] {
         );
       }
 
-      // Add colored token
       const colorMap: Record<string, string> = {
-        keyword: 'text-[#FF7AB2]',    // Pink like Xcode
-        string: 'text-[#FC6A5D]',     // Red/coral like Xcode
-        comment: 'text-[#6C7986]',    // Gray like Xcode
-        number: 'text-[#D0BF69]',     // Yellow like Xcode
-        function: 'text-[#67B7A4]',   // Teal like Xcode
+        keyword: "text-[#FF7AB2]",
+        string: "text-[#FC6A5D]",
+        comment: "text-[#6C7986]",
+        number: "text-[#D0BF69]",
+        function: "text-[#67B7A4]",
       };
 
       tokens.push(
-        <span key={`token-${lineIdx}-${idx}`} className={colorMap[m.type] || 'text-white/80'}>
+        <span key={`token-${lineIdx}-${idx}`} className={colorMap[m.type] || "text-white/80"}>
           {m.text}
         </span>
       );
@@ -94,7 +92,6 @@ function highlightCode(code: string): React.ReactNode[] {
       pos = m.end;
     });
 
-    // Add remaining plain text
     if (pos < line.length) {
       tokens.push(
         <span key={`plain-${lineIdx}-end`} className="text-white/80">
@@ -106,7 +103,7 @@ function highlightCode(code: string): React.ReactNode[] {
     return (
       <div key={lineIdx}>
         {tokens.length > 0 ? tokens : <span className="text-white/80">{line}</span>}
-        {lineIdx < lines.length - 1 && '\n'}
+        {lineIdx < lines.length - 1 && "\n"}
       </div>
     );
   });
@@ -118,12 +115,28 @@ export function CodeBlock({
   title,
   typingDemo = false,
   typingStartDelayMs = 0,
+  typingSequencePhase,
+  onTypingSequenceComplete,
   showChrome = true,
 }: CodeBlockProps) {
-  const [displayedCode, setDisplayedCode] = useState(typingDemo ? "" : code);
+  const sequential = typingDemo && typingSequencePhase !== undefined;
+  const [displayedCode, setDisplayedCode] = useState(() => {
+    if (!typingDemo) return code;
+    if (typingSequencePhase === "done") return code;
+    return "";
+  });
   const [isVisible, setIsVisible] = useState(false);
-  const [isTypingComplete, setIsTypingComplete] = useState(!typingDemo);
+  const [isTypingComplete, setIsTypingComplete] = useState(() => {
+    if (!typingDemo) return true;
+    return typingSequencePhase === "done";
+  });
   const containerRef = useRef<HTMLDivElement>(null);
+  const typingRafRef = useRef(0);
+  const sequenceCompleteRef = useRef<(() => void) | undefined>(onTypingSequenceComplete);
+  sequenceCompleteRef.current = onTypingSequenceComplete;
+
+  const fullHighlighted = useMemo(() => highlightCode(code), [code]);
+  const displayedHighlighted = useMemo(() => highlightCode(displayedCode), [displayedCode]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -132,7 +145,7 @@ export function CodeBlock({
           setIsVisible(true);
         }
       },
-      { threshold: 0.2, rootMargin: '0px' }
+      { threshold: 0.2, rootMargin: "0px" }
     );
 
     if (containerRef.current) {
@@ -142,53 +155,108 @@ export function CodeBlock({
     return () => observer.disconnect();
   }, []);
 
+  // Sync sequential phases (no rAF).
+  useEffect(() => {
+    if (!typingDemo || !sequential || !typingSequencePhase) return;
+    if (typingSequencePhase === "done") {
+      setDisplayedCode(code);
+      setIsTypingComplete(true);
+    } else if (typingSequencePhase === "queued") {
+      setDisplayedCode("");
+      setIsTypingComplete(false);
+    }
+  }, [typingDemo, sequential, typingSequencePhase, code]);
+
+  // Typing animation: sequential "typing" phase OR legacy in-view typingDemo.
   useEffect(() => {
     if (!typingDemo) return;
 
-    if (!isVisible) {
-      setDisplayedCode("");
-      setIsTypingComplete(false);
-      return;
+    if (sequential) {
+      if (typingSequencePhase !== "typing") {
+        cancelAnimationFrame(typingRafRef.current);
+        return;
+      }
+    } else {
+      if (!isVisible) {
+        cancelAnimationFrame(typingRafRef.current);
+        setDisplayedCode("");
+        setIsTypingComplete(false);
+        return;
+      }
     }
 
     setDisplayedCode("");
     setIsTypingComplete(false);
 
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    const startDelay = window.setTimeout(() => {
-      let currentIndex = 0;
-      intervalId = window.setInterval(() => {
-        if (currentIndex <= code.length) {
-          setDisplayedCode(code.substring(0, currentIndex));
-          currentIndex++;
-        } else {
-          setIsTypingComplete(true);
-          if (intervalId !== undefined) {
-            window.clearInterval(intervalId);
-            intervalId = undefined;
-          }
-        }
-      }, 25);
-    }, 300 + typingStartDelayMs);
+    const delayMs = 300 + (sequential ? 0 : typingStartDelayMs);
+    const typingStartWall = performance.now() + delayMs;
 
-    return () => {
-      window.clearTimeout(startDelay);
-      if (intervalId !== undefined) window.clearInterval(intervalId);
+    const tick = (now: number) => {
+      if (now < typingStartWall) {
+        typingRafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      const elapsed = now - typingStartWall;
+      const nextLen = Math.min(code.length, Math.floor(elapsed / TYPING_MS_PER_CHAR));
+      setDisplayedCode((prev) => {
+        if (prev.length === nextLen) return prev;
+        return code.slice(0, nextLen);
+      });
+      if (nextLen >= code.length) {
+        setIsTypingComplete(true);
+        sequenceCompleteRef.current?.();
+        return;
+      }
+      typingRafRef.current = requestAnimationFrame(tick);
     };
-  }, [code, typingDemo, isVisible, typingStartDelayMs]);
 
-  const highlightedCode = highlightCode(displayedCode);
+    typingRafRef.current = requestAnimationFrame(tick);
 
-  const preInner = (
-    <pre
-      className="overflow-auto p-4 font-mono text-[13px] leading-relaxed md:p-6"
-      style={{ minHeight: showChrome ? "180px" : "100px", maxHeight: showChrome ? "300px" : "220px" }}
-    >
+    return () => cancelAnimationFrame(typingRafRef.current);
+  }, [typingDemo, sequential, typingSequencePhase, code, isVisible, typingStartDelayMs]);
+
+  const preShellClass =
+    "relative overflow-y-auto p-4 font-mono text-[13px] leading-relaxed md:p-6";
+  const preShellStyle = {
+    minHeight: showChrome ? "180px" : "100px",
+    maxHeight: showChrome ? "300px" : "220px",
+  } as const;
+
+  const showGhostStack =
+    typingDemo &&
+    (sequential
+      ? typingSequencePhase === "queued" || (typingSequencePhase === "typing" && !isTypingComplete)
+      : !isTypingComplete);
+
+  const caret =
+    typingDemo &&
+    (sequential ? typingSequencePhase === "typing" : true) &&
+    !isTypingComplete && (
+      <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-white/80 align-middle" />
+    );
+
+  const preInner = showGhostStack ? (
+    <pre className={preShellClass} style={preShellStyle}>
+      <div className="grid min-h-0 grid-cols-1 font-mono text-[13px] leading-relaxed">
+        <div
+          className="invisible col-start-1 row-start-1 min-w-0 select-none [pointer-events:none]"
+          aria-hidden="true"
+        >
+          {fullHighlighted}
+        </div>
+        <div className="col-start-1 row-start-1 min-w-0 self-start">
+          <code>
+            {displayedHighlighted}
+            {caret}
+          </code>
+        </div>
+      </div>
+    </pre>
+  ) : (
+    <pre className={preShellClass} style={preShellStyle}>
       <code>
-        {highlightedCode}
-        {typingDemo && !isTypingComplete && (
-          <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-white/80 align-middle" />
-        )}
+        {displayedHighlighted}
+        {caret}
       </code>
     </pre>
   );

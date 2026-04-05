@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     // Clean up old cache entries
     if (cache.size > 50) {
       const oldestKey = cache.keys().next().value;
-      cache.delete(oldestKey);
+      if (oldestKey !== undefined) cache.delete(oldestKey);
     }
     
     return NextResponse.json(data);

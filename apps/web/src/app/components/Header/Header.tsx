@@ -99,11 +99,15 @@ export function Header() {
       const currentY = window.scrollY;
       const now = performance.now();
 
+      /** At scroll top the toolbar bottom border stays hidden unless mega / mobile sheet is open; once scrolled it always shows. */
+      const toolbarBorderVisible =
+        currentY > TOOLBAR_DIVIDER_SCROLL_Y || isMenuOpen || activeMenu !== null;
+
       if (isMenuOpen || activeMenu) {
         setIsHeaderHidden(false);
         lastScrollYRef.current = currentY;
         lastScrollTimeRef.current = now;
-        setShowBorder(currentY > TOOLBAR_DIVIDER_SCROLL_Y);
+        setShowBorder(toolbarBorderVisible);
         return;
       }
 
@@ -111,7 +115,7 @@ export function Header() {
       const isHomePage = pathname === "/";
       if (!isHomePage) {
         setIsHeaderHidden(false);
-        setShowBorder(currentY > TOOLBAR_DIVIDER_SCROLL_Y);
+        setShowBorder(toolbarBorderVisible);
         lastScrollYRef.current = currentY;
         lastScrollTimeRef.current = now;
         return;
@@ -138,7 +142,7 @@ export function Header() {
         }
       }
 
-      setShowBorder(currentY > TOOLBAR_DIVIDER_SCROLL_Y);
+      setShowBorder(toolbarBorderVisible);
 
       if (isMobile) {
         const whiteSectionElement = document.querySelector(".bg-white");
@@ -161,8 +165,9 @@ export function Header() {
   }, [isMenuOpen, activeMenu, isMobile, pathname]);
 
   useLayoutEffect(() => {
-    setShowBorder(window.scrollY > TOOLBAR_DIVIDER_SCROLL_Y);
-  }, [pathname]);
+    const y = typeof window !== "undefined" ? window.scrollY : 0;
+    setShowBorder(y > TOOLBAR_DIVIDER_SCROLL_Y || isMenuOpen || activeMenu !== null);
+  }, [pathname, isMenuOpen, activeMenu]);
 
   useEffect(() => {
     return () => {
@@ -599,7 +604,11 @@ export function Header() {
           )}
           <Link
             href={isSwapPage ? "/" : "/swap"}
-            className="hidden rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white md:flex items-center justify-center whitespace-nowrap min-w-[121px] flex-shrink-0"
+            className={
+              isSwapPage
+                ? "hidden rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white md:flex items-center justify-center whitespace-nowrap min-w-[121px] flex-shrink-0"
+                : "hidden rounded-full border border-white/20 bg-white/80 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal !text-black transition-all hover:border-white/30 hover:bg-white hover:!text-black md:flex min-w-[121px] flex-shrink-0 items-center justify-center whitespace-nowrap"
+            }
           >
             {isSwapPage ? "About Protocol" : "Launch App"}
           </Link>
@@ -692,7 +701,7 @@ export function Header() {
                 >
                   {currentMega?.mega?.map((group) => (
                     <div key={group.heading} className="min-w-0 space-y-[13.2px]">
-                      <h3 className="text-[0.825rem] font-medium text-white/60">
+                      <h3 className="pl-[13.2px] text-[0.825rem] font-medium text-white/60">
                         {group.heading}
                       </h3>
                       <ul className="flex flex-col gap-[4.4px]">
@@ -734,7 +743,7 @@ export function Header() {
                   <div className="space-y-4">
                     {(item as NavLink).mega?.map((group) => (
                       <div key={group.heading} className="space-y-2 pl-3">
-                        <h3 className="text-xs font-medium text-white/60">
+                        <h3 className="pl-3 text-xs font-medium text-white/60">
                           {group.heading}
                         </h3>
                         <ul className="space-y-1">
@@ -808,7 +817,11 @@ export function Header() {
               <Link
                 href={isSwapPage ? "/" : "/swap"}
                 onClick={handleNavClick}
-                className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                className={
+                  isSwapPage
+                    ? "inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                    : "inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full border border-white/20 bg-white/80 px-4 py-3 text-base font-medium !text-black transition-colors hover:border-white/30 hover:bg-white hover:!text-black"
+                }
                 style={{ minHeight: "48px" }}
               >
                 {isSwapPage ? "About Protocol" : "Launch App"}

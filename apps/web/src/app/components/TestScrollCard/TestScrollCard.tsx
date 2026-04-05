@@ -105,6 +105,10 @@ export function TestScrollCard({
     return null;
   }
 
+  if (typeof document === "undefined" || document.body == null) {
+    return null;
+  }
+
   const topPos = cardRect ? finalCardRect.top : window.innerHeight / 2 - 300;
   const leftPos = cardRect ? finalCardRect.right + 20 : window.innerWidth / 2 - 200;
   
@@ -182,7 +186,7 @@ export function TestScrollCard({
         </div>
       </div>
     </div>,
-    typeof document !== 'undefined' ? document.body : null
+    document.body
   );
 }
 

@@ -267,16 +267,12 @@ export function Providers({ children }: PropsWithChildren) {
                 qrModalOptions: {
                   themeMode: "dark",
                   themeVariables: {
-                    "--w3m-z-index": "9999",
-                    "--w3m-accent-color": "#007AFF",
-                    "--w3m-background-color": "#000000",
-                    "--w3m-overlay-background-color": "rgba(0, 0, 0, 0.8)",
-                    "--w3m-text-color": "#FFFFFF",
-                    "--w3m-font-family": "var(--font-geist-sans)",
+                    "--wcm-z-index": "9999",
+                    "--wcm-accent-color": "#007AFF",
+                    "--wcm-background-color": "#000000",
+                    "--wcm-overlay-background-color": "rgba(0, 0, 0, 0.8)",
+                    "--wcm-font-family": "var(--font-geist-sans)",
                   },
-                  // Improve mobile connection reliability
-                  enableAccountView: true,
-                  enableNetworkView: true,
                 },
                 // Improve connection reliability
                 relayUrl: "wss://relay.walletconnect.com",
@@ -382,19 +378,30 @@ export function Providers({ children }: PropsWithChildren) {
         },
       }) : null;
       
-      const targetChain = isLocalhost ? hardhatChain! : sepolia;
-      
       console.log(`🌐 RPC Configuration: ${isMobile ? "Mobile" : "Desktop"} device detected, using RPC: ${rpcUrl}`);
 
+      const transportOpts = {
+        retryCount: 3,
+        retryDelay: 1000,
+        timeout: 10000,
+      } as const;
+
+      if (isLocalhost) {
+        return createConfig({
+          chains: [hardhatChain!],
+          connectors: connectorList,
+          transports: {
+            [hardhatChain!.id]: http(rpcUrl, transportOpts),
+          },
+          ssr: true,
+        });
+      }
+
       return createConfig({
-        chains: [targetChain],
+        chains: [sepolia],
         connectors: connectorList,
         transports: {
-          [targetChain.id]: http(rpcUrl, {
-            retryCount: 3,
-            retryDelay: 1000,
-            timeout: 10000, // 10 second timeout
-          }),
+          [sepolia.id]: http(rpcUrl, transportOpts),
         },
         ssr: true,
       });
