@@ -7,7 +7,7 @@ import { useAccount, useConnect, useDisconnect, useConnectors } from "wagmi";
 import { NavLink } from "../../types/navigation";
 import { navLinks } from "../../data/navLinks";
 
-/** Hide home header on fast scroll-down only (~≥0.42 px/ms ≈ 420 px/s). */
+/** Hide marketing header on fast scroll-down only (~≥0.42 px/ms ≈ 420 px/s). Applies on all routes unless mega/mobile menu is open. */
 const HIDE_DOWN_VELOCITY_PX_PER_MS = 0.42;
 const HOME_HIDE_AFTER_SCROLL_Y = 80;
 /** Ignore tiny jitter; require meaningful step per event. */
@@ -61,17 +61,20 @@ export function Header() {
   const lastScrollYRef = useRef(0);
   /** `performance.now()` of last scroll sample — used for downward velocity (px/ms). */
   const lastScrollTimeRef = useRef(0);
+  /** Detect scroll clamping when layout shortens the document (e.g. docs sidebar closing widens column). */
+  const lastDocScrollHeightRef = useRef(0);
   /** Delay closing mega menu so pointer can move from nav link into the panel without losing hover. */
   const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Clears `activeMenu` after collapse animation so the reverse slide can run. */
   const megaAfterCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Check if mobile on mount and resize
+  // Mobile breakpoint via matchMedia — avoids resize spam and reduces layout thrash while dragging window edges.
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
   }, []);
   
   // Menu items for app pages (Swap, Liquidity, Pools, Positions, Analytics)
@@ -107,17 +110,8 @@ export function Header() {
         setIsHeaderHidden(false);
         lastScrollYRef.current = currentY;
         lastScrollTimeRef.current = now;
+        lastDocScrollHeightRef.current = document.documentElement.scrollHeight;
         setShowBorder(toolbarBorderVisible);
-        return;
-      }
-
-      // Keep header visible on app pages (like Analytics, Swap, etc.)
-      const isHomePage = pathname === "/";
-      if (!isHomePage) {
-        setIsHeaderHidden(false);
-        setShowBorder(toolbarBorderVisible);
-        lastScrollYRef.current = currentY;
-        lastScrollTimeRef.current = now;
         return;
       }
 
@@ -129,7 +123,12 @@ export function Header() {
       const isScrollingDown = dy > 0;
       const isScrollingUp = dy < 0;
 
-      if (isScrollingUp) {
+      const docH = document.documentElement.scrollHeight;
+      const docHeightDecreased =
+        lastDocScrollHeightRef.current > 0 && docH < lastDocScrollHeightRef.current - 2;
+
+      // Require a real upward step — tiny negative deltas (layout, clamp noise) must not resurrect the bar.
+      if (isScrollingUp && dy <= -MIN_DY_FOR_VELOCITY_HIDE && !docHeightDecreased) {
         setIsHeaderHidden(false);
       } else if (
         isScrollingDown &&
@@ -156,13 +155,18 @@ export function Header() {
 
       lastScrollYRef.current = currentY;
       lastScrollTimeRef.current = now;
+      lastDocScrollHeightRef.current = docH;
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [isMenuOpen, activeMenu, isMobile, pathname]);
+  }, [isMenuOpen, activeMenu, isMobile]);
+
+  useEffect(() => {
+    setIsHeaderHidden(false);
+  }, [pathname]);
 
   useLayoutEffect(() => {
     const y = typeof window !== "undefined" ? window.scrollY : 0;
@@ -607,10 +611,22 @@ export function Header() {
             className={
               isSwapPage
                 ? "hidden rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white md:flex items-center justify-center whitespace-nowrap min-w-[121px] flex-shrink-0"
-                : "hidden rounded-full border border-white/20 bg-white/80 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal !text-black transition-all hover:border-white/30 hover:bg-white hover:!text-black md:flex min-w-[121px] flex-shrink-0 items-center justify-center whitespace-nowrap"
+                : "hidden rounded-full border border-white/20 bg-white/80 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal !text-black transition-all hover:border-white/30 hover:bg-white hover:!text-black md:relative md:flex md:min-w-[121px] md:overflow-hidden md:flex-shrink-0 md:items-center md:justify-center md:whitespace-nowrap"
             }
           >
-            {isSwapPage ? "About Protocol" : "Launch App"}
+            {!isSwapPage ? (
+              <>
+                <span
+                  className="pointer-events-none absolute inset-0 z-0 hidden overflow-hidden rounded-full md:block"
+                  aria-hidden
+                >
+                  <span className="launch-app-shimmer-layer absolute inset-0" />
+                </span>
+                <span className="relative z-[1]">Launch App</span>
+              </>
+            ) : (
+              "About Protocol"
+            )}
           </Link>
           <button
             type="button"
@@ -697,11 +713,11 @@ export function Header() {
                   }
                 />
                 <div
-                  className={`relative z-10 mx-auto grid min-h-0 max-h-[min(70vh,704px)] max-w-[1078px] origin-top scale-95 overflow-y-auto overscroll-contain px-[26.4px] pb-[52.8px] pt-[35.2px] [scrollbar-gutter:stable] ${megaGridClass}`}
+                  className={`relative z-10 mx-auto grid min-h-0 max-h-[min(70vh,704px)] max-w-[1078px] overflow-y-auto overscroll-contain px-[26.4px] pb-[52.8px] pt-[35.2px] [scrollbar-gutter:stable] ${megaGridClass}`}
                 >
                   {currentMega?.mega?.map((group) => (
-                    <div key={group.heading} className="min-w-0 space-y-[13.2px]">
-                      <h3 className="pl-[13.2px] text-[0.825rem] font-medium text-white/60">
+                    <div key={group.heading} className="group/megaCol min-w-0 space-y-[13.2px]">
+                      <h3 className="text-[0.825rem] font-medium text-white/60 transition-colors duration-200 group-hover/megaCol:text-white/80">
                         {group.heading}
                       </h3>
                       <ul className="flex flex-col gap-[4.4px]">
@@ -709,7 +725,7 @@ export function Header() {
                           <li key={item.title} className="min-w-0">
                             <Link
                               href={item.href}
-                              className="inline-flex max-w-full items-center rounded-full border border-transparent px-[13.2px] py-[4.4px] text-left text-[0.825rem] font-normal leading-snug text-white/80 transition-all hover:border-white/30 hover:bg-white/10 hover:text-white"
+                              className="inline-flex max-w-full items-center rounded-full border border-transparent py-[4.4px] pl-[17.6px] pr-[17.6px] text-left text-[0.825rem] font-normal leading-snug text-white/80 transition-all duration-200 hover:border-white/20 hover:bg-transparent hover:text-white -ml-[17.6px]"
                             >
                               {item.title}
                             </Link>
@@ -725,111 +741,133 @@ export function Header() {
         </div>
       )}
 
-      {/* Mobile Menu */}
-      {isMenuOpen ? (
-        <div className="border-t border-white/10 bg-black/95 px-4 pb-12 pt-4 md:hidden max-h-[calc(100vh-60.72px)] overflow-y-auto overscroll-contain">
-          <nav className="flex origin-top scale-95 flex-col gap-4 text-base text-white">
-            {currentNavLinks.map((item) => (
-              <div key={item.label} className="space-y-3">
-                <Link
-                  href={item.href}
-                  className="inline-flex items-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
-                  onClick={handleNavClick}
-                  style={{ minHeight: "48px" }}
-                >
-                  {item.label}
-                </Link>
-                {!isSwapPage && (item as NavLink).mega ? (
-                  <div className="space-y-4">
-                    {(item as NavLink).mega?.map((group) => (
-                      <div key={group.heading} className="space-y-2 pl-3">
-                        <h3 className="pl-3 text-xs font-medium text-white/60">
-                          {group.heading}
-                        </h3>
-                        <ul className="space-y-1">
-                          {group.items.map((subItem) => (
-                            <li key={subItem.title}>
-                              <Link
-                                href={subItem.href}
-                                className="block w-full rounded-xl px-3 py-2.5 text-sm font-normal leading-snug text-white/80 transition-colors hover:bg-white/8 hover:text-white touch-manipulation min-h-[44px]"
-                                onClick={handleNavClick}
-                                style={{ minHeight: "44px" }}
-                              >
-                                {subItem.title}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-            <div className="space-y-4">
-              {isConnected ? (
-                <div className="flex flex-col gap-2">
-                  <div className="text-xs text-white/60 px-3">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </div>
-                  <button
-                    onClick={() => {
-                      disconnect();
-                      handleNavClick();
-                    }}
-                    className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+      {/* Mobile Menu — height slide so open/close animates smoothly */}
+      <div
+        className={`grid min-h-0 md:hidden motion-reduce:transition-none ${
+          isMenuOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        } transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div
+            className={`border-t border-white/10 bg-black/95 px-4 pb-12 pt-4 max-h-[calc(100vh-60.72px)] overflow-y-auto overscroll-contain ${
+              isMenuOpen ? "pointer-events-auto" : "pointer-events-none"
+            }`}
+          >
+            <nav className="flex origin-top scale-95 flex-col gap-4 text-base text-white">
+              {currentNavLinks.map((item) => (
+                <div key={item.label} className="space-y-3">
+                  <Link
+                    href={item.href}
+                    className="inline-flex items-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                    onClick={handleNavClick}
                     style={{ minHeight: "48px" }}
                   >
-                    Disconnect
-                  </button>
+                    {item.label}
+                  </Link>
+                  {!isSwapPage && (item as NavLink).mega ? (
+                    <div className="space-y-4">
+                      {(item as NavLink).mega?.map((group) => (
+                        <div key={group.heading} className="group/megaMob space-y-2">
+                          <h3 className="text-xs font-medium text-white/60 transition-colors duration-200 group-hover/megaMob:text-white/80">
+                            {group.heading}
+                          </h3>
+                          <ul className="space-y-1">
+                            {group.items.map((subItem) => (
+                              <li key={subItem.title}>
+                                <Link
+                                  href={subItem.href}
+                                  className="-ml-3.5 block w-full rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-normal leading-snug text-white/80 transition-colors duration-200 hover:border-white/20 hover:bg-transparent hover:text-white touch-manipulation min-h-[44px]"
+                                  onClick={handleNavClick}
+                                  style={{ minHeight: "44px" }}
+                                >
+                                  {subItem.title}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-              ) : (
-                <button
-                  onClick={async () => {
-                    try {
-                      // Prevent duplicate connection attempts
-                      if (isConnectingRef.current || isConnectPending || !hasConnector || !connectors[0]) {
-                        return;
-                      }
-                      isConnectingRef.current = true;
+              ))}
+              <div className="space-y-4">
+                {isConnected ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs text-white/60 px-3">
+                      {address?.slice(0, 6)}...{address?.slice(-4)}
+                    </div>
+                    <button
+                      onClick={() => {
+                        disconnect();
+                        handleNavClick();
+                      }}
+                      className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                      style={{ minHeight: "48px" }}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={async () => {
                       try {
-                        await connect({ connector: connectors[0] });
+                        // Prevent duplicate connection attempts
+                        if (isConnectingRef.current || isConnectPending || !hasConnector || !connectors[0]) {
+                          return;
+                        }
+                        isConnectingRef.current = true;
+                        try {
+                          await connect({ connector: connectors[0] });
+                        } catch (error) {
+                          console.error("Failed to connect wallet:", error);
+                        } finally {
+                          setTimeout(() => {
+                            isConnectingRef.current = false;
+                          }, 1000);
+                        }
                       } catch (error) {
                         console.error("Failed to connect wallet:", error);
-                      } finally {
-                        setTimeout(() => {
-                          isConnectingRef.current = false;
-                        }, 1000);
+                        isConnectingRef.current = false;
                       }
-                    } catch (error) {
-                      console.error("Failed to connect wallet:", error);
-                      isConnectingRef.current = false;
-                    }
-                    handleNavClick();
-                  }}
-                  disabled={isConnectPending || !hasConnector || isConnectingRef.current}
-                  className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
+                      handleNavClick();
+                    }}
+                    disabled={isConnectPending || !hasConnector || isConnectingRef.current}
+                    className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
+                    style={{ minHeight: "48px" }}
+                  >
+                    {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
+                  </button>
+                )}
+                <Link
+                  href={isSwapPage ? "/" : "/swap"}
+                  onClick={handleNavClick}
+                  className={
+                    isSwapPage
+                      ? "inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                      : "relative inline-flex min-h-[48px] touch-manipulation items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/80 px-4 py-3 text-base font-medium !text-black transition-colors hover:border-white/30 hover:bg-white hover:!text-black"
+                  }
                   style={{ minHeight: "48px" }}
                 >
-                  {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
-                </button>
-              )}
-              <Link
-                href={isSwapPage ? "/" : "/swap"}
-                onClick={handleNavClick}
-                className={
-                  isSwapPage
-                    ? "inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
-                    : "inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full border border-white/20 bg-white/80 px-4 py-3 text-base font-medium !text-black transition-colors hover:border-white/30 hover:bg-white hover:!text-black"
-                }
-                style={{ minHeight: "48px" }}
-              >
-                {isSwapPage ? "About Protocol" : "Launch App"}
-              </Link>
-            </div>
-          </nav>
+                  {!isSwapPage ? (
+                    <>
+                      <span
+                        className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-full"
+                        aria-hidden
+                      >
+                        <span className="launch-app-shimmer-layer absolute inset-0" />
+                      </span>
+                      <span className="relative z-[1]">Launch App</span>
+                    </>
+                  ) : (
+                    "About Protocol"
+                  )}
+                </Link>
+              </div>
+            </nav>
+          </div>
         </div>
-      ) : null}
+      </div>
       </header>
       {/* Gradient blend from header into colorful background - only on swap page, desktop only */}
       {isSwapPage && !isMobile && (

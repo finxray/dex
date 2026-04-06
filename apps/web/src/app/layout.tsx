@@ -30,7 +30,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="bg-black" style={{ backgroundColor: "#000000", margin: 0, padding: 0, width: "100%", height: "100%", overflowX: "hidden" }}>
+    <html
+      lang="en"
+      className="bg-black"
+      style={{
+        backgroundColor: "#000000",
+        margin: 0,
+        padding: 0,
+        width: "100%",
+        height: "100%",
+        overflowX: "hidden",
+        scrollbarGutter: "stable",
+      }}
+    >
       <head>
         <link href="https://fonts.cdnfonts.com/css/anita-semi-square" rel="stylesheet" />
         <meta name="theme-color" content="#000000" />

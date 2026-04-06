@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CodeBlock, CodeWindowFrame } from "../../components";
 import { MermaidBlock } from "./MermaidBlock";
 
 const SCROLL_SPY_OFFSET = 130;
+/** Match aside `duration-300` + slack so scroll height can settle after margin eases. */
+const ARCH_DOCS_SIDEBAR_TRANSITION_MS = 300;
+const ARCH_DOCS_SCROLL_PIN_EXTRA_MS = 90;
 
 type NavNode = {
   key: string;
@@ -227,18 +230,6 @@ function NavChevronRight({ className = "h-4 w-4 shrink-0 text-white/45" }: { cla
   );
 }
 
-function NavChevronDown({ className = "h-4 w-4 shrink-0 text-white/45" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-      <path
-        fillRule="evenodd"
-        d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
-
 /** `w-3.5` (0.875rem) × 1.2 — icon + column share this size; trunk offsets by half width. */
 const DOC_NAV_CHEVRON_SIZE = "h-[1.05rem] w-[1.05rem]";
 const DOC_NAV_CHEVRON_COL = "flex h-[1.05rem] w-[1.05rem] shrink-0 items-center justify-center";
@@ -251,10 +242,11 @@ const DOC_TREE_RAIL_X = "left-0";
 const DOC_TREE_RAIL_LEFT_ROOT = "left-[calc(0.525rem-0.5px)]";
 /** Lit trunk / stub / dot: softer white so 1px rails don’t read as heavy as title text. */
 const DOC_TREE_RAIL_LIT = "w-px min-w-px shrink-0 bg-white/40";
-/** 1px rail width without color — use `DOC_TREE_ACTIVE_STROKE_RGB` in `style`. */
+/** 1px rail width without color — use `DOC_TREE_CONNECTOR_STROKE_RGB` in `style`. */
 const DOC_TREE_RAIL_ACTIVE_W = "w-px min-w-px shrink-0";
 const DOC_TREE_STROKE_RGB = "rgba(255,255,255,0.4)";
-const DOC_TREE_ACTIVE_STROKE_RGB = "rgba(255,255,255,0.58)";
+/** Active-path connector lines (folder trunk, nested rails, L-curve). Kept dim vs subtitle `bg-white` dot. */
+const DOC_TREE_CONNECTOR_STROKE_RGB = "rgba(255,255,255,0.28)";
 /** `pl-4` (1rem) + 40% → 1.4rem; stub / negative margin use the same inset. */
 const DOC_TREE_LEAF_PAD = "pl-[1.4rem]";
 const DOC_TREE_LEAF_SPACER = "-ml-[1.4rem] inline-block w-[1.4rem] shrink-0";
@@ -277,14 +269,8 @@ const DOC_TREE_ACTIVE_STUB_Y_ADJUST_PX = 1;
 /** Stub endpoint (px from left in the active-curve box). */
 const DOC_TREE_ACTIVE_STUB_END_PX = 14;
 const DOC_TREE_ACTIVE_DOT_GAP_PX = 3;
-/**
- * Folder active dot: horizontal center = chevron column center (`1.05rem` / 2). Vertical center sits below the
- * chevron (`50%` row center + half chevron + gap + half dot), matching `items-center` folder rows.
- */
-const DOC_TREE_FOLDER_DOT_LEFT = "0.525rem";
-const DOC_TREE_FOLDER_DOT_TOP = `calc(50% + 0.525rem + ${DOC_TREE_ACTIVE_DOT_GAP_PX + DOC_TREE_ACTIVE_DOT_PX / 2}px)`;
-/** Trunk resumes below dot (chevron bottom + gap + dot + gap). */
-const DOC_TREE_FOLDER_TRUNK_TOP = `calc(50% + 0.525rem + ${2 * DOC_TREE_ACTIVE_DOT_GAP_PX + DOC_TREE_ACTIVE_DOT_PX}px)`;
+/** Folder trunk: from bottom of centered chevron (`1.05rem` tall) into nested list — no junction dot. */
+const DOC_TREE_FOLDER_TRUNK_TOP = "calc(50% + 0.525rem)";
 const DOC_TREE_ACTIVE_DOT_CENTER_PX =
   DOC_TREE_ACTIVE_STUB_END_PX + DOC_TREE_ACTIVE_DOT_GAP_PX + DOC_TREE_ACTIVE_DOT_PX / 2;
 
@@ -302,7 +288,7 @@ function ActiveSubtitleTreeCurve() {
     >
       <span
         className="absolute left-0 top-0 w-px min-w-px shrink-0"
-        style={{ height: vStemH, backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB }}
+        style={{ height: vStemH, backgroundColor: DOC_TREE_CONNECTOR_STROKE_RGB }}
       />
       <span
         className="absolute left-0 box-border border-b border-l"
@@ -310,7 +296,7 @@ function ActiveSubtitleTreeCurve() {
           top: vStemH,
           width: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
           height: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
-          borderColor: DOC_TREE_ACTIVE_STROKE_RGB,
+          borderColor: DOC_TREE_CONNECTOR_STROKE_RGB,
           borderBottomLeftRadius: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
         }}
       />
@@ -320,11 +306,11 @@ function ActiveSubtitleTreeCurve() {
           top: `calc(50% - ${DOC_TREE_ACTIVE_STUB_Y_ADJUST_PX}px)`,
           left: DOC_TREE_ACTIVE_CORNER_RADIUS_PX,
           width: hStubW,
-          backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB,
+          backgroundColor: DOC_TREE_CONNECTOR_STROKE_RGB,
         }}
       />
       <span
-        className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+        className="absolute top-[calc(50%-0.5px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
         style={{
           left: DOC_TREE_ACTIVE_DOT_CENTER_PX,
           width: DOC_TREE_ACTIVE_DOT_PX,
@@ -382,11 +368,11 @@ function IdeExplorerNav({
                 className={folderOnActivePath ? DOC_NAV_ITEM_ACTIVE : DOC_NAV_ITEM_BASE}
               >
                 <span className={DOC_NAV_CHEVRON_COL}>
-                  {isOpen ? (
-                    <NavChevronDown className={DOC_NAV_CHEVRON_SIZE} />
-                  ) : (
-                    <NavChevronRight className={DOC_NAV_CHEVRON_SIZE} />
-                  )}
+                  <NavChevronRight
+                    className={`${DOC_NAV_CHEVRON_SIZE} transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
+                      isOpen ? "rotate-90" : "rotate-0"
+                    }`}
+                  />
                 </span>
                 <span className="min-w-0 flex-1">{node.label}</span>
               </button>
@@ -395,31 +381,25 @@ function IdeExplorerNav({
             return (
               <li key={node.key} className={`min-w-0 ${showTreeRail ? DOC_TREE_LEAF_PAD : ""}`}>
                 <div className="relative w-full min-w-0">
-                  {folderOnActivePath ? (
-                    <>
-                      <span
-                        className={`pointer-events-none absolute ${folderRailLeft} bottom-0 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
-                        style={{
-                          top: DOC_TREE_FOLDER_TRUNK_TOP,
-                          backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB,
-                        }}
-                        aria-hidden
-                      />
-                      <span
-                        className="pointer-events-none absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
-                        style={{
-                          left: DOC_TREE_FOLDER_DOT_LEFT,
-                          top: DOC_TREE_FOLDER_DOT_TOP,
-                          width: DOC_TREE_ACTIVE_DOT_PX,
-                          height: DOC_TREE_ACTIVE_DOT_PX,
-                        }}
-                        aria-hidden
-                      />
-                    </>
+                  {folderOnActivePath && isOpen ? (
+                    <span
+                      className={`pointer-events-none absolute ${folderRailLeft} bottom-0 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
+                      style={{
+                        top: DOC_TREE_FOLDER_TRUNK_TOP,
+                        backgroundColor: DOC_TREE_CONNECTOR_STROKE_RGB,
+                      }}
+                      aria-hidden
+                    />
                   ) : null}
                   <div className="relative z-[1]">{folderRow}</div>
                 </div>
-                {isOpen ? renderNodes(node.children!, depth + 1) : null}
+                <div
+                  className={`grid motion-reduce:transition-none transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="min-h-0 overflow-hidden">{renderNodes(node.children!, depth + 1)}</div>
+                </div>
               </li>
             );
           }
@@ -432,13 +412,13 @@ function IdeExplorerNav({
                 ) : !isPathRow && isLast && isPrefixRow ? (
                   <span
                     className={`pointer-events-none absolute ${DOC_TREE_RAIL_X} top-0 bottom-1/2 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
-                    style={{ backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB }}
+                    style={{ backgroundColor: DOC_TREE_CONNECTOR_STROKE_RGB }}
                     aria-hidden
                   />
                 ) : !isPathRow && !isLast && isPrefixRow ? (
                   <span
                     className={`pointer-events-none absolute ${DOC_TREE_RAIL_X} top-0 bottom-0 ${DOC_TREE_RAIL_ACTIVE_W} transition-colors`}
-                    style={{ backgroundColor: DOC_TREE_ACTIVE_STROKE_RGB }}
+                    style={{ backgroundColor: DOC_TREE_CONNECTOR_STROKE_RGB }}
                     aria-hidden
                   />
                 ) : null
@@ -499,6 +479,9 @@ function DocSection({
 
 export function ArchitectureDocContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  /** Desktop: while `md:ml-*` animates, pin `scrollY` each frame so easing doesn’t yank the viewport. */
+  const scrollPinYRef = useRef<number | null>(null);
+  const scrollPinRafRef = useRef<number | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(folderKeysDeep(DOC_NAV)));
   const [activeId, setActiveId] = useState<string>(SECTION_IDS[0] ?? "overview");
 
@@ -535,6 +518,45 @@ export function ArchitectureDocContent() {
     onScrollSpy();
     return () => window.removeEventListener("scroll", onScrollSpy);
   }, [onScrollSpy]);
+
+  const stopScrollPin = useCallback(() => {
+    if (scrollPinRafRef.current != null) {
+      cancelAnimationFrame(scrollPinRafRef.current);
+      scrollPinRafRef.current = null;
+    }
+    scrollPinYRef.current = null;
+  }, []);
+
+  const startScrollPin = useCallback(
+    (y: number) => {
+      stopScrollPin();
+      scrollPinYRef.current = y;
+      const t0 = performance.now();
+      const until = t0 + ARCH_DOCS_SIDEBAR_TRANSITION_MS + ARCH_DOCS_SCROLL_PIN_EXTRA_MS;
+      const tick = () => {
+        const target = scrollPinYRef.current;
+        if (target == null) return;
+        window.scrollTo({ top: target, left: 0, behavior: "auto" });
+        if (performance.now() < until) {
+          scrollPinRafRef.current = requestAnimationFrame(tick);
+        } else {
+          scrollPinRafRef.current = null;
+          scrollPinYRef.current = null;
+        }
+      };
+      scrollPinRafRef.current = requestAnimationFrame(tick);
+    },
+    [stopScrollPin]
+  );
+
+  useEffect(() => () => stopScrollPin(), [stopScrollPin]);
+
+  const toggleDocsSidebar = useCallback(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) {
+      startScrollPin(window.scrollY);
+    }
+    setSidebarOpen((o) => !o);
+  }, [startScrollPin]);
 
   const repoDiagram = useMemo(
     () =>
@@ -632,46 +654,46 @@ export function ArchitectureDocContent() {
         />
       ) : null}
 
-      {/* Open tab when sidebar hidden (all breakpoints) */}
-      {!sidebarOpen ? (
-        <button
-          type="button"
-          className="fixed z-[52] flex h-24 w-7 items-center justify-center rounded-r-lg border border-l-0 border-white/15 bg-black text-lg text-white/80 shadow-lg transition-colors hover:bg-white/[0.06] hover:text-white"
-          style={{
-            top: `max(6rem, calc(50vh - 3rem))`,
-            left: 0,
-          }}
-          aria-label="Open documentation menu"
-          onClick={() => setSidebarOpen(true)}
+      {/* Fixed toggle — closed: glass + outline; open: outline mainly on hover. Chevron follows menu state. */}
+      <button
+        type="button"
+        className={`fixed z-[52] flex h-9 w-9 items-center justify-center rounded-full text-white/95 backdrop-blur-xl backdrop-saturate-200 motion-reduce:transform-none motion-reduce:transition-none transition-[transform,background-color,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.34,1.45,0.64,1)] hover:scale-[1.12] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:scale-[0.97] motion-reduce:hover:scale-100 top-[calc(60.72px+8px)] md:top-[calc(48.4px+8px)] left-[10px] md:left-[13.2px] motion-reduce:active:scale-100 ${
+          sidebarOpen
+            ? "border border-transparent bg-black/55 shadow-[0_2px_20px_rgba(0,0,0,0.45)] hover:border-white/28 hover:bg-white/[0.09] hover:shadow-[0_10px_44px_rgba(0,0,0,0.5)] focus-visible:border-white/30 motion-reduce:hover:shadow-[0_2px_20px_rgba(0,0,0,0.45)]"
+            : "border border-white/[0.22] bg-white/[0.12] shadow-[0_4px_28px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.14)] hover:border-white/32 hover:bg-white/[0.16] hover:shadow-[0_10px_40px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.2)] focus-visible:border-white/35 motion-reduce:hover:shadow-[0_4px_28px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.14)]"
+        }`}
+        aria-expanded={sidebarOpen}
+        aria-controls="arch-docs-sidebar"
+        aria-label={sidebarOpen ? "Hide documentation menu" : "Open documentation menu"}
+        onClick={toggleDocsSidebar}
+      >
+        <svg
+          className={`h-[1.3rem] w-[1.3rem] shrink-0 motion-reduce:transition-none transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+            sidebarOpen ? "rotate-180" : "rotate-0"
+          }`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden
         >
-          ›
-        </button>
-      ) : null}
+          <path
+            fillRule="evenodd"
+            d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
 
       <aside
         id="arch-docs-sidebar"
-        className={`fixed left-0 z-[45] flex w-[300px] min-h-0 flex-col border-r border-white/10 bg-black shadow-none transition-transform duration-200 ease-out top-[60.72px] h-[calc(100dvh-60.72px)] md:top-[48.4px] md:h-[calc(100dvh-48.4px)] ${
+        className={`fixed top-0 left-0 z-[45] flex h-dvh w-[300px] min-h-0 flex-col border-r border-white/10 bg-black pt-[60.72px] shadow-none motion-reduce:transition-none transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:pt-[48.4px] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-11 shrink-0 items-center justify-between border-b border-white/10 px-[10px] md:px-[13.2px]">
-          <span className="truncate pl-[3.2px] text-[0.825rem] font-medium uppercase tracking-wide text-white/60">
-            architecture / docs
+        {/* Title centered on full aside width (300px); fixed toggle sits over the left gutter. */}
+        <div className="flex min-h-[52px] shrink-0 items-center justify-center border-b border-white/10 px-3 py-3.5 md:px-[13.2px]">
+          <span className="min-w-0 max-w-full truncate text-center text-[0.825rem] font-medium leading-snug tracking-wide text-white/60">
+            Architecture / docs
           </span>
-          <button
-            type="button"
-            className="flex h-8 w-8 shrink-0 items-center justify-center text-white/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-0 active:outline-none"
-            aria-label="Hide documentation menu"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <svg className="h-[1.3rem] w-[1.3rem]" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-              <path
-                fillRule="evenodd"
-                d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-[10px] py-3 md:px-[13.2px]">
           <IdeExplorerNav
@@ -688,7 +710,7 @@ export function ArchitectureDocContent() {
       </aside>
 
       <div
-        className={`pb-28 pt-12 transition-[margin] duration-200 ease-out md:px-6 md:pt-16 ${
+        className={`[overflow-anchor:none] pb-28 pt-12 motion-reduce:md:transition-none md:transition-[margin-left] md:duration-300 md:ease-[cubic-bezier(0.32,0.72,0,1)] md:px-6 md:pt-16 ${
           sidebarOpen ? "md:ml-[300px]" : "md:ml-0"
         } px-4`}
       >
