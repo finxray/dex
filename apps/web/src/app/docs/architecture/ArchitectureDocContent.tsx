@@ -449,7 +449,7 @@ function IdeExplorerNav({
 
   return (
     <nav
-      className="select-none text-white/80 origin-top scale-95 [-webkit-font-smoothing:antialiased]"
+      className="select-none origin-top scale-95 [-webkit-font-smoothing:antialiased]"
       aria-label="Documentation structure"
     >
       {renderNodes(DOC_NAV, 0)}

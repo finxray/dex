@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAccount, useConnect, useDisconnect, useConnectors } from "wagmi";
@@ -16,6 +17,13 @@ const MIN_DY_FOR_VELOCITY_HIDE = 14;
 const MAX_DT_FOR_VELOCITY_MS = 72;
 /** Mega panel slide (must match Tailwind `duration-700` on grid-template-rows). */
 const MEGA_PANEL_TRANSITION_MS = 700;
+/** Chained pill moves: keep in sync with `NAV_HOVER_PILL_CLASS` duration. */
+const MEGA_PILL_SEGMENT_MS = 340;
+/** Mega panel body height when switching top-level sections (match `.mega-menu-section-content` in globals.css). */
+const MEGA_SECTION_HEIGHT_MS = 400;
+const MEGA_SECTION_HEIGHT_EASE = "cubic-bezier(0.22,1,0.36,1)";
+/** Shared easing for top bar + mega links + pill (smooth deceleration, no harsh ease-out). */
+const NAV_FLUID_TRANSITION = "duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]";
 /** Toolbar + mega top divider appear only after scrolling past this (px). */
 const TOOLBAR_DIVIDER_SCROLL_Y = 50;
 /** Uniform 10% scale for marketing top bar + desktop mega (typography, padding, gaps). */
@@ -28,6 +36,125 @@ const MEGA_GLASS_OVER_LIGHT = "rgba(0, 0, 0, 0.86)";
 /** Mega glass when backdrop is dark — translucent black, lighter than over-light but slightly deeper than before. */
 const MEGA_GLASS_OVER_DARK = "rgba(0, 0, 0, 0.38)";
 const MEGA_GLASS_INSET_EDGE = "inset 0 1.1px 0 rgba(255,255,255,0.08)";
+/** Below mega bottom border: lifts panel above page (not clipped — parent uses overflow-y-visible). */
+const MEGA_MENU_BOTTOM_SHADOW =
+  "0 20px 48px rgba(0, 0, 0, 0.55), 0 8px 20px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.06)";
+
+const NAV_HOVER_PILL_CLASS =
+  "pointer-events-none absolute z-0 rounded-full border border-white/28 bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-[top,left,width,height,opacity] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none motion-reduce:opacity-0";
+
+/** Bordered top-bar actions (Connect, Disconnect, About Protocol) — idle colour from globals.css `.header-inactive-fg`. */
+const TOPBAR_OUTLINE_BTN_CLASS =
+  `rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal header-inactive-fg transition-[background-color,border-color,color,filter] ${NAV_FLUID_TRANSITION} hover:bg-white/10 hover:border-white/30 hover:text-white`;
+/** Center nav — same idle grey as outline labels; no border on the links themselves. */
+const TOPBAR_CENTER_NAV_CLASS =
+  `text-[0.825rem] font-normal header-inactive-fg outline-none brightness-100 transition-[filter,color] ${NAV_FLUID_TRANSITION} hover:text-white hover:brightness-[1.09] focus-visible:text-white focus-visible:brightness-[1.09]`;
+
+type NavPillRect = { top: number; left: number; width: number; height: number; visible: boolean };
+
+type MegaCell = { c: number; r: number };
+
+function megaMenuCellKey(c: number, r: number) {
+  return `${c},${r}`;
+}
+
+/** Shortest path along real links only: vertical neighbors, or ±1 row when changing column. */
+function megaMenuButtonPath(heights: number[], from: MegaCell, to: MegaCell): MegaCell[] {
+  if (from.c === to.c && from.r === to.r) return [to];
+  const nk = megaMenuCellKey;
+  const neighbors = (c: number, r: number): MegaCell[] => {
+    const out: MegaCell[] = [];
+    if (r > 0) out.push({ c, r: r - 1 });
+    if (r < heights[c]! - 1) out.push({ c, r: r + 1 });
+    if (c > 0) {
+      const h = heights[c - 1]!;
+      for (let dr = -1; dr <= 1; dr++) {
+        const nr = r + dr;
+        if (nr >= 0 && nr < h) out.push({ c: c - 1, r: nr });
+      }
+    }
+    if (c < heights.length - 1) {
+      const h = heights[c + 1]!;
+      for (let dr = -1; dr <= 1; dr++) {
+        const nr = r + dr;
+        if (nr >= 0 && nr < h) out.push({ c: c + 1, r: nr });
+      }
+    }
+    return out;
+  };
+
+  const q: MegaCell[] = [from];
+  const parent = new Map<string, string | null>();
+  parent.set(nk(from.c, from.r), null);
+
+  while (q.length) {
+    const cur = q.shift()!;
+    if (cur.c === to.c && cur.r === to.r) {
+      const path: MegaCell[] = [];
+      let k: string | null = nk(cur.c, cur.r);
+      while (k) {
+        const [cc, rr] = k.split(",").map(Number) as [number, number];
+        path.push({ c: cc, r: rr });
+        const pk = parent.get(k);
+        k = pk === undefined ? null : pk;
+      }
+      path.reverse();
+      return path;
+    }
+    for (const n of neighbors(cur.c, cur.r)) {
+      const nKey = nk(n.c, n.r);
+      if (!parent.has(nKey)) {
+        parent.set(nKey, nk(cur.c, cur.r));
+        q.push(n);
+      }
+    }
+  }
+  return [from, to];
+}
+
+function megaLinkRectRelativeToGrid(
+  gridEl: HTMLElement,
+  linkEl: HTMLElement
+): Pick<NavPillRect, "top" | "left" | "width" | "height"> {
+  const cr = gridEl.getBoundingClientRect();
+  const er = linkEl.getBoundingClientRect();
+  return {
+    top: er.top - cr.top + gridEl.scrollTop,
+    left: er.left - cr.left + gridEl.scrollLeft,
+    width: er.width,
+    height: er.height,
+  };
+}
+
+function MegaMenuLinkColumn({
+  colIndex,
+  items,
+  registerLink,
+  onLinkHover,
+}: {
+  colIndex: number;
+  items: ReadonlyArray<{ title: string; href: string }>;
+  registerLink: (col: number, row: number, el: HTMLAnchorElement | null) => void;
+  onLinkHover: (col: number, row: number) => void;
+}) {
+  return (
+    <ul className="relative z-[1] flex flex-col gap-[4.4px]">
+      {items.map((item, row) => (
+        <li key={item.title} className="min-w-0">
+          <Link
+            ref={(el) => registerLink(colIndex, row, el)}
+            href={item.href}
+            className={`relative z-[1] inline-flex max-w-full items-center rounded-full border border-transparent py-[4.4px] pl-[17.6px] pr-[17.6px] text-left text-[0.825rem] font-normal leading-snug header-inactive-fg brightness-100 transition-[color,filter] ${NAV_FLUID_TRANSITION} hover:text-white hover:brightness-[1.07] -ml-[17.6px]`}
+            onMouseEnter={() => onLinkHover(colIndex, row)}
+            onFocus={() => onLinkHover(colIndex, row)}
+          >
+            {item.title}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function Header() {
   const pathname = usePathname();
@@ -50,6 +177,25 @@ export function Header() {
   const [megaGlassOverLightSection, setMegaGlassOverLightSection] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
+  const megaGridInnerRef = useRef<HTMLDivElement>(null);
+  const megaPanelShellRef = useRef<HTMLDivElement>(null);
+  const prevActiveMenuForShellHRef = useRef<string | null>(null);
+  const lastMegaShellMeasuredHRef = useRef<number | null>(null);
+  const megaShellHeightTimerRef = useRef<number | null>(null);
+  const [megaShellHeight, setMegaShellHeight] = useState<number | "auto">("auto");
+  const megaCellRefs = useRef<(HTMLAnchorElement | null)[][]>([]);
+  const lastMegaPillCellRef = useRef<MegaCell | null>(null);
+  const megaPillAnimTimerRef = useRef<number | null>(null);
+  const megaPillAnimGenRef = useRef(0);
+  const [megaPill, setMegaPill] = useState<NavPillRect>({
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    visible: false,
+  });
+  const [megaPillSnap, setMegaPillSnap] = useState(false);
+  const [megaBackdropMounted, setMegaBackdropMounted] = useState(false);
   const [logoPosition, setLogoPosition] = useState({
     x: 24 * TB,
     y: 12.424 * TB,
@@ -67,6 +213,43 @@ export function Header() {
   const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Clears `activeMenu` after collapse animation so the reverse slide can run. */
   const megaAfterCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Avoid Connect `disabled` mismatches: `useConnectors()` is empty on the server but populated on the client. */
+  const [walletUiReady, setWalletUiReady] = useState(false);
+  useEffect(() => setWalletUiReady(true), []);
+
+  useEffect(() => setMegaBackdropMounted(true), []);
+
+  useEffect(() => {
+    if (!megaPanelExpanded) {
+      lastMegaPillCellRef.current = null;
+      if (megaPillAnimTimerRef.current != null) {
+        window.clearTimeout(megaPillAnimTimerRef.current);
+        megaPillAnimTimerRef.current = null;
+      }
+      megaPillAnimGenRef.current += 1;
+      setMegaPillSnap(false);
+      setMegaPill((p) => ({ ...p, visible: false }));
+      if (megaShellHeightTimerRef.current != null) {
+        window.clearTimeout(megaShellHeightTimerRef.current);
+        megaShellHeightTimerRef.current = null;
+      }
+      prevActiveMenuForShellHRef.current = null;
+      lastMegaShellMeasuredHRef.current = null;
+      setMegaShellHeight("auto");
+    }
+  }, [megaPanelExpanded]);
+
+  useEffect(() => {
+    lastMegaPillCellRef.current = null;
+    if (megaPillAnimTimerRef.current != null) {
+      window.clearTimeout(megaPillAnimTimerRef.current);
+      megaPillAnimTimerRef.current = null;
+    }
+    megaPillAnimGenRef.current += 1;
+    setMegaPillSnap(false);
+    setMegaPill((p) => ({ ...p, visible: false }));
+  }, [activeMenu]);
 
   // Mobile breakpoint via matchMedia — avoids resize spam and reduces layout thrash while dragging window edges.
   useEffect(() => {
@@ -96,6 +279,8 @@ export function Header() {
 
   // Safely check if connectors are available
   const hasConnector = connectors && connectors.length > 0;
+  const isConnectDisabled =
+    isConnectPending || isConnectingRef.current || (walletUiReady && !hasConnector);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -283,6 +468,204 @@ export function Header() {
     ? MEGA_GLASS_OVER_LIGHT
     : MEGA_GLASS_OVER_DARK;
 
+  useLayoutEffect(() => {
+    if (!currentMega?.mega) {
+      megaCellRefs.current = [];
+      return;
+    }
+    megaCellRefs.current = currentMega.mega.map((g) => new Array(g.items.length).fill(null));
+  }, [currentMega?.label, currentMega?.mega]);
+
+  const getMegaPanelMaxPx = useCallback(() => {
+    if (typeof window === "undefined") return 704;
+    return Math.min(Math.round(window.innerHeight * 0.7), 704);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (megaShellHeightTimerRef.current != null) {
+      window.clearTimeout(megaShellHeightTimerRef.current);
+      megaShellHeightTimerRef.current = null;
+    }
+
+    if (!megaPanelExpanded || !currentMega?.mega) {
+      prevActiveMenuForShellHRef.current = null;
+      lastMegaShellMeasuredHRef.current = null;
+      setMegaShellHeight("auto");
+      return;
+    }
+
+    const inner = megaGridInnerRef.current;
+    if (!inner) return;
+
+    const cap = getMegaPanelMaxPx();
+    const newH = Math.min(inner.scrollHeight, cap);
+    const prevMenu = prevActiveMenuForShellHRef.current;
+    const storedH = lastMegaShellMeasuredHRef.current;
+
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (
+      !reduced &&
+      prevMenu !== null &&
+      activeMenu !== null &&
+      activeMenu !== prevMenu &&
+      storedH !== null &&
+      Math.abs(storedH - newH) > 1
+    ) {
+      setMegaShellHeight(storedH);
+      inner.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setMegaShellHeight(newH);
+        });
+      });
+      megaShellHeightTimerRef.current = window.setTimeout(() => {
+        setMegaShellHeight("auto");
+        megaShellHeightTimerRef.current = null;
+      }, MEGA_SECTION_HEIGHT_MS);
+    } else {
+      setMegaShellHeight("auto");
+    }
+
+    prevActiveMenuForShellHRef.current = activeMenu;
+    lastMegaShellMeasuredHRef.current = newH;
+  }, [
+    activeMenu,
+    megaPanelExpanded,
+    currentMega?.mega,
+    currentMega?.label,
+    getMegaPanelMaxPx,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (megaShellHeightTimerRef.current != null) {
+        window.clearTimeout(megaShellHeightTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearMegaPillAnimTimers = useCallback(() => {
+    if (megaPillAnimTimerRef.current != null) {
+      window.clearTimeout(megaPillAnimTimerRef.current);
+      megaPillAnimTimerRef.current = null;
+    }
+    megaPillAnimGenRef.current += 1;
+  }, []);
+
+  const registerMegaLink = useCallback((col: number, row: number, el: HTMLAnchorElement | null) => {
+    const colArr = megaCellRefs.current[col];
+    if (!colArr) return;
+    colArr[row] = el;
+  }, []);
+
+  const handleMegaGridMouseLeave = useCallback(() => {
+    clearMegaPillAnimTimers();
+    lastMegaPillCellRef.current = null;
+    setMegaPillSnap(false);
+    setMegaPill((p) => ({ ...p, visible: false }));
+  }, [clearMegaPillAnimTimers]);
+
+  const handleMegaLinkHover = useCallback(
+    (col: number, row: number) => {
+      const mega = currentMega?.mega;
+      const grid = megaGridInnerRef.current;
+      if (!mega || !grid) return;
+
+      const heights = mega.map((g) => g.items.length);
+      const to: MegaCell = { c: col, r: row };
+      const from = lastMegaPillCellRef.current;
+
+      const rectFor = (cell: MegaCell): NavPillRect | null => {
+        const el = megaCellRefs.current[cell.c]?.[cell.r];
+        if (!el) return null;
+        const b = megaLinkRectRelativeToGrid(grid, el);
+        return { ...b, visible: true };
+      };
+
+      const reduced =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const doneHoverCell = () => {
+        lastMegaPillCellRef.current = to;
+      };
+
+      if (!from || reduced) {
+        clearMegaPillAnimTimers();
+        const r = rectFor(to);
+        if (!r) {
+          doneHoverCell();
+          return;
+        }
+        /* First hover after open (no `from`): jump onto the link — no slide from 0,0 or prior rect. */
+        if (reduced) {
+          setMegaPillSnap(false);
+          setMegaPill(r);
+        } else {
+          setMegaPillSnap(true);
+          setMegaPill(r);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => setMegaPillSnap(false));
+          });
+        }
+        doneHoverCell();
+        return;
+      }
+
+      const path = megaMenuButtonPath(heights, from, to);
+      let rects = path
+        .map((cell) => rectFor(cell))
+        .filter((x): x is NavPillRect => x !== null && x.width > 0);
+
+      if (rects.length !== path.length) {
+        const a = rectFor(from);
+        const b = rectFor(to);
+        rects = a && b ? [a, b] : b ? [b] : [];
+      }
+
+      clearMegaPillAnimTimers();
+      const gen = megaPillAnimGenRef.current;
+
+      if (rects.length === 0) {
+        doneHoverCell();
+        return;
+      }
+      if (rects.length === 1) {
+        setMegaPillSnap(false);
+        setMegaPill(rects[0]);
+        doneHoverCell();
+        return;
+      }
+
+      setMegaPillSnap(true);
+      setMegaPill({ ...rects[0], visible: true });
+      doneHoverCell();
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (gen !== megaPillAnimGenRef.current) return;
+          setMegaPillSnap(false);
+          setMegaPill({ ...rects[1], visible: true });
+          let i = 2;
+          const scheduleNext = () => {
+            if (gen !== megaPillAnimGenRef.current || i >= rects.length) return;
+            megaPillAnimTimerRef.current = window.setTimeout(() => {
+              if (gen !== megaPillAnimGenRef.current) return;
+              setMegaPill({ ...rects[i], visible: true });
+              i++;
+              scheduleNext();
+            }, MEGA_PILL_SEGMENT_MS);
+          };
+          scheduleNext();
+        });
+      });
+    },
+    [currentMega, clearMegaPillAnimTimers]
+  );
+
   // Update document title when a menu is active
   useEffect(() => {
     if (activeMenu) {
@@ -451,18 +834,23 @@ export function Header() {
             />
           </Link>
           </div>
-        <nav className="hidden items-center gap-[35.2px] text-[0.825rem] font-normal text-white/80 md:flex md:flex-1 md:justify-center md:origin-top md:scale-95">
+        <nav className="relative hidden items-center gap-[35.2px] text-[0.825rem] font-normal md:flex md:flex-1 md:justify-center md:origin-top md:scale-95">
           {currentNavLinks.map((item) => (
             <div
               key={item.label}
-              className="relative py-[4.4px]"
+              className="relative z-[1]"
               onMouseEnter={() => !isSwapPage && handleMenuEnter(item.label)}
             >
               <Link
                 href={item.href}
-                className="block transition-colors hover:text-white whitespace-nowrap"
-                style={{ color: activeMenu === item.label ? "#ffffff" : undefined }}
-                onMouseEnter={() => !isSwapPage && handleMenuEnter(item.label)}
+                className={`relative z-[1] block whitespace-nowrap rounded-full px-[13.2px] py-[4.4px] ${TOPBAR_CENTER_NAV_CLASS}`}
+                style={{ color: activeMenu === item.label ? "rgba(255,255,255,1)" : undefined }}
+                onMouseEnter={() => {
+                  if (!isSwapPage) handleMenuEnter(item.label);
+                }}
+                onFocus={() => {
+                  if (!isSwapPage) handleMenuEnter(item.label);
+                }}
               >
                 {item.label}
               </Link>
@@ -478,7 +866,7 @@ export function Header() {
                 </span>
                 <button
                   onClick={() => disconnect()}
-                  className="rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white whitespace-nowrap"
+                  className={`${TOPBAR_OUTLINE_BTN_CLASS} whitespace-nowrap`}
                 >
                   Disconnect
                 </button>
@@ -502,7 +890,7 @@ export function Header() {
                     WebkitBackdropFilter: "blur(22px) saturate(180%)",
                     boxShadow:
                       "inset 0 1.1px 0 rgba(255,255,255,0.1), 0 0 0 4.4px rgba(0, 0, 0, 0.2), 0 0 0 8.8px rgba(0, 0, 0, 0.1), 0 0 0 13.2px rgba(0, 0, 0, 0.05), 0 6.6px 24.2px rgba(0, 0, 0, 0.15)",
-                    color: "#ffffff",
+                    color: "rgba(255, 255, 255, 0.768)",
                     opacity: 1,
                     minWidth: "110px",
                     width: "110px",
@@ -516,7 +904,7 @@ export function Header() {
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = "rgba(12, 14, 22, 0.3)";
                     e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
-                    e.currentTarget.style.color = "#ffffff";
+                    e.currentTarget.style.color = "rgba(255, 255, 255, 0.768)";
                     e.currentTarget.style.opacity = "1";
                   }}
                 >
@@ -548,8 +936,8 @@ export function Header() {
                     isConnectingRef.current = false;
                   }
                 }}
-                disabled={isConnectPending || !hasConnector || isConnectingRef.current}
-                className="hidden rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed md:flex items-center justify-center whitespace-nowrap"
+                disabled={isConnectDisabled}
+                className={`hidden ${TOPBAR_OUTLINE_BTN_CLASS} disabled:opacity-50 disabled:cursor-not-allowed md:flex items-center justify-center whitespace-nowrap`}
               >
                 {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
               </button>
@@ -575,7 +963,7 @@ export function Header() {
                     isConnectingRef.current = false;
                   }
                 }}
-                disabled={isConnectPending || !hasConnector || isConnectingRef.current}
+                disabled={isConnectDisabled}
                 className="md:hidden rounded-full border border-white/15 px-[13.2px] py-[8.8px] text-[0.825rem] font-normal transition-all touch-manipulation flex items-center justify-center whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
                   backgroundColor: "rgba(12, 14, 22, 0.3)",
@@ -583,7 +971,7 @@ export function Header() {
                   WebkitBackdropFilter: "blur(22px) saturate(180%)",
                   boxShadow:
                     "inset 0 1.1px 0 rgba(255,255,255,0.1), 0 0 0 4.4px rgba(0, 0, 0, 0.2), 0 0 0 8.8px rgba(0, 0, 0, 0.1), 0 0 0 13.2px rgba(0, 0, 0, 0.05), 0 6.6px 24.2px rgba(0, 0, 0, 0.15)",
-                  color: "#ffffff",
+                  color: "rgba(255, 255, 255, 0.768)",
                   opacity: 1,
                   minWidth: "110px",
                   width: "110px",
@@ -598,7 +986,7 @@ export function Header() {
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = "rgba(12, 14, 22, 0.3)";
                   e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
-                  e.currentTarget.style.color = "#ffffff";
+                  e.currentTarget.style.color = "rgba(255, 255, 255, 0.768)";
                   e.currentTarget.style.opacity = "1";
                 }}
               >
@@ -610,7 +998,7 @@ export function Header() {
             href={isSwapPage ? "/" : "/swap"}
             className={
               isSwapPage
-                ? "hidden rounded-full border border-white/20 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal text-white/80 transition-all hover:bg-white/10 hover:border-white/30 hover:text-white md:flex items-center justify-center whitespace-nowrap min-w-[121px] flex-shrink-0"
+                ? `hidden ${TOPBAR_OUTLINE_BTN_CLASS} md:flex items-center justify-center whitespace-nowrap min-w-[121px] flex-shrink-0`
                 : "hidden rounded-full border border-white/20 bg-white/80 px-[13.2px] py-[4.4px] text-[0.825rem] font-normal !text-black transition-all hover:border-white/30 hover:bg-white hover:!text-black md:relative md:flex md:min-w-[121px] md:overflow-hidden md:flex-shrink-0 md:items-center md:justify-center md:whitespace-nowrap"
             }
           >
@@ -638,7 +1026,7 @@ export function Header() {
               minWidth: "58.08px", 
               minHeight: "58.08px",
               marginLeft: "auto",
-              color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.8)",
+              color: isMobile && isOverWhiteSection ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.768)",
               transition: "color 0.3s ease"
             }}
             onMouseEnter={(e) => {
@@ -695,8 +1083,23 @@ export function Header() {
               megaPanelExpanded && currentMega?.mega ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
             } transition-[grid-template-rows] duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:duration-0`}
           >
-            <div className="min-h-0 overflow-x-hidden overflow-y-hidden">
-              <div className="relative max-h-[min(70vh,704px)] border-b border-solid border-white/10">
+            <div className="min-h-0 overflow-x-hidden overflow-y-visible">
+              <div
+                className="relative border-b border-solid border-white/10"
+                style={{ boxShadow: MEGA_MENU_BOTTOM_SHADOW }}
+              >
+                <div
+                  ref={megaPanelShellRef}
+                  className="relative max-h-[min(70vh,704px)] overflow-x-hidden"
+                  style={{
+                    height: megaShellHeight === "auto" ? undefined : megaShellHeight,
+                    transition:
+                      megaShellHeight !== "auto"
+                        ? `height ${MEGA_SECTION_HEIGHT_MS}ms ${MEGA_SECTION_HEIGHT_EASE}`
+                        : undefined,
+                    overflowY: megaShellHeight !== "auto" ? "hidden" : undefined,
+                  }}
+                >
                 {/* Glass layer: static styles only; animating backdrop/opacity causes lag. */}
                 <div
                   aria-hidden
@@ -713,27 +1116,40 @@ export function Header() {
                   }
                 />
                 <div
-                  className={`relative z-10 mx-auto grid min-h-0 max-h-[min(70vh,704px)] max-w-[1078px] overflow-y-auto overscroll-contain px-[26.4px] pb-[52.8px] pt-[35.2px] [scrollbar-gutter:stable] ${megaGridClass}`}
+                  ref={megaGridInnerRef}
+                  className="relative z-10 mx-auto min-h-0 max-h-[min(70vh,704px)] max-w-[1078px] overflow-y-auto overscroll-contain px-[26.4px] pb-[52.8px] pt-[35.2px] [scrollbar-gutter:stable]"
+                  onMouseLeave={handleMegaGridMouseLeave}
                 >
-                  {currentMega?.mega?.map((group) => (
-                    <div key={group.heading} className="group/megaCol min-w-0 space-y-[13.2px]">
-                      <h3 className="text-[0.825rem] font-medium text-white/60 transition-colors duration-200 group-hover/megaCol:text-white/80">
-                        {group.heading}
-                      </h3>
-                      <ul className="flex flex-col gap-[4.4px]">
-                        {group.items.map((item) => (
-                          <li key={item.title} className="min-w-0">
-                            <Link
-                              href={item.href}
-                              className="inline-flex max-w-full items-center rounded-full border border-transparent py-[4.4px] pl-[17.6px] pr-[17.6px] text-left text-[0.825rem] font-normal leading-snug text-white/80 transition-all duration-200 hover:border-white/20 hover:bg-transparent hover:text-white -ml-[17.6px]"
-                            >
-                              {item.title}
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  <div
+                    aria-hidden
+                    className={`${NAV_HOVER_PILL_CLASS}${megaPillSnap ? " !transition-none !duration-0" : ""}`}
+                    style={{
+                      top: megaPill.top,
+                      left: megaPill.left,
+                      width: Math.max(megaPill.width, 0),
+                      height: Math.max(megaPill.height, 0),
+                      opacity: megaPill.visible ? 1 : 0,
+                    }}
+                  />
+                  <div
+                    key={activeMenu ?? "none"}
+                    className={`mega-menu-section-content grid w-full min-h-0 ${megaGridClass}`}
+                  >
+                    {currentMega?.mega?.map((group, colIndex) => (
+                      <div key={group.heading} className="min-w-0 space-y-[13.2px]">
+                        <h3 className="text-[0.825rem] font-medium text-white/60">
+                          {group.heading}
+                        </h3>
+                        <MegaMenuLinkColumn
+                          colIndex={colIndex}
+                          items={group.items}
+                          registerLink={registerMegaLink}
+                          onLinkHover={handleMegaLinkHover}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 </div>
               </div>
             </div>
@@ -758,7 +1174,7 @@ export function Header() {
                 <div key={item.label} className="space-y-3">
                   <Link
                     href={item.href}
-                    className="inline-flex items-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                    className={`inline-flex items-center rounded-full px-4 py-3 text-base font-medium header-mobile-menu-inactive-fg transition-[color,background-color] ${NAV_FLUID_TRANSITION} hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]`}
                     onClick={handleNavClick}
                     style={{ minHeight: "48px" }}
                   >
@@ -767,8 +1183,8 @@ export function Header() {
                   {!isSwapPage && (item as NavLink).mega ? (
                     <div className="space-y-4">
                       {(item as NavLink).mega?.map((group) => (
-                        <div key={group.heading} className="group/megaMob space-y-2">
-                          <h3 className="text-xs font-medium text-white/60 transition-colors duration-200 group-hover/megaMob:text-white/80">
+                        <div key={group.heading} className="space-y-2">
+                          <h3 className="text-xs font-medium text-white/60">
                             {group.heading}
                           </h3>
                           <ul className="space-y-1">
@@ -776,7 +1192,7 @@ export function Header() {
                               <li key={subItem.title}>
                                 <Link
                                   href={subItem.href}
-                                  className="-ml-3.5 block w-full rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-normal leading-snug text-white/80 transition-colors duration-200 hover:border-white/20 hover:bg-transparent hover:text-white touch-manipulation min-h-[44px]"
+                                  className={`-ml-3.5 block w-full rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-normal leading-snug header-inactive-fg brightness-100 transition-[color,border-color,background-color,filter] ${NAV_FLUID_TRANSITION} hover:border-white/20 hover:bg-transparent hover:text-white hover:brightness-[1.07] touch-manipulation min-h-[44px]`}
                                   onClick={handleNavClick}
                                   style={{ minHeight: "44px" }}
                                 >
@@ -802,7 +1218,7 @@ export function Header() {
                         disconnect();
                         handleNavClick();
                       }}
-                      className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]"
+                      className={`inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium header-mobile-menu-inactive-fg transition-[color,background-color] ${NAV_FLUID_TRANSITION} hover:bg-white/10 hover:text-white touch-manipulation min-h-[48px]`}
                       style={{ minHeight: "48px" }}
                     >
                       Disconnect
@@ -832,8 +1248,8 @@ export function Header() {
                       }
                       handleNavClick();
                     }}
-                    disabled={isConnectPending || !hasConnector || isConnectingRef.current}
-                    className="inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
+                    disabled={isConnectDisabled}
+                    className={`inline-flex items-center justify-center rounded-full px-4 py-3 text-base font-medium header-mobile-menu-inactive-fg transition-[color,background-color] ${NAV_FLUID_TRANSITION} hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]`}
                     style={{ minHeight: "48px" }}
                   >
                     {isConnectPending ? "Connecting..." : connectError ? "No Wallet Found" : "Connect Wallet"}
@@ -844,7 +1260,7 @@ export function Header() {
                   onClick={handleNavClick}
                   className={
                     isSwapPage
-                      ? "inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full px-4 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+                      ? `inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-full px-4 py-3 text-base font-medium header-mobile-menu-inactive-fg transition-[color,background-color] ${NAV_FLUID_TRANSITION} hover:bg-white/10 hover:text-white`
                       : "relative inline-flex min-h-[48px] touch-manipulation items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/80 px-4 py-3 text-base font-medium !text-black transition-colors hover:border-white/30 hover:bg-white hover:!text-black"
                   }
                   style={{ minHeight: "48px" }}
@@ -869,6 +1285,23 @@ export function Header() {
         </div>
       </div>
       </header>
+      {megaBackdropMounted &&
+        megaPanelExpanded &&
+        currentMega?.mega &&
+        !isSwapPage &&
+        createPortal(
+          <div
+            role="presentation"
+            aria-hidden
+            className="mega-menu-page-backdrop pointer-events-auto fixed left-0 right-0 bottom-0 z-40 hidden md:block"
+            style={{ top: "48.4px" }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              scheduleMegaMenuClose();
+            }}
+          />,
+          document.body
+        )}
       {/* Gradient blend from header into colorful background - only on swap page, desktop only */}
       {isSwapPage && !isMobile && (
         <div
